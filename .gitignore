@@ -1,0 +1,40 @@
+# ── Dependencies ──────────────────────────────────────────
+node_modules/
+package-lock.json
+
+# ── Database ───────────────────────────────────────────────
+workforce.db
+workforce.db-shm
+workforce.db-wal
+*.db
+*.db-shm
+*.db-wal
+
+# ── Environment & Secrets ─────────────────────────────────
+.env
+.env.local
+.env.development
+.env.production
+
+# ── OS Files ──────────────────────────────────────────────
+.DS_Store
+Thumbs.db
+Desktop.ini
+
+# ── Editor / IDE ──────────────────────────────────────────
+.vscode/
+.idea/
+*.suo
+*.user
+*.swp
+*.swo
+*~
+
+# ── Logs ──────────────────────────────────────────────────
+logs/
+*.log
+npm-debug.log*
+
+# ── Runtime ───────────────────────────────────────────────
+pids/
+*.pid
