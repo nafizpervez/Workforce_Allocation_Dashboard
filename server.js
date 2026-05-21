@@ -144,34 +144,36 @@ app.get('/api/projects', (req, res) => {
 });
 
 app.post('/api/projects', (req, res) => {
-  const {
-    code, name, client, budget, spent_pct,
-    end_date, stage, progress, color, priority,
-  } = req.body || {};
-
-  if (!code || !name) {
-    return res.status(400).json({ error: 'code and name are required' });
-  }
+  const b = req.body || {};
+  if (!b.code || !b.name) return res.status(400).json({ error: 'code and name are required' });
 
   try {
     const info = db.prepare(`
-      INSERT INTO projects (code, name, client, budget, spent_pct, end_date, stage, progress, color, priority)
-      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+      INSERT INTO projects (
+        code, name, client, budget, spent_pct, end_date, stage, progress, color, priority,
+        product_amount, account_name, product_name, opportunity_owner,
+        sales_price_currency, sales_price, amount_currency, opp_amount,
+        probability, quantity, product_date, product_month, product_description,
+        list_price_currency, list_price, vendor_product_code, active_product,
+        owner_role, product_family, close_month
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
-      code, name, client || null,
-      safeNum(budget, 0),
-      safeNum(spent_pct, 0),
-      end_date || null,
-      stage || 'Planning',
-      safeNum(progress, 0),
-      color || '#8B5CF6',
-      priority || 'Medium'
+      b.code, b.name, b.client || null,
+      safeNum(b.budget, 0), safeNum(b.spent_pct, 0),
+      b.end_date || null, b.stage || 'Prospect',
+      safeNum(b.progress, 0), b.color || '#8B5CF6', b.priority || 'Medium',
+      safeNum(b.product_amount, 0), b.account_name || null, b.product_name || null,
+      b.opportunity_owner || null, b.sales_price_currency || 'USD', safeNum(b.sales_price, 0),
+      b.amount_currency || 'USD', safeNum(b.opp_amount, 0),
+      safeNum(b.probability, 0), safeNum(b.quantity, 1),
+      b.product_date || null, b.product_month || null, b.product_description || null,
+      b.list_price_currency || 'USD', safeNum(b.list_price, 0),
+      b.vendor_product_code || null, b.active_product !== undefined ? (b.active_product ? 1 : 0) : 1,
+      b.owner_role || null, b.product_family || 'Professional Services', b.close_month || null
     );
     res.status(201).json(db.prepare('SELECT * FROM projects WHERE id = ?').get(info.lastInsertRowid));
   } catch (e) {
-    if (String(e.message).includes('UNIQUE')) {
-      return res.status(409).json({ error: 'project code must be unique' });
-    }
+    if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'project code must be unique' });
     throw e;
   }
 });
@@ -181,8 +183,14 @@ app.put('/api/projects/:id', (req, res) => {
   const existing = db.prepare('SELECT * FROM projects WHERE id = ?').get(id);
   if (!existing) return res.status(404).json({ error: 'project not found' });
 
-  const fields = ['code', 'name', 'client', 'budget', 'spent_pct',
-    'end_date', 'stage', 'progress', 'color', 'priority'];
+  const fields = [
+    'code', 'name', 'client', 'budget', 'spent_pct', 'end_date', 'stage', 'progress', 'color', 'priority',
+    'product_amount', 'account_name', 'product_name', 'opportunity_owner',
+    'sales_price_currency', 'sales_price', 'amount_currency', 'opp_amount',
+    'probability', 'quantity', 'product_date', 'product_month', 'product_description',
+    'list_price_currency', 'list_price', 'vendor_product_code', 'active_product',
+    'owner_role', 'product_family', 'close_month',
+  ];
   const updates = [];
   const params = [];
   for (const f of fields) {
@@ -291,7 +299,7 @@ app.get('/api/dashboard/stats', (req, res) => {
 
   /* ── base counts ── */
   const activeEmployees = db.prepare('SELECT COUNT(*) AS c FROM employees').get().c;
-  const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage != 'Launched'`).get().c;
+  const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage != 'Closed Won'`).get().c;
 
   const totalAssignments = db.prepare(`
     SELECT COUNT(*) AS c FROM assignments WHERE ${FISCAL_WHERE}
@@ -450,7 +458,7 @@ app.get('/api/dashboard/pipeline', (req, res) => {
      GROUP BY stage
   `).all();
 
-  const order = ['Planning', 'Design', 'Development', 'Testing', 'Launched'];
+  const order = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won'];
   rows.sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage));
   res.json(rows);
 });
