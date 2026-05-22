@@ -4,18 +4,22 @@
  * REST endpoints:
  *
  *   GET    /api/employees
- *   POST   /api/employees                 { name, dept, email }
- *   PUT    /api/employees/:id             { name?, dept?, email? }
+ *   POST   /api/employees                 { employee_code, name, dept, email }
+ *   PUT    /api/employees/:id
  *   DELETE /api/employees/:id
  *
  *   GET    /api/projects
- *   POST   /api/projects                  { code, name, client, budget, end_date, stage, progress, color, priority }
+ *   POST   /api/projects
  *   PUT    /api/projects/:id
  *   DELETE /api/projects/:id
+ *     Project fields: code, name, client, budget, spent_pct, end_date, stage,
+ *                     progress, color, priority, product_amount, account_name,
+ *                     product_name, opportunity_owner, opp_amount, probability
  *
  *   GET    /api/assignments?fiscalYear=2026
  *   POST   /api/assignments               { employee_id, project_id, year, month, week, percentage }
- *   PUT    /api/assignments/:id           { percentage?, year?, month?, week?, project_id? }
+ *   POST   /api/assignments/bulk          { employee_id, project_id, percentage, slots:[{year,month,week}] }
+ *   PUT    /api/assignments/:id
  *   DELETE /api/assignments/:id
  *
  *   GET    /api/dashboard/stats?fiscalYear=2026
@@ -47,25 +51,15 @@ app.use(express.static(path.join(__dirname, 'public')));
 /*  Helpers                                                                   */
 /* -------------------------------------------------------------------------- */
 
-/** Returns [{year, month}, ...] for the 12 months of a fiscal year, in display order. */
 function fiscalMonths(fiscalYear) {
   return [
-    { year: fiscalYear, month: 4 },
-    { year: fiscalYear, month: 5 },
-    { year: fiscalYear, month: 6 },
-    { year: fiscalYear, month: 7 },
-    { year: fiscalYear, month: 8 },
-    { year: fiscalYear, month: 9 },
-    { year: fiscalYear, month: 10 },
-    { year: fiscalYear, month: 11 },
-    { year: fiscalYear, month: 12 },
-    { year: fiscalYear + 1, month: 1 },
-    { year: fiscalYear + 1, month: 2 },
-    { year: fiscalYear + 1, month: 3 },
+    { year: fiscalYear, month: 4 }, { year: fiscalYear, month: 5 }, { year: fiscalYear, month: 6 },
+    { year: fiscalYear, month: 7 }, { year: fiscalYear, month: 8 }, { year: fiscalYear, month: 9 },
+    { year: fiscalYear, month: 10 }, { year: fiscalYear, month: 11 }, { year: fiscalYear, month: 12 },
+    { year: fiscalYear + 1, month: 1 }, { year: fiscalYear + 1, month: 2 }, { year: fiscalYear + 1, month: 3 },
   ];
 }
 
-/** Returns SQL fragment for "matches the given fiscal year". */
 const FISCAL_WHERE = `
   (
     (year = ? AND month >= 4)
@@ -73,17 +67,11 @@ const FISCAL_WHERE = `
     (year = ? AND month <= 3)
   )
 `;
-function fiscalParams(fy) {
-  return [fy, fy + 1];
-}
+function fiscalParams(fy) { return [fy, fy + 1]; }
 
 function safeNum(v, fallback) {
   const n = Number(v);
   return Number.isFinite(n) ? n : fallback;
-}
-
-function asyncHandler(fn) {
-  return (req, res, next) => Promise.resolve(fn(req, res, next)).catch(next);
 }
 
 /* -------------------------------------------------------------------------- */
@@ -99,9 +87,7 @@ app.get('/api/employees', (req, res) => {
 
 app.post('/api/employees', (req, res) => {
   const { employee_code, name, dept, email } = req.body || {};
-  if (!name || !dept) {
-    return res.status(400).json({ error: 'name and dept are required' });
-  }
+  if (!name || !dept) return res.status(400).json({ error: 'name and dept are required' });
   const info = db
     .prepare('INSERT INTO employees (employee_code, name, dept, email) VALUES (?, ?, ?, ?)')
     .run(employee_code || '', name, dept, email || null);
@@ -135,7 +121,7 @@ app.delete('/api/employees/:id', (req, res) => {
 });
 
 /* -------------------------------------------------------------------------- */
-/*  Projects                                                                  */
+/*  Projects (slim — only fields actually used by the dashboard)              */
 /* -------------------------------------------------------------------------- */
 
 app.get('/api/projects', (req, res) => {
@@ -151,25 +137,17 @@ app.post('/api/projects', (req, res) => {
     const info = db.prepare(`
       INSERT INTO projects (
         code, name, client, budget, spent_pct, end_date, stage, progress, color, priority,
-        product_amount, account_name, product_name, opportunity_owner,
-        sales_price_currency, sales_price, amount_currency, opp_amount,
-        probability, quantity, product_date, product_month, product_description,
-        list_price_currency, list_price, vendor_product_code, active_product,
-        owner_role, product_family, close_month
-      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        product_amount, account_name, product_name, opportunity_owner, opp_amount, probability,
+        created_date
+      ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
-      b.code, b.name, b.client || null,
-      safeNum(b.budget, 0), safeNum(b.spent_pct, 0),
+      b.code, b.name, b.client || b.account_name || null,
+      safeNum(b.budget ?? b.opp_amount, 0), safeNum(b.spent_pct, 0),
       b.end_date || null, b.stage || 'Prospect',
       safeNum(b.progress, 0), b.color || '#8B5CF6', b.priority || 'Medium',
       safeNum(b.product_amount, 0), b.account_name || null, b.product_name || null,
-      b.opportunity_owner || null, b.sales_price_currency || 'USD', safeNum(b.sales_price, 0),
-      b.amount_currency || 'USD', safeNum(b.opp_amount, 0),
-      safeNum(b.probability, 0), safeNum(b.quantity, 1),
-      b.product_date || null, b.product_month || null, b.product_description || null,
-      b.list_price_currency || 'USD', safeNum(b.list_price, 0),
-      b.vendor_product_code || null, b.active_product !== undefined ? (b.active_product ? 1 : 0) : 1,
-      b.owner_role || null, b.product_family || 'Professional Services', b.close_month || null
+      b.opportunity_owner || null, safeNum(b.opp_amount, 0), safeNum(b.probability, 0),
+      b.created_date || null
     );
     res.status(201).json(db.prepare('SELECT * FROM projects WHERE id = ?').get(info.lastInsertRowid));
   } catch (e) {
@@ -184,12 +162,10 @@ app.put('/api/projects/:id', (req, res) => {
   if (!existing) return res.status(404).json({ error: 'project not found' });
 
   const fields = [
-    'code', 'name', 'client', 'budget', 'spent_pct', 'end_date', 'stage', 'progress', 'color', 'priority',
+    'code', 'name', 'client', 'budget', 'spent_pct', 'end_date', 'stage',
+    'progress', 'color', 'priority',
     'product_amount', 'account_name', 'product_name', 'opportunity_owner',
-    'sales_price_currency', 'sales_price', 'amount_currency', 'opp_amount',
-    'probability', 'quantity', 'product_date', 'product_month', 'product_description',
-    'list_price_currency', 'list_price', 'vendor_product_code', 'active_product',
-    'owner_role', 'product_family', 'close_month',
+    'opp_amount', 'probability', 'created_date',
   ];
   const updates = [];
   const params = [];
@@ -217,10 +193,6 @@ app.delete('/api/projects/:id', (req, res) => {
 /*  Assignments                                                               */
 /* -------------------------------------------------------------------------- */
 
-/**
- * GET /api/assignments?fiscalYear=2026
- * Returns assignments for the fiscal year, joined with project data.
- */
 app.get('/api/assignments', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
   const rows = db.prepare(`
@@ -236,9 +208,7 @@ app.get('/api/assignments', (req, res) => {
 app.post('/api/assignments', (req, res) => {
   const { employee_id, project_id, year, month, week, percentage } = req.body || {};
   if (!employee_id || !project_id || !year || !month || !week) {
-    return res.status(400).json({
-      error: 'employee_id, project_id, year, month, week are required',
-    });
+    return res.status(400).json({ error: 'employee_id, project_id, year, month, week are required' });
   }
   if (month < 1 || month > 12) return res.status(400).json({ error: 'month must be 1..12' });
   if (week < 1 || week > 4) return res.status(400).json({ error: 'week must be 1..4' });
@@ -254,6 +224,35 @@ app.post('/api/assignments', (req, res) => {
      WHERE a.id = ?
   `).get(info.lastInsertRowid);
   res.status(201).json(row);
+});
+
+/**
+ * Bulk-create assignments — used by the date-range UI in Add Assignment modal.
+ * Body: { employee_id, project_id, percentage, slots:[{year,month,week}, ...] }
+ * Returns: { created: N }
+ */
+app.post('/api/assignments/bulk', (req, res) => {
+  const { employee_id, project_id, percentage, slots } = req.body || {};
+  if (!employee_id || !project_id || !Array.isArray(slots) || slots.length === 0) {
+    return res.status(400).json({ error: 'employee_id, project_id, slots[] are required' });
+  }
+  const pct = safeNum(percentage, 0);
+  const insert = db.prepare(`
+    INSERT INTO assignments (employee_id, project_id, year, month, week, percentage)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+  const txn = db.transaction((arr) => {
+    let n = 0;
+    for (const s of arr) {
+      const y = safeNum(s.year, 0), m = safeNum(s.month, 0), w = safeNum(s.week, 0);
+      if (!y || m < 1 || m > 12 || w < 1 || w > 4) continue;
+      insert.run(employee_id, project_id, y, m, w, pct);
+      n++;
+    }
+    return n;
+  });
+  const created = txn(slots);
+  res.status(201).json({ created });
 });
 
 app.put('/api/assignments/:id', (req, res) => {
@@ -293,11 +292,9 @@ app.delete('/api/assignments/:id', (req, res) => {
 /*  Dashboard aggregations                                                    */
 /* -------------------------------------------------------------------------- */
 
-/** Top stat cards */
 app.get('/api/dashboard/stats', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
 
-  /* ── base counts ── */
   const activeEmployees = db.prepare('SELECT COUNT(*) AS c FROM employees').get().c;
   const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage != 'Closed Won'`).get().c;
 
@@ -321,21 +318,17 @@ app.get('/api/dashboard/stats', (req, res) => {
       FROM projects
   `).get().ontime || 0;
 
-  /* ── trends: current calendar month vs previous calendar month ── */
   const now = new Date();
   const curY = now.getFullYear();
   const curM = now.getMonth() + 1;
   const prevM = curM === 1 ? 12 : curM - 1;
   const prevY = curM === 1 ? curY - 1 : curY;
   const curMStr = String(curM).padStart(2, '0');
-  const prevMStr = String(prevM).padStart(2, '0');
 
-  // assignments delta
   const asgCur = db.prepare('SELECT COUNT(*) AS c FROM assignments WHERE year=? AND month=?').get(curY, curM).c;
   const asgPrev = db.prepare('SELECT COUNT(*) AS c FROM assignments WHERE year=? AND month=?').get(prevY, prevM).c;
   const asgDelta = asgCur - asgPrev;
 
-  // utilization delta
   const utilCur = db.prepare(`
     SELECT AVG(wt) AS u FROM (SELECT SUM(percentage) AS wt FROM assignments WHERE year=? AND month=? GROUP BY employee_id, week)
   `).get(curY, curM).u || 0;
@@ -344,15 +337,14 @@ app.get('/api/dashboard/stats', (req, res) => {
   `).get(prevY, prevM).u || 0;
   const utilDelta = +(utilCur - utilPrev).toFixed(1);
 
-  // new employees / projects added this month
   const newEmps = db.prepare(`SELECT COUNT(*) AS c FROM employees WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
-  const newProjs = db.prepare(`SELECT COUNT(*) AS c FROM projects  WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
+  const newProjs = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
 
   const prodDelta = +(utilDelta / 10).toFixed(1);
   const onTimeDelta = +(onTime - (db.prepare(`SELECT ROUND(100.0 * SUM(CASE WHEN progress >= 75 THEN 1 ELSE 0 END) / NULLIF(COUNT(*), 0), 1) AS o FROM projects`).get().o || 0)).toFixed(1);
 
-  function sign(n) { return n >= 0 ? `+${n}` : `${n}`; }
-  function signF(n) { return n >= 0 ? `+${n}%` : `${n}%`; }
+  const sign = n => n >= 0 ? `+${n}` : `${n}`;
+  const signF = n => n >= 0 ? `+${n}%` : `${n}%`;
 
   res.json({
     active_employees: activeEmployees,
@@ -372,7 +364,6 @@ app.get('/api/dashboard/stats', (req, res) => {
   });
 });
 
-/** Trends: monthly assignment counts and average utilization for the fiscal year */
 app.get('/api/dashboard/trends', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
   const months = fiscalMonths(fy);
@@ -392,20 +383,12 @@ app.get('/api/dashboard/trends', (req, res) => {
         )
     `).get(year, month).u || 0;
 
-    const label = new Date(year, month - 1, 1)
-      .toLocaleString('en-US', { month: 'short' });
-    return {
-      label,
-      year,
-      month,
-      assignments: count,
-      utilization: +util.toFixed(1),
-    };
+    const label = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'short' });
+    return { label, year, month, assignments: count, utilization: +util.toFixed(1) };
   });
   res.json(data);
 });
 
-/** Workload per department */
 app.get('/api/dashboard/workload', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
   const rows = db.prepare(`
@@ -419,7 +402,6 @@ app.get('/api/dashboard/workload', (req, res) => {
   res.json(rows);
 });
 
-/** Utilization: per-employee avg utilization for the fiscal year + top/bottom 5 */
 app.get('/api/dashboard/utilization', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
 
@@ -447,7 +429,6 @@ app.get('/api/dashboard/utilization', (req, res) => {
   res.json({ all: cleaned, top_available, high_workload });
 });
 
-/** Project pipeline: count + budget per stage */
 app.get('/api/dashboard/pipeline', (req, res) => {
   const rows = db.prepare(`
     SELECT stage,
@@ -457,19 +438,17 @@ app.get('/api/dashboard/pipeline', (req, res) => {
       FROM projects
      GROUP BY stage
   `).all();
-
   const order = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won'];
   rows.sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage));
   res.json(rows);
 });
 
-/** Upcoming deadlines */
 app.get('/api/dashboard/deadlines', (req, res) => {
   const today = new Date();
   const isoToday = today.toISOString().slice(0, 10);
 
   const rows = db.prepare(`
-    SELECT id, code, name, end_date, progress, priority
+    SELECT id, code, name, end_date, progress, priority, opp_amount, account_name, stage, color
       FROM projects
      WHERE end_date IS NOT NULL AND end_date >= ?
      ORDER BY end_date ASC
@@ -492,10 +471,7 @@ app.get('/api/dashboard/deadlines', (req, res) => {
 /*  Misc                                                                      */
 /* -------------------------------------------------------------------------- */
 
-// Available fiscal years (years that contain at least one assignment)
 app.get('/api/fiscal-years', (req, res) => {
-  // a fiscal year FY contains months {(FY, 4..12), (FY+1, 1..3)}.
-  // Derive distinct fiscal years from assignments table.
   const rows = db.prepare(`
     SELECT DISTINCT
       CASE WHEN month >= 4 THEN year ELSE year - 1 END AS fiscal_year
@@ -505,16 +481,13 @@ app.get('/api/fiscal-years', (req, res) => {
   res.json(rows.map(r => r.fiscal_year));
 });
 
-// Health
 app.get('/api/health', (_req, res) => res.json({ ok: true }));
 
-// Generic error handler
 app.use((err, _req, res, _next) => {
   console.error(err);
   res.status(500).json({ error: err.message });
 });
 
-// Serve index.html for the root
 app.get('/', (_req, res) => {
   res.sendFile(path.join(__dirname, 'public', 'index.html'));
 });
