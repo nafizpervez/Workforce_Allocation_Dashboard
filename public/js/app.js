@@ -317,12 +317,13 @@ function servicePipelineRowHtml(p) {
   const barColor = STAGE_COLOR[p.stage] || '#6B7280', pillCls = STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700';
   const amount = fmtUsd(p.opp_amount ?? p.budget ?? 0);
   /* Project Closing Date line */
-  let projCloseHtml = '<div class="text-xs text-gray-400 mb-2">Proj Close: —</div>';
+  /* Project Close Date — right-aligned, under Close Date, days in red */
+  let projCloseDateHtml = '<div class="text-xs text-gray-400 mt-0.5">Project Close Date: —</div>';
   if (p.project_closing_date) {
     const today = new Date(), dv = Math.round((new Date(p.project_closing_date) - today) / 864e5);
     const isPast = dv < 0, lbl = dv === 0 ? 'Today' : isPast ? `${Math.abs(dv)} days ago` : `${dv} days left`;
-    const lc = isPast ? 'text-orange-500' : dv < 30 ? 'text-amber-500' : 'text-green-600';
-    projCloseHtml = `<div class="flex items-center gap-1.5 text-xs text-gray-500 mb-2"><svg class="w-3 h-3 flex-shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg><span class="text-gray-400">Proj Close:</span><span class="font-medium text-gray-700">${esc(p.project_closing_date)}</span><span class="font-medium ${lc}">${lbl}</span></div>`;
+    const lc = isPast ? 'text-green-600' : 'text-red-500';
+    projCloseDateHtml = `<div class="text-xs text-gray-500 mt-0.5">Project Close Date: <span class="font-medium text-gray-700">${esc(p.project_closing_date)}</span> <span class="font-semibold ${lc}">${lbl}</span></div>`;
   }
   return `<div class="px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer relative" data-action="edit-project" data-project="${p.id}">
     <div class="absolute left-0 top-0 bottom-0 w-1 rounded-r" style="background:${barColor}"></div>
@@ -330,11 +331,10 @@ function servicePipelineRowHtml(p) {
       <div class="flex items-center justify-between gap-2 mb-1"><span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(p.code)}</span><span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span></div>
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(p.name)}</div>
       <div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(p.account_name || p.client || '—')}</span>${p.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(p.product_name)}</span>` : ''}</div>
-      <div class="flex items-center justify-between mb-1">
-        <div class="flex items-center gap-1.5 min-w-0"><span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}</div>
-        ${p.end_date ? `<span class="text-xs text-gray-500 flex-shrink-0">Close: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></span>` : ''}
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex items-center gap-1.5 min-w-0 pt-0.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}</div>
+        <div class="text-right flex-shrink-0 ml-3">${p.end_date ? `<div class="text-xs text-gray-500">Close Date: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></div>` : ''}${projCloseDateHtml}</div>
       </div>
-      ${projCloseHtml}
       <div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${p.progress || 0}%;background:${barColor}"></div></div><span class="text-xs font-medium text-gray-600 w-8 text-right">${p.progress || 0}%</span></div>
     </div>
   </div>`;
