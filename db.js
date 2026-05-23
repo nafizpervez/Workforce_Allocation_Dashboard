@@ -69,9 +69,10 @@ function createSchema(db) {
     "ALTER TABLE projects ADD COLUMN account_name      TEXT    DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN product_name      TEXT    DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN opportunity_owner TEXT    DEFAULT ''",
-    "ALTER TABLE projects ADD COLUMN opp_amount        REAL    DEFAULT 0",
-    "ALTER TABLE projects ADD COLUMN probability       INTEGER DEFAULT 0",
-    "ALTER TABLE projects ADD COLUMN created_date      TEXT    DEFAULT ''",
+    "ALTER TABLE projects ADD COLUMN opp_amount           REAL    DEFAULT 0",
+    "ALTER TABLE projects ADD COLUMN probability          INTEGER DEFAULT 0",
+    "ALTER TABLE projects ADD COLUMN created_date         TEXT    DEFAULT ''",
+    "ALTER TABLE projects ADD COLUMN project_closing_date TEXT    DEFAULT ''",
   ];
   for (const sql of newProjectCols) {
     try { db.exec(sql); } catch (_) { }
