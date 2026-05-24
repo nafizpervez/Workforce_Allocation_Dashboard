@@ -40,7 +40,7 @@ function getFiscalYear(dateStr) {
   const month = d.getMonth() + 1;
   return month >= 4 ? d.getFullYear() : d.getFullYear() - 1;
 }
-function fyLabel(fy) { return `FY ${String(fy).slice(-2)}-${String(fy + 1).slice(-2)}`; }
+function fyLabel(fy) { return String(fy + 1); }
 
 function calcDealStatuses(allProjects) {
   /* Build per-code sorted sequence: (fy, id) */

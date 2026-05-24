@@ -285,7 +285,7 @@ function dealStatusBadge(status) {
 }
 
 /* ================================================================ NEW LOGO CHART */
-const centerLabelPlugin = { id: 'centerLabel', afterDatasetsDraw(chart) { const { ctx } = chart; chart.data.datasets.forEach((ds, i) => { chart.getDatasetMeta(i).data.forEach((bar, idx) => { const val = ds.data[idx]; if (!val || val < 1) return; const { x, y, base } = bar.getProps(['x', 'y', 'base'], true); if (base - y < 18) return; const midY = (y + base) / 2; ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.font = 'bold 14px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 3; ctx.fillText(val, x, midY); ctx.restore(); }); }); } };
+const centerLabelPlugin = { id: 'centerLabel', afterDatasetsDraw(chart) { const { ctx } = chart; chart.data.datasets.forEach((ds, i) => { chart.getDatasetMeta(i).data.forEach((bar, idx) => { const val = ds.data[idx]; if (!val || val < 1) return; const { x, y } = bar.getProps(['x', 'y'], true); ctx.save(); ctx.fillStyle = '#1f2937'; ctx.font = 'bold 13px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(val, x, y - 4); ctx.restore(); }); }); } };
 
 function renderNewLogoChart(data, filter) {
   if (data) S.newLogoChartData = data;
