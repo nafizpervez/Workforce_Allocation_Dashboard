@@ -398,12 +398,29 @@
                 class="bg-white rounded-xl p-6"
                 style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
               >
-                <h3 class="font-semibold text-gray-900 mb-0.5 card-title-pad">
-                  Assignment Trends
-                </h3>
-                <p class="text-xs text-gray-500 mb-4 card-title-pad">
-                  Last 12 months
-                </p>
+                <div class="flex items-center gap-3 card-title-pad mb-4">
+                  <div
+                    class="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                  >
+                    <svg
+                      class="w-4 h-4 text-blue-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">
+                      Assignment Trends
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Last 12 months</p>
+                  </div>
+                </div>
                 <div style="height: 260px">
                   <canvas id="trendsChart"></canvas>
                 </div>
@@ -429,12 +446,33 @@
                 class="bg-white rounded-xl p-6"
                 style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
               >
-                <h3 class="font-semibold text-gray-900 mb-0.5 card-title-pad">
-                  Department Workload
-                </h3>
-                <p class="text-xs text-gray-500 mb-4 card-title-pad">
-                  Active assignments by team
-                </p>
+                <div class="flex items-center gap-3 card-title-pad mb-4">
+                  <div
+                    class="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                  >
+                    <svg
+                      class="w-4 h-4 text-purple-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">
+                      Department Workload
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                      Active assignments by team
+                    </p>
+                  </div>
+                </div>
                 <div style="height: 260px">
                   <canvas id="workloadChart"></canvas>
                 </div>
@@ -460,12 +498,30 @@
                 class="bg-white rounded-xl p-6"
                 style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
               >
-                <h3 class="font-semibold text-gray-900 mb-0.5 card-title-pad">
-                  Resource Allocation
-                </h3>
-                <p class="text-xs text-gray-500 mb-4 card-title-pad">
-                  By department
-                </p>
+                <div class="flex items-center gap-3 card-title-pad mb-4">
+                  <div
+                    class="w-8 h-8 bg-teal-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                  >
+                    <svg
+                      class="w-4 h-4 text-teal-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                      <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">
+                      Resource Allocation
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-0.5">By department</p>
+                  </div>
+                </div>
                 <div style="height: 260px">
                   <canvas id="allocationChart"></canvas>
                 </div>
@@ -538,22 +594,25 @@
                   </div>
                   <div class="flex items-center gap-1 mr-10">
                     <button
-                      onclick="setInsightsPeriod('week')"
+                      onclick="setInsightsPeriod('high','week')"
                       data-pd="week"
+                      data-card="high"
                       class="period-btn"
                     >
                       Week
                     </button>
                     <button
-                      onclick="setInsightsPeriod('month')"
+                      onclick="setInsightsPeriod('high','month')"
                       data-pd="month"
+                      data-card="high"
                       class="period-btn active"
                     >
                       Month
                     </button>
                     <button
-                      onclick="setInsightsPeriod('year')"
+                      onclick="setInsightsPeriod('high','year')"
                       data-pd="year"
+                      data-card="high"
                       class="period-btn"
                     >
                       Year
@@ -616,22 +675,25 @@
                   </div>
                   <div class="flex items-center gap-1 mr-10">
                     <button
-                      onclick="setInsightsPeriod('week')"
+                      onclick="setInsightsPeriod('low','week')"
                       data-pd="week"
+                      data-card="low"
                       class="period-btn"
                     >
                       Week
                     </button>
                     <button
-                      onclick="setInsightsPeriod('month')"
+                      onclick="setInsightsPeriod('low','month')"
                       data-pd="month"
+                      data-card="low"
                       class="period-btn active"
                     >
                       Month
                     </button>
                     <button
-                      onclick="setInsightsPeriod('year')"
+                      onclick="setInsightsPeriod('low','year')"
                       data-pd="year"
+                      data-card="low"
                       class="period-btn"
                     >
                       Year

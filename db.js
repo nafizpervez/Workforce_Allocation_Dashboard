@@ -83,7 +83,6 @@ function createSchema(db) {
    Esri Bangladesh employees — Professional Services (17)
    ============================================================================= */
 const REAL_EMPLOYEES = [
-  { code: 'SGESA00026', name: 'Debashish Bhowmick', dept: 'Professional Services', email: 'd.bhowmick@esribangladesh.com.bd' },
   { code: 'SGESA00029', name: 'Mohsuddin Shovon', dept: 'Professional Services', email: 'm.shovon@esrisa.com' },
   { code: 'SGESA00033', name: 'S.M Abu Saleh', dept: 'Professional Services', email: 'sm.abusaleh@esribangladesh.com.bd' },
   { code: 'SGESA00040', name: 'Arnob Chakrabarty', dept: 'Professional Services', email: 'c.arnob@esribangladesh.com.bd' },

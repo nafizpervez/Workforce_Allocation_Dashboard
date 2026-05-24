@@ -183,7 +183,8 @@ app.get('/api/dashboard/stats', (req, res) => {
     )
   `).get(...fiscalParams(fy)).u || 0;
 
-  const productivity = Math.min(10, +(avgUtil / 10).toFixed(1));
+  const psCount = db.prepare(`SELECT COUNT(*) AS c FROM employees WHERE dept='Professional Services'`).get().c || 1;
+  const productivity = psCount > 0 ? +(avgUtil / psCount).toFixed(2) : 0;
   const onTime = db.prepare(`SELECT ROUND(100.0*SUM(CASE WHEN progress>=80 THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) AS v FROM projects`).get().v || 0;
 
   const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1;
@@ -201,7 +202,7 @@ app.get('/api/dashboard/stats', (req, res) => {
   const newEmps = db.prepare(`SELECT COUNT(*) AS c FROM employees WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
   const newProjs = db.prepare(`SELECT COUNT(*) AS c FROM projects  WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
 
-  const prodDelta = +(utilDelta / 10).toFixed(1);
+  const prodDelta = psCount > 0 ? +(utilDelta / psCount).toFixed(2) : 0;
   const onTimeDelta = +(onTime - (db.prepare('SELECT ROUND(100.0*SUM(CASE WHEN progress>=75 THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) AS v FROM projects').get().v || 0)).toFixed(1);
 
   const sign = n => n >= 0 ? `+${n}` : `${n}`;
@@ -213,6 +214,7 @@ app.get('/api/dashboard/stats', (req, res) => {
     avg_utilization: +avgUtil.toFixed(1),
     assigned_projects: assignedProjects,
     productivity,
+    ps_count: psCount,
     on_time_pct: onTime,
     trends: {
       employees: { value: newEmps > 0 ? `+${newEmps} this month` : 'No change', up: newEmps >= 0 },
@@ -275,7 +277,7 @@ app.get('/api/dashboard/pipeline', (_, res) => {
 app.get('/api/dashboard/deadlines', (_, res) => {
   const today = new Date();
   const rows = db.prepare(`
-    SELECT id, code, name, end_date, project_closing_date,
+    SELECT id, code, name, end_date, project_closing_date, product_name,
            progress, priority, opp_amount, account_name, stage, color, opportunity_owner
       FROM projects
      WHERE stage = 'Closed Won'

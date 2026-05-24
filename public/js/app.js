@@ -8,7 +8,8 @@ const S = {
   employees: [], projects: [], assignments: [],
   matrix: {}, employeeUtil: new Map(), charts: {},
   searchQuery: '',
-  insightsPeriod: 'month',
+  insightsPeriodHigh: 'month',
+  insightsPeriodLow: 'month',
   /* matrix filters */
   matrixProjectFilter: null, matrixResourceFilter: null,
   matrixMonthFilter: '', matrixStageFilt: '', matrixAmountFilt: '',
@@ -96,10 +97,14 @@ function calcLocalUtil(period) {
   return { all, top_available: all.slice(0, 5), high_workload: [...all].reverse().slice(0, 5) };
 }
 
-function setInsightsPeriod(period) {
-  S.insightsPeriod = period;
-  document.querySelectorAll('[data-pd]').forEach(b => b.classList.toggle('active', b.dataset.pd === period));
-  renderInsights(calcLocalUtil(period));
+function setInsightsPeriod(card, period) {
+  if (card === 'high') S.insightsPeriodHigh = period;
+  else S.insightsPeriodLow = period;
+  document.querySelectorAll(`[data-card="${card}"][data-pd]`).forEach(b => b.classList.toggle('active', b.dataset.pd === period));
+  const util = calcLocalUtil(period);
+  const empty = '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
+  if (card === 'high') document.getElementById('highWorkloadList').innerHTML = util.high_workload.map(insightRow).join('') || empty;
+  else document.getElementById('topAvailableList').innerHTML = util.top_available.map(insightRow).join('') || empty;
 }
 
 /* ================================================================ API */
@@ -128,7 +133,7 @@ async function loadAll() {
     renderStats(stats);
     renderMatrix();
     renderTrends(trends); renderWorkload(wl); renderAllocation(wl);
-    renderInsights(calcLocalUtil(S.insightsPeriod));
+    renderInsights();
     S.lastRunningData = dl;
     applyAndRenderRunning();
     renderServicePipeline(projs);
@@ -164,18 +169,20 @@ function populatePipelineStageFilter() {
 /* ================================================================ STATS */
 function renderStats(s) {
   const t = s.trends || {};
+  const n = s.active_employees || 1;
   const cards = [
-    { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', bg: 'bg-blue-100', fg: 'text-blue-600', icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
-    { v: s.active_projects.toLocaleString(), label: 'Active Projects', tk: 'projects', bg: 'bg-purple-100', fg: 'text-purple-600', icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
-    { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
-    { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
-    { v: s.productivity + '/10', label: 'Productivity Score', tk: 'productivity', bg: 'bg-green-100', fg: 'text-green-600', icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
-    { v: s.on_time_pct + '%', label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
+    { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Count of all resources registered in the system`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
+    { v: s.active_projects.toLocaleString(), label: 'Active Projects', tk: 'projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
+    { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: `Sum of all weekly allocation % ÷ Total assignment slots`, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
+    { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+    { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Avg Utilization (${s.avg_utilization}%) ÷ ${s.ps_count} PS Resources = ${s.productivity}`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
+    { v: s.on_time_pct + '%', label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: `On-track projects ÷ Total projects × 100`, icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
   ];
   document.getElementById('statsRow').innerHTML = cards.map(c => {
     const td = t[c.tk] || { value: '—', up: true }, up = td.up;
     return `<div class="dc dc-stat"><div class="dc-handle" title="Drag card"><svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></div>
-    <div class="bg-white rounded-xl border border-gray-200 p-5" style="box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+    <div class="stat-card-inner bg-white rounded-xl border border-gray-200 p-5 relative" style="box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+      <div class="stat-tooltip">${esc(c.formula)}</div>
       <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3"><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg></div>
       <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
       <div class="text-sm text-gray-500 mb-2">${esc(c.label)}</div>
@@ -248,14 +255,13 @@ function renderWorkload(data) { if (S.charts.workload) S.charts.workload.destroy
 
 function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }) }
 
+function insightRow(e) { const u = e.utilization, clr = uc(u), badge = ub(u), label = us(u); return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" data-action="edit-emp-side" data-emp="${e.id}"><div class="relative flex-shrink-0"><div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style="background:${clr}"></div></div><div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-900 truncate">${esc(e.name)}</div><div class="text-xs text-gray-500">${esc(e.dept)}</div></div><span class="px-3 py-1 rounded-full text-xs font-medium ${badge} flex-shrink-0">${esc(label)}</span><div class="text-right flex-shrink-0"><div class="text-base font-semibold" style="color:${clr}">${u.toFixed(0)}%</div><div class="w-16 h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100, u)}%;background:${clr}"></div></div></div></div>`; }
+
 /* ================================================================ INSIGHTS */
-function renderInsights(util) {
-  const row = e => {
-    const u = e.utilization, clr = uc(u), badge = ub(u), label = us(u);
-    return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" data-action="edit-emp-side" data-emp="${e.id}"><div class="relative flex-shrink-0"><div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style="background:${clr}"></div></div><div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-900 truncate">${esc(e.name)}</div><div class="text-xs text-gray-500">${esc(e.dept)}</div></div><span class="px-3 py-1 rounded-full text-xs font-medium ${badge} flex-shrink-0">${esc(label)}</span><div class="text-right flex-shrink-0"><div class="text-base font-semibold" style="color:${clr}">${u.toFixed(0)}%</div><div class="w-16 h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100, u)}%;background:${clr}"></div></div></div></div>`;
-  };
-  document.getElementById('topAvailableList').innerHTML = util.top_available.map(row).join('') || '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
-  document.getElementById('highWorkloadList').innerHTML = util.high_workload.map(row).join('') || '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
+function renderInsights() {
+  const empty = '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
+  document.getElementById('highWorkloadList').innerHTML = calcLocalUtil(S.insightsPeriodHigh).high_workload.map(insightRow).join('') || empty;
+  document.getElementById('topAvailableList').innerHTML = calcLocalUtil(S.insightsPeriodLow).top_available.map(insightRow).join('') || empty;
 }
 
 /* ================================================================ RUNNING PROJECTS — rich layout */
