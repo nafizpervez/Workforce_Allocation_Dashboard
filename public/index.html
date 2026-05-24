@@ -642,6 +642,108 @@
               </div>
             </div>
             <div style="height: 280px"><canvas id="newLogoChart"></canvas></div>
+            <!-- Conditions legend -->
+            <div
+              class="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-x-8 gap-y-2"
+            >
+              <div class="flex items-start gap-2.5">
+                <span
+                  class="mt-0.5 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-3 h-3 text-emerald-600"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <path
+                      d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                    />
+                  </svg>
+                </span>
+                <div>
+                  <span class="text-xs font-semibold text-emerald-700"
+                    >NEW LOGO</span
+                  ><span class="text-xs text-gray-500 ml-1.5"
+                    >— Account name has never appeared in any prior Closed Won
+                    deal</span
+                  >
+                </div>
+              </div>
+              <div class="flex items-start gap-2.5">
+                <span
+                  class="mt-0.5 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-3 h-3 text-blue-600"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path
+                      d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                    />
+                    <path d="M3 3v5h5" />
+                  </svg>
+                </span>
+                <div>
+                  <span class="text-xs font-semibold text-blue-700">REPEAT</span
+                  ><span class="text-xs text-gray-500 ml-1.5"
+                    >— Account's last Closed Won was in the immediately
+                    preceding fiscal year</span
+                  >
+                </div>
+              </div>
+              <div class="flex items-start gap-2.5">
+                <span
+                  class="mt-0.5 w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-3 h-3 text-amber-600"
+                    viewBox="0 0 24 24"
+                    fill="currentColor"
+                  >
+                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
+                  </svg>
+                </span>
+                <div>
+                  <span class="text-xs font-semibold text-amber-700"
+                    >REACTIVE</span
+                  ><span class="text-xs text-gray-500 ml-1.5"
+                    >— Account appeared before but skipped ≥ 1 fiscal year
+                    before returning</span
+                  >
+                </div>
+              </div>
+              <div class="flex items-start gap-2.5">
+                <span
+                  class="mt-0.5 w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-3 h-3 text-gray-500"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <circle cx="12" cy="12" r="10" />
+                    <path d="M12 8v4M12 16h.01" />
+                  </svg>
+                </span>
+                <div>
+                  <span class="text-xs font-semibold text-gray-600"
+                    >DUPLICATE RULE</span
+                  ><span class="text-xs text-gray-500 ml-1.5"
+                    >— Same account twice in same FY: 1st follows normal rule ·
+                    2nd is always REACTIVE</span
+                  >
+                </div>
+              </div>
+            </div>
           </div>
         </div>
 
