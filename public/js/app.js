@@ -24,12 +24,12 @@ const S = {
 };
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won'];
+const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const PCOLORS = ['#8B5CF6', '#14B8A6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#06B6D4', '#F43F5E', '#84CC16', '#A855F7', '#0EA5E9', '#EAB308', '#22C55E', '#3B82F6', '#D946EF'];
 const DEPT_COLORS = { 'Solution': '#2563EB', 'Professional Services': '#8B5CF6', 'Finance': '#14B8A6', 'Sales': '#F59E0B', 'Operations': '#10B981', 'Management': '#EC4899' };
-const STAGE_COLOR = { 'Prospect': '#6B7280', 'Qualify': '#0EA5E9', 'Validate': '#8B5CF6', 'Presentation - Solve': '#EC4899', 'Proposal': '#F59E0B', 'Negotiate': '#F97316', 'Closed Won': '#10B981' };
-const STAGE_PILL = { 'Prospect': 'bg-gray-100 text-gray-700', 'Qualify': 'bg-sky-100 text-sky-700', 'Validate': 'bg-purple-100 text-purple-700', 'Presentation - Solve': 'bg-pink-100 text-pink-700', 'Proposal': 'bg-amber-100 text-amber-700', 'Negotiate': 'bg-orange-100 text-orange-700', 'Closed Won': 'bg-green-100 text-green-700' };
+const STAGE_COLOR = { 'Prospect': '#6B7280', 'Qualify': '#0EA5E9', 'Validate': '#8B5CF6', 'Presentation - Solve': '#EC4899', 'Proposal': '#F59E0B', 'Negotiate': '#F97316', 'Closed Won': '#10B981', 'Closed Lost': '#DC2626' };
+const STAGE_PILL = { 'Prospect': 'bg-gray-100 text-gray-700', 'Qualify': 'bg-sky-100 text-sky-700', 'Validate': 'bg-purple-100 text-purple-700', 'Presentation - Solve': 'bg-pink-100 text-pink-700', 'Proposal': 'bg-amber-100 text-amber-700', 'Negotiate': 'bg-orange-100 text-orange-700', 'Closed Won': 'bg-green-100 text-green-700', 'Closed Lost': 'bg-red-100 text-red-700' };
 const PRIORITY_COLOR = { Critical: '#DC2626', High: '#D97706', Medium: '#2563EB', Low: '#6B7280' };
 const PRIORITY_PILL = { Critical: 'bg-red-100 text-red-700', High: 'bg-orange-100 text-orange-700', Medium: 'bg-blue-100 text-blue-700', Low: 'bg-gray-100 text-gray-700' };
 
@@ -453,9 +453,9 @@ async function saveProject(id) {
   const code = document.getElementById('fp_code').value.trim().toUpperCase();
   const name = document.getElementById('fp_name').value.trim();
   if (!code || !name) { toast('Opportunity Number and Project Name are required', 'error'); return; }
-  /* ── duplicate check ── */
-  const dup = S.projects.find(p => { if (id && p.id === id) return false; return p.code === code || p.name.toLowerCase() === name.toLowerCase(); });
-  if (dup) { toast(dup.code === code ? `A project with Opportunity Number "${code}" already exists` : `A project named "${name}" already exists`, 'error'); return; }
+  /* ── duplicate check: only block same name on a different record ── */
+  const dup = S.projects.find(p => { if (id && p.id === id) return false; return p.name.toLowerCase() === name.toLowerCase(); });
+  if (dup) { toast(`A project named "${name}" already exists`, 'error'); return; }
   const amount = +document.getElementById('fp_opp_amount').value;
   const payload = { code, name, account_name: document.getElementById('fp_account').value.trim(), client: document.getElementById('fp_account').value.trim(), product_name: document.getElementById('fp_product_name').value.trim(), opportunity_owner: document.getElementById('fp_owner').value.trim(), stage: document.getElementById('fp_stage').value, priority: document.getElementById('fp_pri').value, product_amount: +document.getElementById('fp_product_amount').value, probability: +document.getElementById('fp_probability').value, created_date: document.getElementById('fp_created').value, end_date: document.getElementById('fp_end').value, project_closing_date: document.getElementById('fp_closing').value, opp_amount: amount, budget: amount, progress: +document.getElementById('fp_prog').value, color: document.getElementById('fp_color').value };
   try { if (id) await api('PUT', `/api/projects/${id}`, payload); else await api('POST', '/api/projects', payload); closeModal(); toast(`Project ${id ? 'updated' : 'created'}`); await loadAll(); } catch (e) { toast(e.message, 'error'); }

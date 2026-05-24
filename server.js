@@ -172,7 +172,7 @@ app.get('/api/dashboard/stats', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
 
   const activeEmployees = db.prepare('SELECT COUNT(*) AS c FROM employees').get().c;
-  const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage!='Closed Won'`).get().c;
+  const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage != 'Closed Won'`).get().c;
   // Assigned Projects: distinct projects that have at least one assignment this FY
   const assignedProjects = db.prepare(`SELECT COUNT(DISTINCT project_id) AS c FROM assignments WHERE ${FISCAL_WHERE}`).get(...fiscalParams(fy)).c;
 
