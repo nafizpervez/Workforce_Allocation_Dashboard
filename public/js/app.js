@@ -10,6 +10,8 @@ const S = {
   searchQuery: '',
   insightsPeriodHigh: 'month',
   insightsPeriodLow: 'month',
+  newLogoFilter: 'NEW LOGO',
+  newLogoChartData: [],
   /* matrix filters */
   matrixProjectFilter: null, matrixResourceFilter: null,
   matrixMonthFilter: '', matrixStageFilt: '', matrixAmountFilt: '',
@@ -117,7 +119,7 @@ function toast(msg, kind = 'success') { const root = document.getElementById('to
 async function loadAll() {
   try {
     const fy = S.fiscalYear;
-    const [emps, projs, asgs, stats, trends, wl, util, pipe, dl] = await Promise.all([
+    const [emps, projs, asgs, stats, trends, wl, util, pipe, dl, nlChart] = await Promise.all([
       api('GET', '/api/employees'), api('GET', '/api/projects'),
       api('GET', `/api/assignments?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/stats?fiscalYear=${fy}`),
@@ -126,13 +128,14 @@ async function loadAll() {
       api('GET', `/api/dashboard/utilization?fiscalYear=${fy}`),
       api('GET', '/api/dashboard/pipeline'),
       api('GET', '/api/dashboard/deadlines'),
+      api('GET', '/api/dashboard/new-logo-chart'),
     ]);
     S.employees = emps; S.projects = projs; S.assignments = asgs;
     buildMatrix();
     S.employeeUtil = new Map(util.all.map(u => [u.id, u.utilization]));
     renderStats(stats);
     renderMatrix();
-    renderTrends(trends); renderWorkload(wl); renderAllocation(wl);
+    renderTrends(trends); renderWorkload(wl); renderAllocation(wl); renderNewLogoChart(nlChart);
     renderInsights();
     S.lastRunningData = dl;
     applyAndRenderRunning();
@@ -264,7 +267,72 @@ function renderInsights() {
   document.getElementById('topAvailableList').innerHTML = calcLocalUtil(S.insightsPeriodLow).top_available.map(insightRow).join('') || empty;
 }
 
-/* ================================================================ RUNNING PROJECTS — rich layout */
+/* ── Deal status badge ────────────────────────────────────────── */
+function dealStatusBadge(status) {
+  if (!status) return '';
+  const map = {
+    'NEW LOGO': { cls: 'bg-emerald-100 text-emerald-700', icon: '<path d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"/>' },
+    'REPEAT': { cls: 'bg-blue-100 text-blue-700', icon: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/>' },
+    'REACTIVE': { cls: 'bg-amber-100 text-amber-700', icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
+  };
+  const s = map[status] || map['NEW LOGO'];
+  return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${s.cls} flex-shrink-0"><svg class="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="${status === 'NEW LOGO' ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${s.icon}</svg>${status}</span>`;
+}
+
+/* ================================================================ NEW LOGO CHART */
+const centerLabelPlugin = { id: 'centerLabel', afterDatasetsDraw(chart) { const { ctx } = chart; chart.data.datasets.forEach((ds, i) => { chart.getDatasetMeta(i).data.forEach((bar, idx) => { const val = ds.data[idx]; if (!val || val < 1) return; const { x, y, base } = bar.getProps(['x', 'y', 'base'], true); if (base - y < 18) return; const midY = (y + base) / 2; ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.font = 'bold 15px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 3; ctx.fillText(val, x, midY); ctx.restore(); }); }); } };
+
+function renderNewLogoChart(data, filter) {
+  if (data) S.newLogoChartData = data;
+  const d = S.newLogoChartData || [];
+  const f = filter || S.newLogoFilter || 'NEW LOGO';
+  S.newLogoFilter = f;
+
+  /* update button active states */
+  document.querySelectorAll('.nl-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.status === f));
+
+  if (S.charts.newLogo) S.charts.newLogo.destroy();
+  const canvas = document.getElementById('newLogoChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const gradientColors = {
+    'NEW LOGO': ['rgba(20,184,166,0.95)', 'rgba(14,165,233,0.75)'],
+    'REPEAT': ['rgba(59,130,246,0.95)', 'rgba(99,102,241,0.75)'],
+    'REACTIVE': ['rgba(245,158,11,0.95)', 'rgba(249,115,22,0.75)'],
+  };
+  const hoverColors = { 'NEW LOGO': '#0d9488', 'REPEAT': '#2563eb', 'REACTIVE': '#d97706' };
+  const [c1, c2] = gradientColors[f] || gradientColors['NEW LOGO'];
+  const grad = ctx.createLinearGradient(0, 0, 0, 300);
+  grad.addColorStop(0, c1); grad.addColorStop(1, c2);
+
+  S.charts.newLogo = new Chart(ctx, {
+    type: 'bar',
+    plugins: [centerLabelPlugin],
+    data: {
+      labels: d.map(x => x.label),
+      datasets: [{
+        label: f, data: d.map(x => x[f] || 0),
+        backgroundColor: grad, borderRadius: 8, borderSkipped: false,
+        hoverBackgroundColor: hoverColors[f]
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          bodyFont: { size: 13, weight: '600' }, titleFont: { size: 12 }, padding: 10,
+          callbacks: { label: c => `  ${c.parsed.y} ${f} deal${c.parsed.y === 1 ? '' : 's'}` }
+        },
+      },
+      scales: {
+        x: { ticks: { font: { size: 13, weight: '600' }, color: '#374151' }, grid: { display: false }, border: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 12 }, color: '#6B7280' }, grid: { color: '#F3F4F6' }, border: { display: false } },
+      }
+    }
+  });
+}
 function runningProjectRowHtml(d) {
   const barColor = '#10B981';
   const amount = fmtUsd(d.opp_amount || d.budget || 0);
@@ -289,8 +357,9 @@ function runningProjectRowHtml(d) {
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(d.name)}</div>
       ${(d.account_name || d.client) ? `<div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(d.account_name || d.client || '—')}</span>${d.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(d.product_name)}</span>` : ''}</div>` : ''}
       <div class="flex items-center justify-between mb-1">
-        <div class="flex items-center gap-1.5 min-w-0">
+        <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
           <span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 bg-green-100 text-green-700">Closed Won</span>
+          ${dealStatusBadge(d.deal_status)}
           ${d.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(d.opportunity_owner)}</span>` : ''}
         </div>
         ${d.end_date ? `<span class="text-xs text-gray-500 flex-shrink-0">Close: <span class="font-medium text-gray-700">${esc(d.end_date)}</span></span>` : ''}
@@ -338,7 +407,7 @@ function servicePipelineRowHtml(p) {
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(p.name)}</div>
       <div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(p.account_name || p.client || '—')}</span>${p.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(p.product_name)}</span>` : ''}</div>
       <div class="flex items-start justify-between mb-2">
-        <div class="flex items-center gap-1.5 min-w-0 pt-0.5"><span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}</div>
+        <div class="flex items-center gap-1.5 min-w-0 pt-0.5 flex-wrap"><span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>${dealStatusBadge(p.deal_status)}${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}</div>
         <div class="text-right flex-shrink-0 ml-3">${p.end_date ? `<div class="text-xs text-gray-500">Close Date: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></div>` : ''}${projCloseDateHtml}</div>
       </div>
       <div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${p.progress || 0}%;background:${barColor}"></div></div><span class="text-xs font-medium text-gray-600 w-8 text-right">${p.progress || 0}%</span></div>
@@ -530,6 +599,9 @@ function initEvents() {
     const pr = e.target.closest('[data-action="edit-project"]'); if (pr) openProjectModal({ id: +pr.dataset.project });
     const va = e.target.closest('[data-view-all]'); if (va) openViewAllModal(va.dataset.viewAll);
   });
+
+  /* ── New Logo chart filter buttons ── */
+  document.querySelectorAll('.nl-filter-btn').forEach(b => b.addEventListener('click', () => renderNewLogoChart(null, b.dataset.status)));
 
   initColResize(); initSectionDrag();
 }

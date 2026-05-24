@@ -28,6 +28,68 @@ function fiscalMonths(fy) {
 }
 const FISCAL_WHERE = `((year = ? AND month >= 4) OR (year = ? AND month <= 3))`;
 const fiscalParams = fy => [fy, fy + 1];
+
+/* ─── Deal status helpers ─────────────────────────────────────── */
+function getFiscalYear(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return null;
+  const month = d.getMonth() + 1;
+  return month >= 4 ? d.getFullYear() : d.getFullYear() - 1;
+}
+function fyLabel(fy) { return `FY ${String(fy).slice(-2)}-${String(fy + 1).slice(-2)}`; }
+
+function calcDealStatuses(allProjects) {
+  /* Build per-code sorted sequence: (fy, id) */
+  const codeMap = {};
+  for (const p of allProjects) {
+    const fy = getFiscalYear(p.end_date);
+    if (fy === null) continue;
+    (codeMap[p.code] || (codeMap[p.code] = [])).push({ fy, id: p.id });
+  }
+  for (const k of Object.keys(codeMap)) codeMap[k].sort((a, b) => a.fy - b.fy || a.id - b.id);
+
+  const out = {};
+
+  for (const code of Object.keys(codeMap)) {
+    let prevStatus = null;   // status assigned to the immediately prior occurrence
+    let prevFY = null;   // FY of the immediately prior occurrence
+
+    for (const occ of codeMap[code]) {
+      let status;
+
+      if (prevStatus === null) {
+        /* ── First appearance of this SA code ever ── */
+        status = 'NEW LOGO';
+
+      } else if (prevFY === occ.fy) {
+        /* ── Duplicate within the SAME fiscal year ──
+           If predecessor was NEW LOGO → this is a REPEAT (same deal, same year)
+           If predecessor was REPEAT or REACTIVE → REACTIVE (too many times in one year) */
+        status = prevStatus === 'NEW LOGO' ? 'REPEAT' : 'REACTIVE';
+
+      } else if (prevFY === occ.fy - 1) {
+        /* ── Appeared in immediately preceding FY → REPEAT ── */
+        status = 'REPEAT';
+
+      } else {
+        /* ── Skipped ≥ 1 FY → REACTIVE ── */
+        status = 'REACTIVE';
+      }
+
+      out[occ.id] = status;
+      prevStatus = status;
+      prevFY = occ.fy;
+    }
+  }
+
+  /* Fallback for projects with no/invalid end_date */
+  for (const p of allProjects) {
+    if (!(p.id in out)) out[p.id] = 'NEW LOGO';
+  }
+
+  return out;
+}
 const safeNum = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };
 
 /* ─── employees ───────────────────────────────────────────────── */
@@ -64,9 +126,11 @@ const PROJECT_FIELDS = [
   'created_date', 'project_closing_date',
 ];
 
-app.get('/api/projects', (_, res) =>
-  res.json(db.prepare('SELECT * FROM projects ORDER BY id').all())
-);
+app.get('/api/projects', (_, res) => {
+  const rows = db.prepare('SELECT * FROM projects ORDER BY id').all();
+  const statusMap = calcDealStatuses(rows);
+  res.json(rows.map(r => ({ ...r, deal_status: statusMap[r.id] || 'NEW LOGO' })));
+});
 
 app.post('/api/projects', (req, res) => {
   const b = req.body || {};
@@ -287,13 +351,34 @@ app.get('/api/dashboard/deadlines', (_, res) => {
      END ASC
   `).all();
 
+  const allProjects = db.prepare('SELECT id, code, end_date FROM projects').all();
+  const statusMap = calcDealStatuses(allProjects);
+
   const enriched = rows.map(r => {
     const closingDate = r.project_closing_date || r.end_date;
     const days = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
     const status = days === null ? '—' : days < 0 ? 'Overdue' : days < 14 ? 'Due Soon' : 'On Track';
-    return { ...r, closing_date: closingDate, days, status };
+    return { ...r, closing_date: closingDate, days, status, deal_status: statusMap[r.id] || 'NEW LOGO' };
   });
   res.json(enriched);
+});
+
+/* ─── New Logo bar chart data ─────────────────────────────────── */
+app.get('/api/dashboard/new-logo-chart', (_, res) => {
+  const allProjects = db.prepare('SELECT id, code, end_date FROM projects').all();
+  const statusMap = calcDealStatuses(allProjects);
+  const fyData = {};
+  for (const p of allProjects) {
+    const fy = getFiscalYear(p.end_date);
+    if (fy === null) continue;
+    const st = statusMap[p.id] || 'NEW LOGO';
+    if (!fyData[fy]) fyData[fy] = { 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0 };
+    fyData[fy][st]++;
+  }
+  const result = Object.entries(fyData)
+    .sort((a, b) => +a[0] - +b[0])
+    .map(([fy, c]) => ({ fy: +fy, label: fyLabel(+fy), 'NEW LOGO': c['NEW LOGO'], 'REPEAT': c['REPEAT'], 'REACTIVE': c['REACTIVE'] }));
+  res.json(result);
 });
 
 /* ─── misc ─────────────────────────────────────────────────────── */

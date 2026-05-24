@@ -724,3 +724,24 @@ td.cell:hover .cell-add {
 .stat-card-inner:hover .stat-tooltip {
   display: block;
 }
+
+/* ── New Logo chart filter buttons ─────────────────────────────── */
+.nl-filter-btn.active[data-status="NEW LOGO"] {
+  background: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #6ee7b7 !important;
+}
+.nl-filter-btn.active[data-status="REPEAT"] {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+  border-color: #93c5fd !important;
+}
+.nl-filter-btn.active[data-status="REACTIVE"] {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fcd34d !important;
+}
+.nl-filter-btn:not(.active):hover {
+  background: #f3f4f6 !important;
+  border-color: #d1d5db !important;
+}
