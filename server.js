@@ -67,10 +67,11 @@ function calcDealStatuses(allProjects) {
         /* First-ever Closed Won for this account */
         status = 'NEW LOGO';
       } else if (prevFY === occ.fy) {
-        /* Same fiscal year as previous occurrence:
-           prev=NEW LOGO → REPEAT (two lines in first-ever deal year)
-           prev=REPEAT/REACTIVE → REACTIVE (3rd+ in same year or after repeat) */
-        status = prevStatus === 'NEW LOGO' ? 'REPEAT' : 'REACTIVE';
+        /* Same fiscal year — inherit the previous status, with one exception:
+           prev=NEW LOGO  → NEW LOGO  (both entries are first-ever)
+           prev=REPEAT    → REPEAT    (both entries are consecutive-year repeats)
+           prev=REACTIVE  → REPEAT    (came back after gap; second entry repeats it) */
+        status = prevStatus === 'REACTIVE' ? 'REPEAT' : prevStatus;
       } else if (prevFY === occ.fy - 1) {
         /* Consecutive FY — came back next year */
         status = 'REPEAT';
