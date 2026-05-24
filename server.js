@@ -370,10 +370,10 @@ app.get('/api/dashboard/deadlines', (_, res) => {
 /* ─── New Logo bar chart data ─────────────────────────────────── */
 app.get('/api/dashboard/new-logo-chart', (_, res) => {
   const allProjects = db.prepare('SELECT id, code, end_date FROM projects').all();
-  const statusMap = calcDealStatuses(allProjects); // classify using FULL history
+  const statusMap = calcDealStatuses(allProjects); // full history, full display
   const fyData = {};
   for (const p of allProjects) {
-    if (!p.end_date || p.end_date < DISPLAY_CUTOFF) continue; // only display from Oct 2025
+    if (!p.end_date) continue; // skip entries with no date
     const fy = getFiscalYear(p.end_date);
     if (fy === null) continue;
     const st = statusMap[p.id] || 'NEW LOGO';
