@@ -573,11 +573,28 @@
               <div class="flex items-center gap-2 mr-10">
                 <button
                   class="nl-filter-btn active"
+                  data-status="COMBINED"
+                  style="
+                    background: #e0e7ff;
+                    color: #3730a3;
+                    border: 1px solid #a5b4fc;
+                    padding: 5px 12px;
+                    border-radius: 20px;
+                    font-size: 12px;
+                    font-weight: 600;
+                    cursor: pointer;
+                    transition: all 0.15s;
+                  "
+                >
+                  ▦ COMBINED
+                </button>
+                <button
+                  class="nl-filter-btn"
                   data-status="NEW LOGO"
                   style="
-                    background: #d1fae5;
-                    color: #065f46;
-                    border: 1px solid #6ee7b7;
+                    background: white;
+                    color: #374151;
+                    border: 1px solid #e5e7eb;
                     padding: 5px 12px;
                     border-radius: 20px;
                     font-size: 12px;
@@ -973,6 +990,12 @@
                 <div class="card-filter-bar">
                   <select id="pipeStageFilt" class="flt-select">
                     <option value="">All Stages</option>
+                  </select>
+                  <select id="pipeDealStatusFilt" class="flt-select">
+                    <option value="">All Deal Types</option>
+                    <option value="NEW LOGO">⭐ NEW LOGO</option>
+                    <option value="REPEAT">↺ REPEAT</option>
+                    <option value="REACTIVE">⚡ REACTIVE</option>
                   </select>
                   <select id="pipeAmountFilt" class="flt-select">
                     <option value="">All Amounts</option>

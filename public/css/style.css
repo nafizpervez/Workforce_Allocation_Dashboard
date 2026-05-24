@@ -745,3 +745,8 @@ td.cell:hover .cell-add {
   background: #f3f4f6 !important;
   border-color: #d1d5db !important;
 }
+.nl-filter-btn.active[data-status="COMBINED"] {
+  background: #e0e7ff !important;
+  color: #3730a3 !important;
+  border-color: #a5b4fc !important;
+}

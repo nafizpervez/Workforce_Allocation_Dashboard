@@ -10,7 +10,7 @@ const S = {
   searchQuery: '',
   insightsPeriodHigh: 'month',
   insightsPeriodLow: 'month',
-  newLogoFilter: 'NEW LOGO',
+  newLogoFilter: 'COMBINED',
   newLogoChartData: [],
   /* matrix filters */
   matrixProjectFilter: null, matrixResourceFilter: null,
@@ -18,7 +18,7 @@ const S = {
   matrixCloseDateFilt: '', matrixProjCloseFilt: '',
   matrixSortHigh: false, matrixSortLow: false, matrixSortAssigned: false,
   /* pipeline filters */
-  pipelineStageFilt: '', pipelineAmountFilt: '', pipelineCloseFilt: '', pipelineProjCloseFilt: '', pipelineSortAssigned: false,
+  pipelineStageFilt: '', pipelineDealStatusFilt: '', pipelineAmountFilt: '', pipelineCloseFilt: '', pipelineProjCloseFilt: '', pipelineSortAssigned: false,
   /* running filters */
   runAmountFilt: '', runCloseFilt: '', runProjCloseFilt: '', runSortAssigned: false,
   /* cached data for re-filter */
@@ -63,8 +63,13 @@ function getAmountOk(opp_amount, filt) { if (!filt) return true; const [min, max
 
 function getFteCount(projId) { return new Set(S.assignments.filter(a => a.project_id === projId).map(a => a.employee_id)).size; }
 
+const DISPLAY_CUTOFF = '2025-10-01';
+
 function applyPipelineFilters(list) {
   return list.filter(p => {
+    if (p.stage === 'Closed Lost') return false;                         // always exclude
+    if (p.end_date && p.end_date < DISPLAY_CUTOFF) return false;          // only from Oct 2025
+    if (S.pipelineDealStatusFilt && p.deal_status !== S.pipelineDealStatusFilt) return false;
     if (S.pipelineStageFilt && p.stage !== S.pipelineStageFilt) return false;
     if (!getAmountOk(p.opp_amount, S.pipelineAmountFilt)) return false;
     if (!matchDateFilter(p.end_date, S.pipelineCloseFilt)) return false;
@@ -166,7 +171,7 @@ function populateMatrixFilter() {
 
 function populatePipelineStageFilter() {
   const sel = document.getElementById('pipeStageFilt');
-  if (sel && sel.options.length <= 1) { sel.innerHTML = '<option value="">All Stages</option>' + STAGES.filter(s => s !== 'Closed Won').map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join(''); }
+  if (sel && sel.options.length <= 1) { sel.innerHTML = '<option value="">All Stages</option>' + STAGES.filter(s => s !== 'Closed Won' && s !== 'Closed Lost').map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join(''); }
 }
 
 /* ================================================================ STATS */
@@ -280,50 +285,64 @@ function dealStatusBadge(status) {
 }
 
 /* ================================================================ NEW LOGO CHART */
-const centerLabelPlugin = { id: 'centerLabel', afterDatasetsDraw(chart) { const { ctx } = chart; chart.data.datasets.forEach((ds, i) => { chart.getDatasetMeta(i).data.forEach((bar, idx) => { const val = ds.data[idx]; if (!val || val < 1) return; const { x, y, base } = bar.getProps(['x', 'y', 'base'], true); if (base - y < 18) return; const midY = (y + base) / 2; ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.font = 'bold 15px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 3; ctx.fillText(val, x, midY); ctx.restore(); }); }); } };
+const centerLabelPlugin = { id: 'centerLabel', afterDatasetsDraw(chart) { const { ctx } = chart; chart.data.datasets.forEach((ds, i) => { chart.getDatasetMeta(i).data.forEach((bar, idx) => { const val = ds.data[idx]; if (!val || val < 1) return; const { x, y, base } = bar.getProps(['x', 'y', 'base'], true); if (base - y < 18) return; const midY = (y + base) / 2; ctx.save(); ctx.fillStyle = 'rgba(255,255,255,0.95)'; ctx.font = 'bold 14px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.shadowColor = 'rgba(0,0,0,0.18)'; ctx.shadowBlur = 3; ctx.fillText(val, x, midY); ctx.restore(); }); }); } };
 
 function renderNewLogoChart(data, filter) {
   if (data) S.newLogoChartData = data;
   const d = S.newLogoChartData || [];
-  const f = filter || S.newLogoFilter || 'NEW LOGO';
+  const f = filter || S.newLogoFilter || 'COMBINED';
   S.newLogoFilter = f;
-
-  /* update button active states */
   document.querySelectorAll('.nl-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.status === f));
-
   if (S.charts.newLogo) S.charts.newLogo.destroy();
   const canvas = document.getElementById('newLogoChart');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  const gradientColors = {
-    'NEW LOGO': ['rgba(20,184,166,0.95)', 'rgba(14,165,233,0.75)'],
-    'REPEAT': ['rgba(59,130,246,0.95)', 'rgba(99,102,241,0.75)'],
-    'REACTIVE': ['rgba(245,158,11,0.95)', 'rgba(249,115,22,0.75)'],
+  const mkGrad = (c1, c2) => { const g = ctx.createLinearGradient(0, 0, 0, 300); g.addColorStop(0, c1); g.addColorStop(1, c2); return g; };
+  const COLORS = {
+    'NEW LOGO': { bg: mkGrad('rgba(20,184,166,0.92)', 'rgba(14,165,233,0.72)'), hover: '#0d9488' },
+    'REPEAT': { bg: mkGrad('rgba(59,130,246,0.92)', 'rgba(99,102,241,0.72)'), hover: '#2563eb' },
+    'REACTIVE': { bg: mkGrad('rgba(245,158,11,0.92)', 'rgba(249,115,22,0.72)'), hover: '#d97706' },
   };
-  const hoverColors = { 'NEW LOGO': '#0d9488', 'REPEAT': '#2563eb', 'REACTIVE': '#d97706' };
-  const [c1, c2] = gradientColors[f] || gradientColors['NEW LOGO'];
-  const grad = ctx.createLinearGradient(0, 0, 0, 300);
-  grad.addColorStop(0, c1); grad.addColorStop(1, c2);
+
+  let datasets, plugins, showLegend;
+  if (f === 'COMBINED') {
+    datasets = ['NEW LOGO', 'REPEAT', 'REACTIVE'].map(st => ({
+      label: st, data: d.map(x => x[st] || 0),
+      backgroundColor: COLORS[st].bg, hoverBackgroundColor: COLORS[st].hover,
+      borderRadius: 5, borderSkipped: false,
+    }));
+    plugins = [centerLabelPlugin];
+    showLegend = true;
+  } else {
+    datasets = [{
+      label: f, data: d.map(x => x[f] || 0),
+      backgroundColor: COLORS[f].bg, hoverBackgroundColor: COLORS[f].hover,
+      borderRadius: 8, borderSkipped: false
+    }];
+    plugins = [centerLabelPlugin];
+    showLegend = false;
+  }
 
   S.charts.newLogo = new Chart(ctx, {
-    type: 'bar',
-    plugins: [centerLabelPlugin],
-    data: {
-      labels: d.map(x => x.label),
-      datasets: [{
-        label: f, data: d.map(x => x[f] || 0),
-        backgroundColor: grad, borderRadius: 8, borderSkipped: false,
-        hoverBackgroundColor: hoverColors[f]
-      }]
-    },
+    type: 'bar', plugins,
+    data: { labels: d.map(x => x.label), datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: showLegend, position: 'top',
+          labels: {
+            boxWidth: 12, boxHeight: 12, padding: 18, font: { size: 12, weight: '600' },
+            generateLabels: chart => chart.data.datasets.map((ds, i) => ({
+              text: ds.label, fillStyle: ['#14b8a6', '#3b82f6', '#f59e0b'][i],
+              strokeStyle: 'transparent', index: i,
+            }))
+          }
+        },
         tooltip: {
-          bodyFont: { size: 13, weight: '600' }, titleFont: { size: 12 }, padding: 10,
-          callbacks: { label: c => `  ${c.parsed.y} ${f} deal${c.parsed.y === 1 ? '' : 's'}` }
+          bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10,
+          callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} deal${c.parsed.y === 1 ? '' : 's'}` }
         },
       },
       scales: {
@@ -574,6 +593,7 @@ function initEvents() {
 
   /* ── Pipeline filter listeners ── */
   document.getElementById('pipeStageFilt')?.addEventListener('change', e => { S.pipelineStageFilt = e.target.value; applyAndRenderPipeline(); });
+  document.getElementById('pipeDealStatusFilt')?.addEventListener('change', e => { S.pipelineDealStatusFilt = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeAmountFilt')?.addEventListener('change', e => { S.pipelineAmountFilt = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeCloseFilt')?.addEventListener('change', e => { S.pipelineCloseFilt = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeProjCloseFilt')?.addEventListener('change', e => { S.pipelineProjCloseFilt = e.target.value; applyAndRenderPipeline(); });

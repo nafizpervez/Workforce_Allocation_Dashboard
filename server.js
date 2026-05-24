@@ -29,7 +29,10 @@ function fiscalMonths(fy) {
 const FISCAL_WHERE = `((year = ? AND month >= 4) OR (year = ? AND month <= 3))`;
 const fiscalParams = fy => [fy, fy + 1];
 
-/* ─── Deal status helpers ─────────────────────────────────────── */
+/* ─── Display cutoff: only show projects from Oct 2025 onwards ── */
+const DISPLAY_CUTOFF = '2025-10-01';
+
+
 function getFiscalYear(dateStr) {
   if (!dateStr) return null;
   const d = new Date(dateStr + 'T00:00:00');
@@ -345,11 +348,12 @@ app.get('/api/dashboard/deadlines', (_, res) => {
            progress, priority, opp_amount, account_name, stage, color, opportunity_owner
       FROM projects
      WHERE stage = 'Closed Won'
+       AND end_date >= ?
      ORDER BY CASE
        WHEN project_closing_date IS NOT NULL AND project_closing_date != '' THEN project_closing_date
        ELSE COALESCE(end_date, '9999-12-31')
      END ASC
-  `).all();
+  `).all(DISPLAY_CUTOFF);
 
   const allProjects = db.prepare('SELECT id, code, end_date FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);
@@ -366,9 +370,10 @@ app.get('/api/dashboard/deadlines', (_, res) => {
 /* ─── New Logo bar chart data ─────────────────────────────────── */
 app.get('/api/dashboard/new-logo-chart', (_, res) => {
   const allProjects = db.prepare('SELECT id, code, end_date FROM projects').all();
-  const statusMap = calcDealStatuses(allProjects);
+  const statusMap = calcDealStatuses(allProjects); // classify using FULL history
   const fyData = {};
   for (const p of allProjects) {
+    if (!p.end_date || p.end_date < DISPLAY_CUTOFF) continue; // only display from Oct 2025
     const fy = getFiscalYear(p.end_date);
     if (fy === null) continue;
     const st = statusMap[p.id] || 'NEW LOGO';
