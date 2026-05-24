@@ -40,7 +40,7 @@ function getFiscalYear(dateStr) {
   const month = d.getMonth() + 1;
   return month >= 4 ? d.getFullYear() : d.getFullYear() - 1;
 }
-function fyLabel(fy) { return String(fy + 1); }
+function fyLabel(fy) { return `FY ${fy + 1}`; }
 
 function calcDealStatuses(allProjects) {
   /* ── 1. Build Closed Won history keyed by account_name ─────── */
@@ -386,18 +386,30 @@ app.get('/api/dashboard/new-logo-chart', (_, res) => {
   const allProjects = db.prepare('SELECT id, code, account_name, client, end_date, stage FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);
   const fyData = {};
+  const fyAccounts = {};
   for (const p of allProjects) {
-    if (p.stage !== 'Closed Won') continue;   // chart: Closed Won only
+    if (p.stage !== 'Closed Won') continue;
     if (!p.end_date) continue;
     const fy = getFiscalYear(p.end_date);
     if (fy === null) continue;
     const st = statusMap[p.id] || 'NEW LOGO';
+    const acct = (p.account_name || p.client || 'Unknown').trim();
     if (!fyData[fy]) fyData[fy] = { 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0 };
+    if (!fyAccounts[fy]) fyAccounts[fy] = { 'NEW LOGO': new Set(), 'REPEAT': new Set(), 'REACTIVE': new Set() };
     fyData[fy][st]++;
+    fyAccounts[fy][st].add(acct);
   }
   const result = Object.entries(fyData)
     .sort((a, b) => +a[0] - +b[0])
-    .map(([fy, c]) => ({ fy: +fy, label: fyLabel(+fy), 'NEW LOGO': c['NEW LOGO'], 'REPEAT': c['REPEAT'], 'REACTIVE': c['REACTIVE'] }));
+    .map(([fy, c]) => ({
+      fy: +fy, label: fyLabel(+fy),
+      'NEW LOGO': c['NEW LOGO'], 'REPEAT': c['REPEAT'], 'REACTIVE': c['REACTIVE'],
+      accounts: {
+        'NEW LOGO': [...(fyAccounts[+fy]?.['NEW LOGO'] || [])].sort(),
+        'REPEAT': [...(fyAccounts[+fy]?.['REPEAT'] || [])].sort(),
+        'REACTIVE': [...(fyAccounts[+fy]?.['REACTIVE'] || [])].sort(),
+      }
+    }));
   res.json(result);
 });
 

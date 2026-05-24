@@ -284,6 +284,31 @@ function dealStatusBadge(status) {
   return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${s.cls} flex-shrink-0"><svg class="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="${status === 'NEW LOGO' ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${s.icon}</svg>${status}</span>`;
 }
 
+/* ── Deal breakdown modal (click on any bar) ─────────────────── */
+function openDealModal(fyData) {
+  const { label, accounts } = fyData;
+  const section = (status, badgeCls, icon) => {
+    const list = accounts[status] || [];
+    if (!list.length) return `<div class="mb-4"><div class="flex items-center gap-2 mb-1.5"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span><span class="text-xs text-gray-400">0 accounts</span></div></div>`;
+    return `<div class="mb-5">
+      <div class="flex items-center gap-2 mb-2">
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span>
+        <span class="text-xs text-gray-400">${list.length} account${list.length === 1 ? '' : 's'}</span>
+      </div>
+      <div class="space-y-1">${list.map(a => `<div class="text-sm text-gray-800 py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">${esc(a)}</div>`).join('')}</div>
+    </div>`;
+  };
+  openModal(`${mHdr(label + ' — Deal Breakdown', 'Closed Won account names by acquisition type')}
+    <div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
+      ${section('NEW LOGO', 'bg-emerald-100 text-emerald-700', '⭐')}
+      ${section('REPEAT', 'bg-blue-100 text-blue-700', '↺')}
+      ${section('REACTIVE', 'bg-amber-100 text-amber-700', '⚡')}
+    </div>
+    <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+      <button onclick="closeModal()" class="btn-gray">Close</button>
+    </div>`, 'max-w-lg');
+}
+
 /* ================================================================ NEW LOGO CHART */
 const centerLabelPlugin = { id: 'centerLabel', afterDatasetsDraw(chart) { const { ctx } = chart; chart.data.datasets.forEach((ds, i) => { chart.getDatasetMeta(i).data.forEach((bar, idx) => { const val = ds.data[idx]; if (!val || val < 1) return; const { x, y } = bar.getProps(['x', 'y'], true); ctx.save(); ctx.fillStyle = '#1f2937'; ctx.font = 'bold 13px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(val, x, y - 4); ctx.restore(); }); }); } };
 
@@ -329,6 +354,16 @@ function renderNewLogoChart(data, filter) {
     data: { labels: d.map(x => x.label), datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
+      onClick: (event, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        const data = S.newLogoChartData[idx];
+        if (data) openDealModal(data);
+      },
+      onHover: (event, elements) => {
+        const target = event.native?.target;
+        if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
       plugins: {
         legend: {
           display: showLegend, position: 'top',
