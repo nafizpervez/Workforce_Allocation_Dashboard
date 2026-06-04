@@ -20,8 +20,10 @@ const S = {
   matrixSortHigh: false, matrixSortLow: false, matrixSortAssigned: false,
   /* pipeline filters */
   pipelineStageFilt: '', pipelineDealStatusFilt: '', pipelineAmountFilt: '', pipelineCloseFilt: '', pipelineProjCloseFilt: '', pipelineSortAssigned: false,
+  pipelineProdFamilyFilt: '', pipelineSearch: '',
   /* running filters */
   runAmountFilt: '', runCloseFilt: '', runProjCloseFilt: '', runSortAssigned: false,
+  runProdFamilyFilt: '', runSearch: '',
   /* cached data for re-filter */
   lastRunningData: [],
 };
@@ -67,24 +69,30 @@ function getFteCount(projId) { return new Set(S.assignments.filter(a => a.projec
 const DISPLAY_CUTOFF = '2025-10-01';
 
 function applyPipelineFilters(list) {
+  const q = (S.pipelineSearch || '').toLowerCase().trim();
   return list.filter(p => {
-    if (p.stage === 'Closed Lost') return false;                         // always exclude
-    if (p.end_date && p.end_date < DISPLAY_CUTOFF) return false;          // only from Oct 2025
+    if (p.stage === 'Closed Lost') return false;
+    if (p.end_date && p.end_date < DISPLAY_CUTOFF) return false;
     if (S.pipelineDealStatusFilt && p.deal_status !== S.pipelineDealStatusFilt) return false;
     if (S.pipelineStageFilt && p.stage !== S.pipelineStageFilt) return false;
     if (!getAmountOk(p.opp_amount, S.pipelineAmountFilt)) return false;
     if (!matchDateFilter(p.end_date, S.pipelineCloseFilt)) return false;
     if (!matchDateFilter(p.project_closing_date, S.pipelineProjCloseFilt)) return false;
+    if (S.pipelineProdFamilyFilt && p.product_family !== S.pipelineProdFamilyFilt) return false;
+    if (q && !(p.name || '').toLowerCase().includes(q) && !(p.code || '').toLowerCase().includes(q)) return false;
     return true;
   }).sort((a, b) => S.pipelineSortAssigned ? (getFteCount(b.id) - getFteCount(a.id)) : 0);
 }
 
 function applyRunningFilters(list) {
+  const q = (S.runSearch || '').toLowerCase().trim();
   return list.filter(d => {
     if (!getAmountOk(d.opp_amount, S.runAmountFilt)) return false;
     const cd = d.closing_date || d.project_closing_date || d.end_date;
     if (S.runCloseFilt && !matchDateFilter(cd, S.runCloseFilt)) return false;
     if (S.runProjCloseFilt && !matchDateFilter(d.project_closing_date, S.runProjCloseFilt)) return false;
+    if (S.runProdFamilyFilt && d.product_family !== S.runProdFamilyFilt) return false;
+    if (q && !(d.name || '').toLowerCase().includes(q) && !(d.code || '').toLowerCase().includes(q)) return false;
     return true;
   }).sort((a, b) => S.runSortAssigned ? (getFteCount(b.id) - getFteCount(a.id)) : 0);
 }
@@ -144,6 +152,7 @@ async function loadAll() {
     renderMatrix();
     renderTrends(trends); renderWorkload(wl); renderAllocation(wl); renderNewLogoChart(nlChart);
     S.psRevenueData = psRevChart;
+    populateProductFamilyDropdowns();
     renderInsights();
     S.lastRunningData = dl;
     applyAndRenderRunning();
@@ -399,33 +408,135 @@ function renderPsRevenueChart(data) {
   const canvas = document.getElementById('psRevenueChart');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
-  const grad = ctx.createLinearGradient(0, 0, 0, 300);
-  grad.addColorStop(0, 'rgba(139,92,246,0.9)');
-  grad.addColorStop(1, 'rgba(99,102,241,0.65)');
-  const fmtK = v => v >= 1000000 ? '$' + (v / 1000000).toFixed(1) + 'M' : v >= 1000 ? '$' + (v / 1000).toFixed(1) + 'K' : '$' + v.toFixed(0);
+
+  const fmtUsdK = v => v >= 1_000_000 ? '$' + (v / 1_000_000).toFixed(2) + 'M'
+    : v >= 1_000 ? '$' + (v / 1_000).toFixed(1) + 'K' : '$' + Number(v).toFixed(0);
+
+  /* ── gradients ── */
+  const gradTotal = ctx.createLinearGradient(0, 0, 0, 300);
+  gradTotal.addColorStop(0, 'rgba(14,165,233,0.88)');
+  gradTotal.addColorStop(1, 'rgba(56,189,248,0.55)');
+
+  const gradPS = ctx.createLinearGradient(0, 0, 0, 300);
+  gradPS.addColorStop(0, 'rgba(139,92,246,0.88)');
+  gradPS.addColorStop(1, 'rgba(99,102,241,0.55)');
+
+  const gradPct = ctx.createLinearGradient(0, 0, 0, 300);
+  gradPct.addColorStop(0, 'rgba(16,185,129,0.88)');
+  gradPct.addColorStop(1, 'rgba(52,211,153,0.55)');
+
+  /* ── label plugin: show value above each bar ── */
+  const labelPlugin = {
+    id: 'barTopLabel',
+    afterDatasetsDraw(chart) {
+      const { ctx: c } = chart;
+      chart.data.datasets.forEach((ds, dsIdx) => {
+        chart.getDatasetMeta(dsIdx).data.forEach((bar, i) => {
+          const val = ds.data[i];
+          if (!val && val !== 0) return;
+          const { x, y } = bar.getProps(['x', 'y'], true);
+          c.save();
+          c.fillStyle = '#1f2937';
+          c.font = 'bold 11px Inter,sans-serif';
+          c.textAlign = 'center';
+          c.textBaseline = 'bottom';
+          /* Format label per dataset */
+          let lbl;
+          if (dsIdx === 0) lbl = fmtUsdK(val);       // Total Amount
+          else if (dsIdx === 1) lbl = fmtUsdK(val);  // PS Amount
+          else lbl = val.toFixed(1) + '%';            // PS Share
+          c.fillText(lbl, x, y - 3);
+          c.restore();
+        });
+      });
+    }
+  };
+
   S.charts.psRevenue = new Chart(ctx, {
     type: 'bar',
-    plugins: [{ id: 'topLabel', afterDatasetsDraw(chart) { const { ctx: c } = chart; chart.getDatasetMeta(0).data.forEach((bar, i) => { const v = data[i]?.revenue || 0; if (!v) return; const { x, y } = bar.getProps(['x', 'y'], true); c.save(); c.fillStyle = '#1f2937'; c.font = 'bold 12px Inter,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText(fmtK(v), x, y - 4); c.restore(); }); } }],
+    plugins: [labelPlugin],
     data: {
       labels: data.map(d => d.label),
-      datasets: [{
-        label: 'PS Revenue', data: data.map(d => d.revenue),
-        backgroundColor: grad, hoverBackgroundColor: '#7c3aed',
-        borderRadius: 6, borderSkipped: false, barPercentage: 1.0, categoryPercentage: 0.55
-      }]
+      datasets: [
+        {
+          label: 'Total Amount',
+          data: data.map(d => d.total_amount),
+          backgroundColor: gradTotal,
+          hoverBackgroundColor: '#0ea5e9',
+          borderRadius: 5, borderSkipped: false,
+          yAxisID: 'yAmt',
+          barPercentage: 0.85, categoryPercentage: 0.75,
+        },
+        {
+          label: 'PS Amount',
+          data: data.map(d => d.ps_amount),
+          backgroundColor: gradPS,
+          hoverBackgroundColor: '#7c3aed',
+          borderRadius: 5, borderSkipped: false,
+          yAxisID: 'yAmt',
+          barPercentage: 0.85, categoryPercentage: 0.75,
+        },
+        {
+          label: 'PS Share %',
+          data: data.map(d => d.pct),
+          backgroundColor: gradPct,
+          hoverBackgroundColor: '#059669',
+          borderRadius: 5, borderSkipped: false,
+          yAxisID: 'yPct',
+          barPercentage: 0.85, categoryPercentage: 0.75,
+        },
+      ]
     },
     options: {
-      responsive: true, maintainAspectRatio: false,
+      responsive: true,
+      maintainAspectRatio: false,
+      layout: { padding: { top: 28, left: 4, right: 4, bottom: 0 } },
+      interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: false },
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            boxWidth: 12, boxHeight: 12, padding: 18,
+            font: { size: 12, weight: '600' },
+            generateLabels: chart => [
+              { text: 'Total Amount', fillStyle: '#0ea5e9', strokeStyle: 'transparent', index: 0 },
+              { text: 'PS Amount', fillStyle: '#8b5cf6', strokeStyle: 'transparent', index: 1 },
+              { text: 'PS Share %', fillStyle: '#10b981', strokeStyle: 'transparent', index: 2 },
+            ]
+          }
+        },
         tooltip: {
-          bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10,
-          callbacks: { label: c => `  USD ${(c.parsed.y || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}` }
+          bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 12,
+          callbacks: {
+            title: items => items[0].label,
+            label: c => {
+              if (c.datasetIndex === 0) return `  Total Amount: ${fmtUsdK(c.parsed.y)}`;
+              if (c.datasetIndex === 1) return `  PS Amount:    ${fmtUsdK(c.parsed.y)}`;
+              return `  PS Share:     ${c.parsed.y.toFixed(1)}%`;
+            }
+          }
         },
       },
       scales: {
-        x: { ticks: { font: { size: 13, weight: '600' }, color: '#374151' }, grid: { display: false }, border: { display: false } },
-        y: { beginAtZero: true, ticks: { font: { size: 12 }, color: '#6B7280', callback: v => '$' + v.toLocaleString() }, grid: { color: '#F3F4F6' }, border: { display: false } },
+        x: {
+          ticks: { font: { size: 13, weight: '600' }, color: '#374151' },
+          grid: { display: false }, border: { display: false }
+        },
+        yAmt: {
+          type: 'linear', position: 'left',
+          beginAtZero: true,
+          ticks: { font: { size: 11 }, color: '#6B7280', callback: v => fmtUsdK(v) },
+          grid: { color: '#F3F4F6' }, border: { display: false },
+          title: { display: true, text: 'Amount (USD)', font: { size: 11 }, color: '#9CA3AF' }
+        },
+        yPct: {
+          type: 'linear', position: 'right',
+          beginAtZero: true, max: 100,
+          ticks: { font: { size: 11 }, color: '#6B7280', callback: v => v + '%' },
+          grid: { display: false }, border: { display: false },
+          title: { display: true, text: 'PS Share %', font: { size: 11 }, color: '#9CA3AF' }
+        }
       }
     }
   });
@@ -465,6 +576,7 @@ function runningProjectRowHtml(d) {
       </div>
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(d.name)}</div>
       ${(d.account_name || d.client) ? `<div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(d.account_name || d.client || '—')}</span>${d.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(d.product_name)}</span>` : ''}</div>` : ''}
+      ${d.product_family ? `<div class="mb-1"><span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(d.product_family)}</span></div>` : ''}
       <div class="flex items-center justify-between mb-1">
         <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
           <span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 bg-green-100 text-green-700">Closed Won</span>
@@ -515,6 +627,7 @@ function servicePipelineRowHtml(p) {
       <div class="flex items-center justify-between gap-2 mb-1"><span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(p.code)}</span><span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span></div>
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(p.name)}</div>
       <div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(p.account_name || p.client || '—')}</span>${p.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(p.product_name)}</span>` : ''}</div>
+      ${p.product_family ? `<div class="mb-1"><span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span></div>` : ''}
       <div class="flex items-start justify-between mb-2">
         <div class="flex items-center gap-1.5 min-w-0 pt-0.5 flex-wrap"><span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>${dealStatusBadge(p.deal_status)}${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}</div>
         <div class="text-right flex-shrink-0 ml-3">${p.end_date ? `<div class="text-xs text-gray-500">Close Date: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></div>` : ''}${projCloseDateHtml}</div>
@@ -531,6 +644,20 @@ function applyAndRenderPipeline() {
 }
 
 function renderServicePipeline(projects) { applyAndRenderPipeline(); }
+
+/* ── Populate Product Family dropdowns dynamically from loaded data ── */
+function populateProductFamilyDropdowns() {
+  const runFamilies = [...new Set((S.lastRunningData || []).map(d => d.product_family).filter(Boolean))].sort();
+  const pipeFamilies = [...new Set((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost').map(p => p.product_family).filter(Boolean))].sort();
+  const fillSelect = (id, families) => {
+    const el = document.getElementById(id); if (!el) return;
+    const cur = el.value;
+    el.innerHTML = '<option value="">All Families</option>' + families.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+    el.value = families.includes(cur) ? cur : '';
+  };
+  fillSelect('runProdFamilyFilt', runFamilies);
+  fillSelect('pipeProdFamilyFilt', pipeFamilies);
+}
 
 /* ================================================================ MODALS — NO outside-click close */
 function openModal(html, width = 'max-w-lg') {
@@ -682,12 +809,16 @@ function initEvents() {
   document.getElementById('pipeAmountFilt')?.addEventListener('change', e => { S.pipelineAmountFilt = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeCloseFilt')?.addEventListener('change', e => { S.pipelineCloseFilt = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeProjCloseFilt')?.addEventListener('change', e => { S.pipelineProjCloseFilt = e.target.value; applyAndRenderPipeline(); });
+  document.getElementById('pipeProdFamilyFilt')?.addEventListener('change', e => { S.pipelineProdFamilyFilt = e.target.value; applyAndRenderPipeline(); });
+  document.getElementById('pipeSearch')?.addEventListener('input', e => { S.pipelineSearch = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeSortAssignedBtn')?.addEventListener('click', () => { S.pipelineSortAssigned = !S.pipelineSortAssigned; document.getElementById('pipeSortAssignedBtn').classList.toggle('active', S.pipelineSortAssigned); applyAndRenderPipeline(); });
 
   /* ── Running filter listeners ── */
   document.getElementById('runAmountFilt')?.addEventListener('change', e => { S.runAmountFilt = e.target.value; applyAndRenderRunning(); });
   document.getElementById('runCloseFilt')?.addEventListener('change', e => { S.runCloseFilt = e.target.value; applyAndRenderRunning(); });
   document.getElementById('runProjCloseFilt')?.addEventListener('change', e => { S.runProjCloseFilt = e.target.value; applyAndRenderRunning(); });
+  document.getElementById('runProdFamilyFilt')?.addEventListener('change', e => { S.runProdFamilyFilt = e.target.value; applyAndRenderRunning(); });
+  document.getElementById('runSearch')?.addEventListener('input', e => { S.runSearch = e.target.value; applyAndRenderRunning(); });
   document.getElementById('runSortAssignedBtn')?.addEventListener('click', () => { S.runSortAssigned = !S.runSortAssigned; document.getElementById('runSortAssignedBtn').classList.toggle('active', S.runSortAssigned); applyAndRenderRunning(); });
 
   /* ── Matrix table click ── */

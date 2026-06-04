@@ -582,7 +582,7 @@
                       d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
                     />
                   </svg>
-                  PS Revenue %
+                  Revenue
                 </button>
                 <button class="chart-tab-btn" data-chart-tab="tab3">
                   <svg
@@ -804,10 +804,10 @@
                 </div>
                 <div>
                   <h3 class="font-semibold text-gray-900">
-                    PS Revenue by Fiscal Year
+                    PS Revenue Share by Fiscal Year
                   </h3>
                   <p class="text-xs text-gray-500 mt-0.5">
-                    Closed Won · PS product lines only (Apr – Mar)
+                    Closed Won · PS Amount as % of Total Revenue (Apr – Mar)
                   </p>
                 </div>
               </div>
@@ -1089,6 +1089,27 @@
                 </div>
                 <!-- Running Projects filter bar -->
                 <div class="card-filter-bar">
+                  <div class="relative flex-shrink-0">
+                    <svg
+                      class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <input
+                      id="runSearch"
+                      type="text"
+                      placeholder="Search name / SA no."
+                      class="flt-select pl-7 w-44"
+                      style="background: white"
+                    />
+                  </div>
                   <select id="runAmountFilt" class="flt-select">
                     <option value="">All Amounts</option>
                     <option value="0-10000">Under $10K</option>
@@ -1107,6 +1128,9 @@
                     <option value="overdue">Overdue</option>
                     <option value="thismonth">This Month</option>
                     <option value="next3months">Next 3 Months</option>
+                  </select>
+                  <select id="runProdFamilyFilt" class="flt-select">
+                    <option value="">All Families</option>
                   </select>
                   <button id="runSortAssignedBtn" class="flt-sort-btn">
                     Most Assigned
@@ -1192,6 +1216,27 @@
                 </div>
                 <!-- Service Pipeline filter bar -->
                 <div class="card-filter-bar">
+                  <div class="relative flex-shrink-0">
+                    <svg
+                      class="absolute left-2.5 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-gray-400 pointer-events-none"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="11" cy="11" r="8" />
+                      <path d="m21 21-4.35-4.35" />
+                    </svg>
+                    <input
+                      id="pipeSearch"
+                      type="text"
+                      placeholder="Search name / SA no."
+                      class="flt-select pl-7 w-44"
+                      style="background: white"
+                    />
+                  </div>
                   <select id="pipeStageFilt" class="flt-select">
                     <option value="">All Stages</option>
                   </select>
@@ -1220,6 +1265,9 @@
                     <option value="overdue">Overdue</option>
                     <option value="thismonth">This Month</option>
                     <option value="next3months">Next 3 Months</option>
+                  </select>
+                  <select id="pipeProdFamilyFilt" class="flt-select">
+                    <option value="">All Families</option>
                   </select>
                   <button id="pipeSortAssignedBtn" class="flt-sort-btn">
                     Most Assigned

@@ -29,20 +29,38 @@ function fiscalMonths(fy) {
 const FISCAL_WHERE = `((year = ? AND month >= 4) OR (year = ? AND month <= 3))`;
 const fiscalParams = fy => [fy, fy + 1];
 
-/* ─── PS Revenue by fiscal year ───────────────────────────────── */
+/* ─── Revenue chart — PS% of total per FY (Closed Won only) ────── */
 app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
-  const rows = db.prepare('SELECT product_amount, opp_amount, end_date, stage, product_name FROM projects').all();
-  const fyRevenue = {};
+  const rows = db.prepare(`
+    SELECT end_date, product_amount, product_family, stage
+    FROM projects
+    WHERE stage = 'Closed Won'
+  `).all();
+
+  /* Group by FY: accumulate total product_amount and PS-only product_amount */
+  const fyData = {};
   for (const r of rows) {
-    if (r.stage !== 'Closed Won') continue;
-    if (!isPSProduct(r.product_name)) continue;
     const fy = getFiscalYear(r.end_date);
     if (fy === null) continue;
-    fyRevenue[fy] = (fyRevenue[fy] || 0) + (r.product_amount || 0);
+    if (!fyData[fy]) fyData[fy] = { total: 0, ps: 0 };
+    const amt = r.product_amount || 0;
+    fyData[fy].total += amt;
+    if (r.product_family === 'Professional Services') {
+      fyData[fy].ps += amt;
+    }
   }
-  const result = Object.entries(fyRevenue)
+
+  /* Build result — pct = PS amount as % of total amount for that FY */
+  const result = Object.entries(fyData)
     .sort((a, b) => +a[0] - +b[0])
-    .map(([fy, revenue]) => ({ fy: +fy, label: fyLabel(+fy), revenue: +revenue.toFixed(2) }));
+    .map(([fy, d]) => ({
+      fy: +fy,
+      label: fyLabel(+fy),
+      ps_amount: +d.ps.toFixed(2),
+      total_amount: +d.total.toFixed(2),
+      pct: d.total > 0 ? +((d.ps / d.total) * 100).toFixed(1) : 0,
+    }));
+
   res.json(result);
 });
 const DISPLAY_CUTOFF = '2025-10-01';
@@ -379,11 +397,12 @@ app.get('/api/dashboard/pipeline', (_, res) => {
 app.get('/api/dashboard/deadlines', (_, res) => {
   const today = new Date();
   const rows = db.prepare(`
-    SELECT id, code, name, end_date, project_closing_date, product_name,
+    SELECT id, code, name, end_date, project_closing_date, product_name, product_family,
            progress, priority, opp_amount, product_amount, account_name, stage, color, opportunity_owner
       FROM projects
      WHERE stage = 'Closed Won'
        AND end_date >= ?
+       AND (progress IS NULL OR progress < 100)
      ORDER BY CASE
        WHEN project_closing_date IS NOT NULL AND project_closing_date != '' THEN project_closing_date
        ELSE COALESCE(end_date, '9999-12-31')

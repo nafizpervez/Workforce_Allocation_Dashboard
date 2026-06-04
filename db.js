@@ -105,41 +105,22 @@ function mkp(closeDate, owner, code, productName, name, account, prob, productAm
   };
 }
 
-/* ── 28 Active / Prospect pipeline projects (PSreport.xlsx current) ── */
-const PIPELINE_PROJECTS = [
-  { code: 'SA136664', product_amount: 1500, account_name: 'Institute of Water Modelling (IWM)', product_name: 'PS Project Implementation', name: 'Desktop SW for IWM 2026', end_date: '2026-07-15', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 16380, probability: 10, stage: 'Prospect', priority: 'Low', color: '#8B5CF6' },
-  { code: 'SA133040', product_amount: 8000, account_name: "Cox's Bazar Development Authority (COXDA)", product_name: 'PS Project Delivery', name: 'ENT STD for COXDA', end_date: '2026-10-29', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 52514, probability: 10, stage: 'Prospect', priority: 'Low', color: '#14B8A6' },
-  { code: 'SA131887', product_amount: 3000, account_name: 'Bangladesh Forest Department (BFD)', product_name: 'PS Project Implementation', name: 'GIS SW for RIMS Department of Forest', end_date: '2026-11-25', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 118657, probability: 10, stage: 'Prospect', priority: 'Low', color: '#EC4899' },
-  { code: 'SA123377', product_amount: 0, account_name: 'Bangladesh Railway', product_name: 'PS System Support', name: 'GIS Software for Railway', end_date: '2026-12-30', opportunity_owner: 'Zobayer Ahmed', opp_amount: 74368, probability: 10, stage: 'Prospect', priority: 'Low', color: '#F59E0B' },
-  { code: 'SA127332', product_amount: 5000, account_name: 'Dhaka Electric Supply Company Limited (DESCO)', product_name: 'PS Project Implementation', name: 'GIS SW MNT project of DESCO', end_date: '2027-01-19', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 128652.5, probability: 10, stage: 'Prospect', priority: 'Low', color: '#10B981' },
-  { code: 'SA130515', product_amount: 3500, account_name: 'Bangladesh Bureau Statistics (BBS)', product_name: 'PS Project Implementation', name: 'MNT of ArcGIS Enterprise License', end_date: '2026-06-30', opportunity_owner: 'Zobayer Ahmed', opp_amount: 75039.45, probability: 20, stage: 'Qualify', priority: 'Low', color: '#6366F1' },
-  { code: 'SA129036', product_amount: 2000, account_name: 'Survey of Bangladesh (SOB)', product_name: 'PS Project Implementation', name: 'GIS SW - Enterprise MNT', end_date: '2026-07-15', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 49757.65, probability: 20, stage: 'Qualify', priority: 'Low', color: '#06B6D4' },
-  { code: 'SA129876', product_amount: 190, account_name: 'Pabna University of Science & Technology (PUST)', product_name: 'PS System Support', name: 'Esri EduSW SmallLab license 1 year - 2025 - URPPUST', end_date: '2026-09-30', opportunity_owner: 'Most Iffat Ara Ila', opp_amount: 658.35, probability: 20, stage: 'Qualify', priority: 'Low', color: '#F43F5E' },
-  { code: 'SA136729', product_amount: 35000, account_name: 'Grameenphone (GP)', product_name: 'PS Project Implementation', name: 'ArcGIS Solution for Grameenphone (GP)', end_date: '2026-09-30', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 60000, probability: 20, stage: 'Qualify', priority: 'High', color: '#84CC16' },
-  { code: 'SA126709', product_amount: 20000, account_name: 'Survey of Bangladesh (SOB)', product_name: 'PS Project Implementation', name: 'Cartographic Generalization Tool', end_date: '2026-10-15', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 20000, probability: 20, stage: 'Qualify', priority: 'Medium', color: '#A855F7' },
-  { code: 'SA129392', product_amount: 190, account_name: 'Department of Urban & Regional Planning - BUET', product_name: 'PS System Support', name: 'Esri EduSW MediumLab license 2 year - 2025_URPBUET', end_date: '2026-10-25', opportunity_owner: 'Most Iffat Ara Ila', opp_amount: 2065.3, probability: 20, stage: 'Qualify', priority: 'Low', color: '#0EA5E9' },
-  { code: 'SA129391', product_amount: 190, account_name: 'Aviation and Aerospace University, Bangladesh (AAUB)', product_name: 'PS System Support', name: 'Esri EduSW MediumLab license 2 year - 2025_AeroEnginering', end_date: '2026-11-30', opportunity_owner: 'Most Iffat Ara Ila', opp_amount: 2065.3, probability: 20, stage: 'Qualify', priority: 'Low', color: '#EAB308' },
-  { code: 'SA132162', product_amount: 190, account_name: 'Arannayk Foundation', product_name: 'PS System Support', name: 'Esri NPO SW for Arannayk 2025', end_date: '2026-11-19', opportunity_owner: 'Most Iffat Ara Ila', opp_amount: 856.9, probability: 20, stage: 'Qualify', priority: 'Low', color: '#22C55E' },
-  { code: 'SA135695', product_amount: 1000, account_name: 'Directorate of Technical Education', product_name: 'PS Project Implementation', name: 'DTE_ArcGIS_Pro_Advanced_Phase 2', end_date: '2026-12-24', opportunity_owner: 'Zobayer Ahmed', opp_amount: 102116, probability: 20, stage: 'Qualify', priority: 'Medium', color: '#3B82F6' },
-  { code: 'SA124747', product_amount: 3200, account_name: 'Urban Development Directorate (UDD)', product_name: 'PS Project Implementation', name: 'UDD Urban Planning Solution', end_date: '2026-06-25', opportunity_owner: 'Abdullah Al Baki', opp_amount: 120766, probability: 40, stage: 'Validate', priority: 'High', color: '#D946EF' },
-  { code: 'SA136880', product_amount: 4450, account_name: 'Data Experts (Pvt) Limited (datEx)', product_name: 'PS Project Implementation', name: 'Service Work for Datex', end_date: '2026-07-31', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 4450, probability: 40, stage: 'Validate', priority: 'Medium', color: '#8B5CF6' },
-  { code: 'SA119655', product_amount: 10000, account_name: 'West Zone Power Distribution Company Ltd (WZPDCL)', product_name: 'PS System Support', name: 'ArcGIS SW for WZPDCL - GIS & SCADA based ADMS project', end_date: '2026-12-10', opportunity_owner: 'Abdullah Al Baki', opp_amount: 140249, probability: 40, stage: 'Validate', priority: 'High', color: '#14B8A6' },
-  { code: 'SA125314', product_amount: 2880, account_name: 'Palli Karma Sahayak Foundation (PKSF)', product_name: 'PS Project Implementation', name: 'SW for Centralized GIS Platform of PKSF', end_date: '2026-07-14', opportunity_owner: 'Zobayer Ahmed', opp_amount: 118537, probability: 45, stage: 'Presentation - Solve', priority: 'High', color: '#EC4899' },
-  { code: 'SA119653', product_amount: 2500, account_name: 'Bangladesh Petroleum Exploration Company (BAPEX)', product_name: 'PS Project Implementation', name: 'Esri SW for BAPEX', end_date: '2026-07-09', opportunity_owner: 'Abdullah Al Baki', opp_amount: 76314, probability: 45, stage: 'Presentation - Solve', priority: 'High', color: '#F59E0B' },
-  { code: 'SA129156', product_amount: 36000, account_name: 'Omera Petroleum Limited', product_name: 'PS Project Implementation', name: 'Omera Fleet Management', end_date: '2026-08-30', opportunity_owner: 'Md Naiemul Haque Chowdhury', opp_amount: 120857, probability: 45, stage: 'Presentation - Solve', priority: 'High', color: '#10B981' },
-  { code: 'SA129792', product_amount: 190, account_name: 'Chittagong University of Engineering and Technology (CUET)', product_name: 'PS System Support', name: 'Esri EduSW MediumLab license 5 year - 2025 - CUET', end_date: '2026-09-16', opportunity_owner: 'Most Iffat Ara Ila', opp_amount: 4880.82, probability: 45, stage: 'Presentation - Solve', priority: 'Low', color: '#6366F1' },
-  { code: 'SA131666', product_amount: 1350, account_name: 'Bangladesh Power Development Board (BPDB)', product_name: 'PS System Support', name: 'BPDB SW Maintenance 2026', end_date: '2026-05-14', opportunity_owner: 'Mohammad A. Hadi', opp_amount: 57857.4, probability: 60, stage: 'Proposal', priority: 'High', color: '#06B6D4' },
-  { code: 'SA131817', product_amount: 190, account_name: 'Department of Geology - DU', product_name: 'PS System Support', name: 'Esri EduSW MediumLab license 3 years - 2025 - GeoDU', end_date: '2026-06-24', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 3002.95, probability: 60, stage: 'Proposal', priority: 'Low', color: '#F43F5E' },
-  { code: 'SA133734', product_amount: 246, account_name: 'Gas Transmission Company Limited (GTCL)', product_name: 'PS Project Implementation', name: 'Upgradation to ArcGIS Online Creator User Type Annual Subscription', end_date: '2026-06-30', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 1760, probability: 80, stage: 'Negotiate', priority: 'Medium', color: '#84CC16' },
-  { code: 'SA136260', product_amount: 190, account_name: 'Independent University Bangladesh', product_name: 'PS System Support', name: 'ArcGIS Medium Lab: 2026-2027', end_date: '2026-04-09', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 1127.65, probability: 100, stage: 'Closed Won', priority: 'Low', color: '#A855F7', project_closing_date: '' },
-  { code: 'SA129008', product_amount: 5320, account_name: '24 Engineer Construction Brigade', product_name: 'PS System Support', name: 'Esri SW for BD Army 24 Engineers', end_date: '2026-04-30', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 45699.8, probability: 100, stage: 'Closed Won', priority: 'High', color: '#0EA5E9', project_closing_date: '' },
-  { code: 'SA137026', product_amount: 190, account_name: 'BRAC', product_name: 'PS System Support', name: 'AGOL PRO PLUS for BRAC', end_date: '2026-05-17', opportunity_owner: 'Basher Muhammad Raquibul Raquibul', opp_amount: 799.9, probability: 100, stage: 'Closed Won', priority: 'Low', color: '#EAB308', project_closing_date: '' },
-  { code: 'SA132317', product_amount: 3005, account_name: 'Directorate of Technical Education', product_name: 'PS Project Implementation', name: 'DTE_ArcGIS_Pro_Advance', end_date: '2026-05-20', opportunity_owner: 'Zobayer Ahmed', opp_amount: 245283.4, probability: 100, stage: 'Closed Won', priority: 'High', color: '#22C55E', project_closing_date: '' },
-];
+/* ── FY27 Pipeline projects — loaded verbatim from pipeline_seed.json ──────────
+   Generated by Python directly from the Excel file with zero value changes.
+   Each record maps 1-to-1 with an Excel row (all 12 columns preserved).       */
+const PIPELINE_PROJECTS = JSON.parse(
+  fs.readFileSync(path.join(__dirname, 'pipeline_seed.json'), 'utf-8')
+).map(r => ({
+  ...r,
+  client: r.account_name,
+  budget: r.opp_amount,
+  spent_pct: 0,
+  progress: 0,   // ← always 0; pipeline CW rows are active running projects
+  priority: r.opp_amount >= 50000 ? 'High' : r.opp_amount >= 10000 ? 'Medium' : 'Low',
+  color: (() => { const C = ['#8B5CF6', '#14B8A6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#06B6D4', '#F43F5E', '#84CC16', '#A855F7', '#0EA5E9', '#EAB308', '#22C55E', '#3B82F6', '#D946EF']; return C[Math.abs(r.code.split('').reduce((a, c) => a + c.charCodeAt(0), 0)) % C.length]; })(),
+  project_closing_date: '',
+}));
 
-/* ── Historical projects from PSreport full data ────────────────
-   mkp(closeDate, owner, code, productName, name, account, prob, productAmt, amt, stage)
-   ─────────────────────────────────────────────────────────────── */
 /* ── Historical projects — loaded verbatim from historical_seed.json ─────────
    Generated by Python directly from the Excel file with zero value changes.
    Each record maps 1-to-1 with an Excel row (all 11 columns preserved).      */
@@ -189,5 +170,19 @@ function seed(db) {
   console.log('Seed complete.');
 }
 
-module.exports = { getDb, createSchema, seed, DB_PATH, fiscalYearLabel };
-if (require.main === module) cli();
+module.exports = { getDb, createSchema, seed, DB_PATH };
+
+if (require.main === module) {
+  const args = process.argv.slice(2);
+  const db = getDb();
+  createSchema(db);
+  if (args.includes('--reset')) {
+    db.exec("DELETE FROM assignments; DELETE FROM projects; DELETE FROM employees;");
+    db.exec("DELETE FROM sqlite_sequence WHERE name IN ('employees','projects','assignments');");
+    console.log('Database reset.');
+  }
+  if (args.includes('--seed') || args.includes('--reset')) {
+    seed(db);
+  }
+  db.close();
+}
