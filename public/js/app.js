@@ -402,6 +402,87 @@ function renderNewLogoChart(data, filter) {
     }
   });
 }
+
+/* ── Revenue chart drill-down modal ──────────────────────────── */
+function openRevenueModal(d) {
+  const fmtUsdK = v => v >= 1_000_000 ? '$' + (v / 1_000_000).toFixed(3) + 'M'
+    : v >= 1_000 ? '$' + (v / 1_000).toFixed(1) + 'K' : '$' + Number(v).toFixed(2);
+
+  const projRow = (p, showFamily) => `
+    <div class="flex items-center justify-between gap-3 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors">
+      <div class="min-w-0">
+        <div class="text-xs font-semibold text-gray-800 truncate">${esc(p.name)}</div>
+        <div class="text-xs text-gray-400 mono">${esc(p.code)}${showFamily && p.product_family ? ` · ${esc(p.product_family)}` : ''}</div>
+      </div>
+      <span class="text-xs font-bold text-gray-700 mono flex-shrink-0">${fmtUsdK(p.amount)}</span>
+    </div>`;
+
+  const allProjs = d.all_projects || [];
+  const psProjs = d.ps_projects || [];
+
+  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · product_amount per project')}
+    <div class="p-6 overflow-y-auto nice-scroll space-y-6" style="max-height:65vh">
+
+      <!-- Total Amount -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#0ea5e9"></span>
+            <span class="text-sm font-semibold text-gray-800">Total Amount</span>
+            <span class="text-xs text-gray-400">${allProjs.length} project${allProjs.length === 1 ? '' : 's'}</span>
+          </div>
+          <span class="text-sm font-bold text-sky-600 mono">${fmtUsdK(d.total_amount)}</span>
+        </div>
+        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
+          ${allProjs.map(p => projRow(p, true)).join('') || '<p class="text-xs text-gray-400 px-3">No projects</p>'}
+        </div>
+      </div>
+
+      <!-- PS Amount -->
+      <div>
+        <div class="flex items-center justify-between mb-2">
+          <div class="flex items-center gap-2">
+            <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#8b5cf6"></span>
+            <span class="text-sm font-semibold text-gray-800">PS Amount</span>
+            <span class="text-xs text-gray-400">${psProjs.length} PS project${psProjs.length === 1 ? '' : 's'}</span>
+          </div>
+          <span class="text-sm font-bold text-violet-600 mono">${fmtUsdK(d.ps_amount)}</span>
+        </div>
+        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
+          ${psProjs.map(p => projRow(p, false)).join('') || '<p class="text-xs text-gray-400 px-3">No PS projects this FY</p>'}
+        </div>
+      </div>
+
+      <!-- PS Share % Calculation -->
+      <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
+        <div class="flex items-center gap-2 mb-3">
+          <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#10b981"></span>
+          <span class="text-sm font-semibold text-emerald-800">PS Share % — Calculation</span>
+        </div>
+        <div class="font-mono text-sm text-emerald-900 space-y-1">
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-700">PS Amount</span>
+            <span class="font-bold">${fmtUsdK(d.ps_amount)}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-700">Total Amount</span>
+            <span class="font-bold">${fmtUsdK(d.total_amount)}</span>
+          </div>
+          <div class="border-t border-emerald-200 my-2"></div>
+          <div class="flex items-center justify-between text-base">
+            <span class="text-emerald-700">${fmtUsdK(d.ps_amount)} ÷ ${fmtUsdK(d.total_amount)} × 100</span>
+            <span class="font-bold text-emerald-800 text-lg">${d.pct.toFixed(1)}%</span>
+          </div>
+        </div>
+      </div>
+
+    </div>
+    <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+      <button onclick="closeModal()" class="btn-gray">Close</button>
+    </div>`, 'max-w-xl');
+}
+
+
 /* ================================================================ PS REVENUE CHART */
 function renderPsRevenueChart(data) {
   if (S.charts.psRevenue) S.charts.psRevenue.destroy();
@@ -490,6 +571,15 @@ function renderPsRevenueChart(data) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      onClick: (event, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        if (data[idx]) openRevenueModal(data[idx]);
+      },
+      onHover: (event, elements) => {
+        const target = event.native?.target;
+        if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
       layout: { padding: { top: 28, left: 4, right: 4, bottom: 0 } },
       interaction: { mode: 'index', intersect: false },
       plugins: {

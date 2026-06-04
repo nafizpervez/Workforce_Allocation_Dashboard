@@ -102,7 +102,7 @@ const safeNum = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n 
 /* ─── Revenue chart — PS% of total per FY (Closed Won only) ── */
 app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
   const rows = db.prepare(`
-    SELECT end_date, product_amount, product_family, stage
+    SELECT id, code, name, end_date, product_amount, product_family, stage
     FROM projects
     WHERE stage = 'Closed Won'
   `).all();
@@ -111,11 +111,13 @@ app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
   for (const r of rows) {
     const fy = getFiscalYear(r.end_date);
     if (fy === null) continue;
-    if (!fyData[fy]) fyData[fy] = { total: 0, ps: 0 };
+    if (!fyData[fy]) fyData[fy] = { total: 0, ps: 0, allProjects: [], psProjects: [] };
     const amt = r.product_amount || 0;
     fyData[fy].total += amt;
+    fyData[fy].allProjects.push({ name: r.name || r.code, code: r.code, amount: amt, product_family: r.product_family || '—' });
     if (r.product_family === 'Professional Services') {
       fyData[fy].ps += amt;
+      fyData[fy].psProjects.push({ name: r.name || r.code, code: r.code, amount: amt });
     }
   }
 
@@ -127,6 +129,8 @@ app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
       ps_amount: +d.ps.toFixed(2),
       total_amount: +d.total.toFixed(2),
       pct: d.total > 0 ? +((d.ps / d.total) * 100).toFixed(1) : 0,
+      all_projects: d.allProjects.sort((a, b) => b.amount - a.amount),
+      ps_projects: d.psProjects.sort((a, b) => b.amount - a.amount),
     }));
 
   res.json(result);
