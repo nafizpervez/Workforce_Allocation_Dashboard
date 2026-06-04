@@ -192,7 +192,7 @@ function renderStats(s) {
   const n = s.active_employees || 1;
   const cards = [
     { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Count of all resources registered in the system`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
-    { v: s.active_projects.toLocaleString(), label: 'Active Projects', tk: 'projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
+    { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
     { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: `Sum of all weekly allocation % ÷ Total assignment slots`, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
     { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
     { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Avg Utilization (${s.avg_utilization}%) ÷ ${s.ps_count} PS Resources = ${s.productivity}`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
@@ -298,9 +298,9 @@ function dealStatusBadge(status) {
 
 /* ── Deal breakdown modal (click on any bar) ─────────────────── */
 function openDealModal(fyData) {
-  const { label, accounts } = fyData;
+  const { label, projects } = fyData;
   const section = (status, badgeCls, icon) => {
-    const list = accounts[status] || [];
+    const list = projects[status] || [];
     if (!list.length) return `<div class="mb-4"><div class="flex items-center gap-2 mb-1.5"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span><span class="text-xs text-gray-400">0 accounts</span></div></div>`;
     return `<div class="mb-5">
       <div class="flex items-center gap-2 mb-2">
@@ -310,7 +310,7 @@ function openDealModal(fyData) {
       <div class="space-y-1">${list.map(a => `<div class="text-sm text-gray-800 py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">${esc(a)}</div>`).join('')}</div>
     </div>`;
   };
-  openModal(`${mHdr(label + ' — Deal Breakdown', 'Closed Won account names by acquisition type')}
+  openModal(`${mHdr(label + ' — Deal Breakdown', 'Closed Won project names by acquisition type')}
     <div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
       ${section('NEW LOGO', 'bg-emerald-100 text-emerald-700', '⭐')}
       ${section('REPEAT', 'bg-blue-100 text-blue-700', '↺')}

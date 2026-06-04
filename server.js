@@ -29,7 +29,77 @@ function fiscalMonths(fy) {
 const FISCAL_WHERE = `((year = ? AND month >= 4) OR (year = ? AND month <= 3))`;
 const fiscalParams = fy => [fy, fy + 1];
 
-/* ─── Revenue chart — PS% of total per FY (Closed Won only) ────── */
+const DISPLAY_CUTOFF = '2025-10-01';
+
+function getFiscalYear(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr + 'T00:00:00');
+  if (isNaN(d)) return null;
+  const month = d.getMonth() + 1;
+  return month >= 4 ? d.getFullYear() : d.getFullYear() - 1;
+}
+function fyLabel(fy) { return `FY ${fy + 1}`; }
+
+function calcDealStatuses(allProjects) {
+  /* ── 1. Build Closed Won history keyed by account_name ── */
+  const acctMap = {};
+  for (const p of allProjects) {
+    if (p.stage !== 'Closed Won') continue;
+    const fy = getFiscalYear(p.end_date);
+    if (fy === null) continue;
+    const key = (p.account_name || p.client || '').trim().toLowerCase();
+    if (!key) continue;
+    (acctMap[key] || (acctMap[key] = [])).push({ fy, id: p.id });
+  }
+  for (const k of Object.keys(acctMap)) acctMap[k].sort((a, b) => a.fy - b.fy || a.id - b.id);
+
+  const out = {};
+
+  /* ── 2. Assign status to CLOSED WON projects sequentially ── */
+  for (const key of Object.keys(acctMap)) {
+    let prevStatus = null, prevFY = null;
+    for (const occ of acctMap[key]) {
+      let status;
+      if (prevStatus === null) {
+        status = 'NEW LOGO';
+      } else if (prevFY === occ.fy) {
+        status = prevStatus === 'REACTIVE' ? 'REPEAT' : prevStatus;
+      } else if (prevFY === occ.fy - 1) {
+        status = 'REPEAT';
+      } else {
+        status = 'REACTIVE';
+      }
+      out[occ.id] = status;
+      prevStatus = status;
+      prevFY = occ.fy;
+    }
+  }
+
+  /* ── 3. Prospective status for NON-Closed Won (pipeline) ── */
+  for (const p of allProjects) {
+    if (p.stage === 'Closed Won') continue;
+    const fy = getFiscalYear(p.end_date) || new Date().getFullYear();
+    const key = (p.account_name || p.client || '').trim().toLowerCase();
+    const hist = acctMap[key] || [];
+    if (hist.length === 0) {
+      out[p.id] = 'NEW LOGO';
+    } else {
+      const lastFY = hist[hist.length - 1].fy;
+      out[p.id] = (lastFY >= fy - 1) ? 'REPEAT' : 'REACTIVE';
+    }
+  }
+
+  /* ── 4. Fallback ── */
+  for (const p of allProjects) {
+    if (!(p.id in out)) out[p.id] = 'NEW LOGO';
+  }
+
+  return out;
+}
+
+const safeNum = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };
+
+/* ─── Revenue chart — PS% of total per FY (Closed Won only) ── */
 app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
   const rows = db.prepare(`
     SELECT end_date, product_amount, product_family, stage
@@ -37,7 +107,6 @@ app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
     WHERE stage = 'Closed Won'
   `).all();
 
-  /* Group by FY: accumulate total product_amount and PS-only product_amount */
   const fyData = {};
   for (const r of rows) {
     const fy = getFiscalYear(r.end_date);
@@ -50,7 +119,6 @@ app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
     }
   }
 
-  /* Build result — pct = PS amount as % of total amount for that FY */
   const result = Object.entries(fyData)
     .sort((a, b) => +a[0] - +b[0])
     .map(([fy, d]) => ({
@@ -63,89 +131,6 @@ app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
 
   res.json(result);
 });
-const DISPLAY_CUTOFF = '2025-10-01';
-
-
-function getFiscalYear(dateStr) {
-  if (!dateStr) return null;
-  const d = new Date(dateStr + 'T00:00:00');
-  if (isNaN(d)) return null;
-  const month = d.getMonth() + 1;
-  return month >= 4 ? d.getFullYear() : d.getFullYear() - 1;
-}
-function fyLabel(fy) { return `FY ${fy + 1}`; }
-
-/* ─── Only count projects whose product_name is PS-related ─────── */
-function isPSProduct(name) {
-  return name && name.trim().toUpperCase().startsWith('PS ');
-}
-
-function calcDealStatuses(allProjects) {
-  /* ── 1. Build Closed Won history keyed by account_name (PS products only) ── */
-  const acctMap = {};
-  for (const p of allProjects) {
-    if (p.stage !== 'Closed Won') continue;
-    const fy = getFiscalYear(p.end_date);
-    if (fy === null) continue;
-    const key = (p.account_name || p.client || '').trim().toLowerCase();
-    if (!key) continue;
-    (acctMap[key] || (acctMap[key] = [])).push({ fy, id: p.id });
-  }
-  /* sort each account's appearances chronologically */
-  for (const k of Object.keys(acctMap)) acctMap[k].sort((a, b) => a.fy - b.fy || a.id - b.id);
-
-  const out = {};
-
-  /* ── 2. Assign status to CLOSED WON projects sequentially ──── */
-  for (const key of Object.keys(acctMap)) {
-    let prevStatus = null, prevFY = null;
-    for (const occ of acctMap[key]) {
-      let status;
-      if (prevStatus === null) {
-        /* First-ever Closed Won for this account */
-        status = 'NEW LOGO';
-      } else if (prevFY === occ.fy) {
-        /* Same fiscal year — inherit the previous status, with one exception:
-           prev=NEW LOGO  → NEW LOGO  (both entries are first-ever)
-           prev=REPEAT    → REPEAT    (both entries are consecutive-year repeats)
-           prev=REACTIVE  → REPEAT    (came back after gap; second entry repeats it) */
-        status = prevStatus === 'REACTIVE' ? 'REPEAT' : prevStatus;
-      } else if (prevFY === occ.fy - 1) {
-        /* Consecutive FY — came back next year */
-        status = 'REPEAT';
-      } else {
-        /* Gap of ≥1 FY skipped — reactivated */
-        status = 'REACTIVE';
-      }
-      out[occ.id] = status;
-      prevStatus = status;
-      prevFY = occ.fy;
-    }
-  }
-
-  /* ── 3. Prospective status for NON-Closed Won (pipeline) ────── */
-  for (const p of allProjects) {
-    if (p.stage === 'Closed Won') continue;
-    const fy = getFiscalYear(p.end_date) || new Date().getFullYear();
-    const key = (p.account_name || p.client || '').trim().toLowerCase();
-    const hist = acctMap[key] || [];
-    if (hist.length === 0) {
-      out[p.id] = 'NEW LOGO';
-    } else {
-      const lastFY = hist[hist.length - 1].fy;
-      /* If last win was this FY or previous FY → REPEAT; else REACTIVE */
-      out[p.id] = (lastFY >= fy - 1) ? 'REPEAT' : 'REACTIVE';
-    }
-  }
-
-  /* ── 4. Fallback (no account_name / no date) ─────────────────── */
-  for (const p of allProjects) {
-    if (!(p.id in out)) out[p.id] = 'NEW LOGO';
-  }
-
-  return out;
-}
-const safeNum = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };
 
 /* ─── employees ───────────────────────────────────────────────── */
 app.get('/api/employees', (_, res) =>
@@ -183,7 +168,7 @@ const PROJECT_FIELDS = [
 
 app.get('/api/projects', (_, res) => {
   const rows = db.prepare('SELECT * FROM projects ORDER BY id').all();
-  const statusMap = calcDealStatuses(rows);  // rows have account_name, client, stage
+  const statusMap = calcDealStatuses(rows);
   res.json(rows.map(r => ({ ...r, deal_status: statusMap[r.id] || 'NEW LOGO' })));
 });
 
@@ -293,7 +278,6 @@ app.get('/api/dashboard/stats', (req, res) => {
 
   const activeEmployees = db.prepare('SELECT COUNT(*) AS c FROM employees').get().c;
   const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage != 'Closed Won'`).get().c;
-  // Assigned Projects: distinct projects that have at least one assignment this FY
   const assignedProjects = db.prepare(`SELECT COUNT(DISTINCT project_id) AS c FROM assignments WHERE ${FISCAL_WHERE}`).get(...fiscalParams(fy)).c;
 
   const avgUtil = db.prepare(`
@@ -393,7 +377,7 @@ app.get('/api/dashboard/pipeline', (_, res) => {
   res.json(rows);
 });
 
-/* Running Projects: Closed Won projects, sorted by project_closing_date (fallback end_date) */
+/* Running Projects: Closed Won, progress < 100, from cutoff date */
 app.get('/api/dashboard/deadlines', (_, res) => {
   const today = new Date();
   const rows = db.prepare(`
@@ -409,7 +393,7 @@ app.get('/api/dashboard/deadlines', (_, res) => {
      END ASC
   `).all(DISPLAY_CUTOFF);
 
-  const allProjects = db.prepare('SELECT id, code, account_name, client, end_date, stage, product_name FROM projects').all();
+  const allProjects = db.prepare('SELECT id, code, name, account_name, client, end_date, stage, product_name FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);
 
   const enriched = rows.map(r => {
@@ -423,33 +407,44 @@ app.get('/api/dashboard/deadlines', (_, res) => {
 
 /* ─── New Logo bar chart data ─────────────────────────────────── */
 app.get('/api/dashboard/new-logo-chart', (_, res) => {
-  const allProjects = db.prepare('SELECT id, code, account_name, client, end_date, stage, product_name FROM projects').all();
+  /* ★ FIX: include `name` so p.name resolves to project name, not p.code ★ */
+  const allProjects = db.prepare(
+    'SELECT id, code, name, account_name, client, end_date, stage, product_name FROM projects'
+  ).all();
+
   const statusMap = calcDealStatuses(allProjects);
   const fyData = {};
-  const fyAccounts = {};
+  const fyProjects = {};
+
   for (const p of allProjects) {
-    if (p.stage !== 'Closed Won') continue;   // all departments, all product families
+    if (p.stage !== 'Closed Won') continue;
     if (!p.end_date) continue;
     const fy = getFiscalYear(p.end_date);
     if (fy === null) continue;
     const st = statusMap[p.id] || 'NEW LOGO';
-    const acct = (p.account_name || p.client || 'Unknown').trim();
+    /* Use project name (p.name); fall back to code only if name is blank */
+    const projName = (p.name || p.code || 'Unknown').trim();
     if (!fyData[fy]) fyData[fy] = { 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0 };
-    if (!fyAccounts[fy]) fyAccounts[fy] = { 'NEW LOGO': new Set(), 'REPEAT': new Set(), 'REACTIVE': new Set() };
+    if (!fyProjects[fy]) fyProjects[fy] = { 'NEW LOGO': new Set(), 'REPEAT': new Set(), 'REACTIVE': new Set() };
     fyData[fy][st]++;
-    fyAccounts[fy][st].add(acct);
+    fyProjects[fy][st].add(projName);
   }
+
   const result = Object.entries(fyData)
     .sort((a, b) => +a[0] - +b[0])
     .map(([fy, c]) => ({
-      fy: +fy, label: fyLabel(+fy),
-      'NEW LOGO': c['NEW LOGO'], 'REPEAT': c['REPEAT'], 'REACTIVE': c['REACTIVE'],
-      accounts: {
-        'NEW LOGO': [...(fyAccounts[+fy]?.['NEW LOGO'] || [])].sort(),
-        'REPEAT': [...(fyAccounts[+fy]?.['REPEAT'] || [])].sort(),
-        'REACTIVE': [...(fyAccounts[+fy]?.['REACTIVE'] || [])].sort(),
+      fy: +fy,
+      label: fyLabel(+fy),
+      'NEW LOGO': c['NEW LOGO'],
+      'REPEAT': c['REPEAT'],
+      'REACTIVE': c['REACTIVE'],
+      projects: {
+        'NEW LOGO': [...(fyProjects[+fy]?.['NEW LOGO'] || [])].sort(),
+        'REPEAT': [...(fyProjects[+fy]?.['REPEAT'] || [])].sort(),
+        'REACTIVE': [...(fyProjects[+fy]?.['REACTIVE'] || [])].sort(),
       }
     }));
+
   res.json(result);
 });
 
