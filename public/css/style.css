@@ -750,3 +750,34 @@ td.cell:hover .cell-add {
   color: #3730a3 !important;
   border-color: #a5b4fc !important;
 }
+
+/* ── Chart section tabs (Deal Acquisition / PS Revenue / Tab 3) ── */
+.chart-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  margin-right: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.chart-tab-btn:hover {
+  color: #374151;
+}
+.chart-tab-btn.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+.chart-tab-content {
+  transition: opacity 0.15s;
+}
+.chart-tab-content.hidden {
+  display: none;
+}

@@ -12,6 +12,7 @@ const S = {
   insightsPeriodLow: 'month',
   newLogoFilter: 'COMBINED',
   newLogoChartData: [],
+  psRevenueData: [],
   /* matrix filters */
   matrixProjectFilter: null, matrixResourceFilter: null,
   matrixMonthFilter: '', matrixStageFilt: '', matrixAmountFilt: '',
@@ -124,7 +125,7 @@ function toast(msg, kind = 'success') { const root = document.getElementById('to
 async function loadAll() {
   try {
     const fy = S.fiscalYear;
-    const [emps, projs, asgs, stats, trends, wl, util, pipe, dl, nlChart] = await Promise.all([
+    const [emps, projs, asgs, stats, trends, wl, util, pipe, dl, nlChart, psRevChart] = await Promise.all([
       api('GET', '/api/employees'), api('GET', '/api/projects'),
       api('GET', `/api/assignments?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/stats?fiscalYear=${fy}`),
@@ -134,6 +135,7 @@ async function loadAll() {
       api('GET', '/api/dashboard/pipeline'),
       api('GET', '/api/dashboard/deadlines'),
       api('GET', '/api/dashboard/new-logo-chart'),
+      api('GET', '/api/dashboard/ps-revenue-chart'),
     ]);
     S.employees = emps; S.projects = projs; S.assignments = asgs;
     buildMatrix();
@@ -141,6 +143,7 @@ async function loadAll() {
     renderStats(stats);
     renderMatrix();
     renderTrends(trends); renderWorkload(wl); renderAllocation(wl); renderNewLogoChart(nlChart);
+    S.psRevenueData = psRevChart;
     renderInsights();
     S.lastRunningData = dl;
     applyAndRenderRunning();
@@ -336,6 +339,7 @@ function renderNewLogoChart(data, filter) {
       label: st, data: d.map(x => x[st] || 0),
       backgroundColor: COLORS[st].bg, hoverBackgroundColor: COLORS[st].hover,
       borderRadius: 5, borderSkipped: false,
+      barPercentage: 0.88, categoryPercentage: 0.75,
     }));
     plugins = [centerLabelPlugin];
     showLegend = true;
@@ -343,7 +347,8 @@ function renderNewLogoChart(data, filter) {
     datasets = [{
       label: f, data: d.map(x => x[f] || 0),
       backgroundColor: COLORS[f].bg, hoverBackgroundColor: COLORS[f].hover,
-      borderRadius: 8, borderSkipped: false
+      borderRadius: 8, borderSkipped: false,
+      barPercentage: 1.0, categoryPercentage: 0.55
     }];
     plugins = [centerLabelPlugin];
     showLegend = false;
@@ -354,6 +359,7 @@ function renderNewLogoChart(data, filter) {
     data: { labels: d.map(x => x.label), datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 28, left: 4, right: 4, bottom: 0 } },
       onClick: (event, elements) => {
         if (!elements.length) return;
         const idx = elements[0].index;
@@ -366,9 +372,9 @@ function renderNewLogoChart(data, filter) {
       },
       plugins: {
         legend: {
-          display: showLegend, position: 'top',
+          display: showLegend, position: 'bottom',
           labels: {
-            boxWidth: 12, boxHeight: 12, padding: 18, font: { size: 12, weight: '600' },
+            boxWidth: 12, boxHeight: 12, padding: 20, font: { size: 12, weight: '600' },
             generateLabels: chart => chart.data.datasets.map((ds, i) => ({
               text: ds.label, fillStyle: ['#14b8a6', '#3b82f6', '#f59e0b'][i],
               strokeStyle: 'transparent', index: i,
@@ -387,9 +393,58 @@ function renderNewLogoChart(data, filter) {
     }
   });
 }
+/* ================================================================ PS REVENUE CHART */
+function renderPsRevenueChart(data) {
+  if (S.charts.psRevenue) S.charts.psRevenue.destroy();
+  const canvas = document.getElementById('psRevenueChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+  const grad = ctx.createLinearGradient(0, 0, 0, 300);
+  grad.addColorStop(0, 'rgba(139,92,246,0.9)');
+  grad.addColorStop(1, 'rgba(99,102,241,0.65)');
+  const fmtK = v => v >= 1000000 ? '$' + (v / 1000000).toFixed(1) + 'M' : v >= 1000 ? '$' + (v / 1000).toFixed(1) + 'K' : '$' + v.toFixed(0);
+  S.charts.psRevenue = new Chart(ctx, {
+    type: 'bar',
+    plugins: [{ id: 'topLabel', afterDatasetsDraw(chart) { const { ctx: c } = chart; chart.getDatasetMeta(0).data.forEach((bar, i) => { const v = data[i]?.revenue || 0; if (!v) return; const { x, y } = bar.getProps(['x', 'y'], true); c.save(); c.fillStyle = '#1f2937'; c.font = 'bold 12px Inter,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'bottom'; c.fillText(fmtK(v), x, y - 4); c.restore(); }); } }],
+    data: {
+      labels: data.map(d => d.label),
+      datasets: [{
+        label: 'PS Revenue', data: data.map(d => d.revenue),
+        backgroundColor: grad, hoverBackgroundColor: '#7c3aed',
+        borderRadius: 6, borderSkipped: false, barPercentage: 1.0, categoryPercentage: 0.55
+      }]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      plugins: {
+        legend: { display: false },
+        tooltip: {
+          bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10,
+          callbacks: { label: c => `  USD ${(c.parsed.y || 0).toLocaleString('en-US', { minimumFractionDigits: 2 })}` }
+        },
+      },
+      scales: {
+        x: { ticks: { font: { size: 13, weight: '600' }, color: '#374151' }, grid: { display: false }, border: { display: false } },
+        y: { beginAtZero: true, ticks: { font: { size: 12 }, color: '#6B7280', callback: v => '$' + v.toLocaleString() }, grid: { color: '#F3F4F6' }, border: { display: false } },
+      }
+    }
+  });
+}
+
+/* ── Chart tab switching ──────────────────────────────────────── */
+function switchChartTab(tab) {
+  document.querySelectorAll('.chart-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.chartTab === tab));
+  document.querySelectorAll('.chart-tab-content').forEach(c => c.classList.toggle('hidden', !c.id.endsWith('-' + tab)));
+  const filters = document.getElementById('dealAcqFilters');
+  if (filters) filters.classList.toggle('hidden', tab !== 'acquisition');
+  /* Re-render charts when switching to ensure canvas is sized */
+  if (tab === 'revenue' && S.psRevenueData) renderPsRevenueChart(S.psRevenueData);
+  if (tab === 'acquisition') renderNewLogoChart(null, S.newLogoFilter);
+}
+
 function runningProjectRowHtml(d) {
   const barColor = '#10B981';
-  const amount = fmtUsd(d.opp_amount || d.budget || 0);
+  const amount = fmtUsd(d.product_amount || 0);
   const closingDate = d.closing_date || d.project_closing_date || d.end_date;
   const today = new Date();
   const daysVal = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
@@ -444,7 +499,7 @@ function renderRunningProjects(data) { S.lastRunningData = data; applyAndRenderR
 /* ================================================================ SERVICE PIPELINE — rich layout + proj closing date */
 function servicePipelineRowHtml(p) {
   const barColor = STAGE_COLOR[p.stage] || '#6B7280', pillCls = STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700';
-  const amount = fmtUsd(p.opp_amount ?? p.budget ?? 0);
+  const amount = fmtUsd(p.product_amount ?? 0);
   /* Project Closing Date line */
   /* Project Close Date — right-aligned, under Close Date, days in red */
   let projCloseDateHtml = '<div class="text-xs text-gray-400 mt-0.5">Project Close Date: —</div>';
@@ -545,9 +600,6 @@ async function saveEmployee(id) {
   const code = document.getElementById('fe_code').value.trim();
   const name = document.getElementById('fe_name').value.trim();
   if (!name) { toast('Name is required', 'error'); return; }
-  /* ── duplicate check ── */
-  const dup = S.employees.find(e => { if (id && e.id === id) return false; return (code && e.employee_code === code) || e.name.toLowerCase() === name.toLowerCase(); });
-  if (dup) { toast(dup.name.toLowerCase() === name.toLowerCase() ? `A resource named "${name}" already exists` : `A resource with ID "${code}" already exists`, 'error'); return; }
   try { const p = { employee_code: code, name, dept: document.getElementById('fe_dept').value, email: document.getElementById('fe_email').value.trim() }; if (id) await api('PUT', `/api/employees/${id}`, p); else await api('POST', '/api/employees', p); closeModal(); toast(`Resource ${id ? 'updated' : 'added'}`); await loadAll(); } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -558,15 +610,16 @@ function openProjectModal(opts = {}) {
   const editing = !!opts.id, p = editing ? S.projects.find(x => x.id === opts.id) : null, v = (k, fb) => p ? (p[k] ?? fb) : fb;
   const OWNER_OPTS = ['Abdullah Al Baki', 'Basher Muhammad Raquibul Raquibul', 'Zobayer Ahmed', 'Most Iffat Ara Ila', 'Md Naiemul Haque Chowdhury', 'Mohammad A. Hadi'];
   const todayStr = new Date().toISOString().slice(0, 10);
-  openModal(`${mHdr(editing ? 'Edit Project' : 'Add Project', editing ? 'Update project details' : 'Register a new project')}<div class="p-6 space-y-4 max-h-[80vh] overflow-y-auto nice-scroll">
+  openModal(`${mHdr(editing ? 'Edit Project' : 'Add Project', editing ? 'Update project details' : 'Register a new project')}<div class="p-6 space-y-4 max-h-[55vh] overflow-y-auto nice-scroll">
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Opportunity Number</label><input id="fp_code" type="text" class="field-input mono" value="${esc(v('code', ''))}" placeholder="e.g. SA136664"></div><div><label class="field-label">Priority</label><select id="fp_pri" class="field-input">${PRIORITIES.map(x => `<option ${x === v('priority', 'Medium') ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
     <div><label class="field-label">Project Name</label><input id="fp_name" type="text" class="field-input" value="${esc(v('name', ''))}" placeholder="e.g. Desktop SW for IWM 2026"></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Account Name</label><input id="fp_account" type="text" class="field-input" value="${esc(v('account_name', v('client', '')))}"></div><div><label class="field-label">Product Name</label><input id="fp_product_name" type="text" class="field-input" value="${esc(v('product_name', ''))}"></div></div>
-    <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Opportunity Owner</label><input id="fp_owner" type="text" class="field-input" list="ownerList" value="${esc(v('opportunity_owner', ''))}"><datalist id="ownerList">${OWNER_OPTS.map(o => `<option value="${esc(o)}">`).join('')}</datalist></div><div><label class="field-label">Stage</label><select id="fp_stage" class="field-input">${STAGES.map(x => `<option ${x === v('stage', 'Prospect') ? 'selected' : ''}>${x}</option>`).join('')}</select></div></div>
+    <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Product Family</label><input id="fp_product_family" type="text" class="field-input" value="${esc(v('product_family', ''))}" placeholder="e.g. Professional Service, Software…"></div><div><label class="field-label">Opportunity Owner</label><input id="fp_owner" type="text" class="field-input" list="ownerList" value="${esc(v('opportunity_owner', ''))}"><datalist id="ownerList">${OWNER_OPTS.map(o => `<option value="${esc(o)}">`).join('')}</datalist></div></div>
+    <div><label class="field-label">Stage</label><select id="fp_stage" class="field-input">${STAGES.map(x => `<option ${x === v('stage', 'Prospect') ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Product Amount (USD)</label><input id="fp_product_amount" type="number" class="field-input" value="${v('product_amount', 0)}" min="0" step="0.01"></div><div><label class="field-label">Probability (%)</label><input id="fp_probability" type="number" class="field-input" value="${v('probability', 0)}" min="0" max="100" step="5"></div></div>
     <div class="grid grid-cols-3 gap-3"><div><label class="field-label">Created Date</label><input id="fp_created" type="date" class="field-input" value="${esc(v('created_date', todayStr))}"></div><div><label class="field-label">Closed Won Date</label><input id="fp_end" type="date" class="field-input" value="${esc(v('end_date', ''))}"></div><div><label class="field-label">Project Closing Date</label><input id="fp_closing" type="date" class="field-input" value="${esc(v('project_closing_date', ''))}"></div></div>
     <div><label class="field-label">Amount (USD)</label><input id="fp_opp_amount" type="number" class="field-input" value="${v('opp_amount', 0)}" min="0" step="0.01"></div>
-    <div><label class="field-label flex justify-between"><span>Progress (internal)</span><span class="text-blue-600 font-semibold" id="progLbl">${v('progress', 0)}%</span></label><input id="fp_prog" type="range" min="0" max="100" value="${v('progress', 0)}" class="w-full" oninput="document.getElementById('progLbl').textContent=this.value+'%'"></div>
+    <div><label class="field-label">Progress (internal) <span class="text-xs text-gray-400 font-normal ml-1">0 – 100</span></label><input id="fp_prog" type="number" min="0" max="100" step="1" value="${v('progress', 0)}" class="field-input" placeholder="0"></div>
     <div><label class="field-label">Color</label><div class="flex flex-wrap gap-2" id="cpkr">${PCOLORS.map(c => `<button type="button" data-c="${c}" class="w-8 h-8 rounded-lg ${c === v('color', '#8B5CF6') ? 'ring-2 ring-offset-2 ring-gray-900' : ''}" style="background:${c}"></button>`).join('')}</div><input type="hidden" id="fp_color" value="${v('color', '#8B5CF6')}"></div>
   </div>${mFtr(editing ? opts.id : null, 'saveProject', 'deleteProject')}`);
   document.querySelectorAll('#cpkr button').forEach(b => b.addEventListener('click', () => { document.getElementById('fp_color').value = b.dataset.c; document.querySelectorAll('#cpkr button').forEach(x => x.classList.remove('ring-2', 'ring-offset-2', 'ring-gray-900')); b.classList.add('ring-2', 'ring-offset-2', 'ring-gray-900'); }));
@@ -576,11 +629,8 @@ async function saveProject(id) {
   const code = document.getElementById('fp_code').value.trim().toUpperCase();
   const name = document.getElementById('fp_name').value.trim();
   if (!code || !name) { toast('Opportunity Number and Project Name are required', 'error'); return; }
-  /* ── duplicate check: only block same name on a different record ── */
-  const dup = S.projects.find(p => { if (id && p.id === id) return false; return p.name.toLowerCase() === name.toLowerCase(); });
-  if (dup) { toast(`A project named "${name}" already exists`, 'error'); return; }
   const amount = +document.getElementById('fp_opp_amount').value;
-  const payload = { code, name, account_name: document.getElementById('fp_account').value.trim(), client: document.getElementById('fp_account').value.trim(), product_name: document.getElementById('fp_product_name').value.trim(), opportunity_owner: document.getElementById('fp_owner').value.trim(), stage: document.getElementById('fp_stage').value, priority: document.getElementById('fp_pri').value, product_amount: +document.getElementById('fp_product_amount').value, probability: +document.getElementById('fp_probability').value, created_date: document.getElementById('fp_created').value, end_date: document.getElementById('fp_end').value, project_closing_date: document.getElementById('fp_closing').value, opp_amount: amount, budget: amount, progress: +document.getElementById('fp_prog').value, color: document.getElementById('fp_color').value };
+  const payload = { code, name, account_name: document.getElementById('fp_account').value.trim(), client: document.getElementById('fp_account').value.trim(), product_name: document.getElementById('fp_product_name').value.trim(), product_family: document.getElementById('fp_product_family').value.trim(), opportunity_owner: document.getElementById('fp_owner').value.trim(), stage: document.getElementById('fp_stage').value, priority: document.getElementById('fp_pri').value, product_amount: +document.getElementById('fp_product_amount').value, probability: +document.getElementById('fp_probability').value, created_date: document.getElementById('fp_created').value, end_date: document.getElementById('fp_end').value, project_closing_date: document.getElementById('fp_closing').value, opp_amount: amount, budget: amount, progress: +document.getElementById('fp_prog').value, color: document.getElementById('fp_color').value };
   try { if (id) await api('PUT', `/api/projects/${id}`, payload); else await api('POST', '/api/projects', payload); closeModal(); toast(`Project ${id ? 'updated' : 'created'}`); await loadAll(); } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -654,6 +704,9 @@ function initEvents() {
     const pr = e.target.closest('[data-action="edit-project"]'); if (pr) openProjectModal({ id: +pr.dataset.project });
     const va = e.target.closest('[data-view-all]'); if (va) openViewAllModal(va.dataset.viewAll);
   });
+
+  /* ── Chart section tab buttons ── */
+  document.querySelectorAll('.chart-tab-btn').forEach(b => b.addEventListener('click', () => switchChartTab(b.dataset.chartTab)));
 
   /* ── New Logo chart filter buttons ── */
   document.querySelectorAll('.nl-filter-btn').forEach(b => b.addEventListener('click', () => renderNewLogoChart(null, b.dataset.status)));

@@ -543,16 +543,21 @@
             </svg>
           </div>
           <div
-            class="bg-white rounded-xl p-6"
+            class="bg-white rounded-xl overflow-hidden"
             style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
           >
-            <div class="flex items-start justify-between mb-4">
-              <div class="flex items-center gap-3">
-                <div
-                  class="w-9 h-9 bg-teal-100 rounded-xl flex items-center justify-center flex-shrink-0"
+            <!-- ── Top row: tabs (left) + chart-specific controls (right) ── -->
+            <div
+              class="flex items-center justify-between px-6 pt-5 pb-0 border-b border-gray-100"
+            >
+              <!-- Three chart tabs -->
+              <div class="flex items-center gap-0">
+                <button
+                  class="chart-tab-btn active"
+                  data-chart-tab="acquisition"
                 >
                   <svg
-                    class="w-5 h-5 text-teal-600"
+                    class="w-3.5 h-3.5"
                     viewBox="0 0 24 24"
                     fill="currentColor"
                   >
@@ -560,17 +565,46 @@
                       d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
                     />
                   </svg>
-                </div>
-                <div>
-                  <h2 class="text-base font-semibold text-gray-900">
-                    Deal Acquisition Chart
-                  </h2>
-                  <p class="text-sm text-gray-500 mt-0.5">
-                    New Logo · Repeat · Reactive by fiscal year (Apr – Mar)
-                  </p>
-                </div>
+                  Deal Acquisition Chart
+                </button>
+                <button class="chart-tab-btn" data-chart-tab="revenue">
+                  <svg
+                    class="w-3.5 h-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path
+                      d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                    />
+                  </svg>
+                  PS Revenue %
+                </button>
+                <button class="chart-tab-btn" data-chart-tab="tab3">
+                  <svg
+                    class="w-3.5 h-3.5"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18M9 21V9" />
+                  </svg>
+                  Chart 3
+                </button>
               </div>
-              <div class="flex items-center gap-2 mr-10">
+              <!-- Filter buttons — only visible for Deal Acquisition tab -->
+              <div
+                id="dealAcqFilters"
+                class="flex items-center gap-2 pb-3 mr-10"
+              >
                 <button
                   class="nl-filter-btn active"
                   data-status="COMBINED"
@@ -641,88 +675,120 @@
                 </button>
               </div>
             </div>
-            <div style="height: 280px"><canvas id="newLogoChart"></canvas></div>
-            <!-- Conditions legend -->
-            <div
-              class="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-x-8 gap-y-2"
-            >
-              <div class="flex items-start gap-2.5">
-                <span
-                  class="mt-0.5 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"
-                >
-                  <svg
-                    class="w-3 h-3 text-emerald-600"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <path
-                      d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
-                    />
-                  </svg>
-                </span>
-                <div>
-                  <span class="text-xs font-semibold text-emerald-700"
-                    >NEW LOGO</span
-                  ><span class="text-xs text-gray-500 ml-1.5"
-                    >— Account name has never appeared in any prior Closed Won
-                    deal</span
-                  >
+
+            <!-- ── TAB 1: Deal Acquisition Chart ── -->
+            <div id="chartTab-acquisition" class="chart-tab-content p-6">
+              <div style="height: 300px">
+                <canvas id="newLogoChart"></canvas>
+              </div>
+              <!-- Conditions legend -->
+              <div
+                class="mt-4 pt-4 border-t border-gray-100 grid grid-cols-2 gap-x-8 gap-y-2"
+              >
+                <div class="flex items-start gap-2.5">
+                  <span
+                    class="mt-0.5 w-5 h-5 rounded-full bg-emerald-100 flex items-center justify-center flex-shrink-0"
+                    ><svg
+                      class="w-3 h-3 text-emerald-600"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <path
+                        d="M12 2l3.09 6.26L22 9.27l-5 4.87 1.18 6.88L12 17.77l-6.18 3.25L7 14.14 2 9.27l6.91-1.01L12 2z"
+                      /></svg
+                  ></span>
+                  <div>
+                    <span class="text-xs font-semibold text-emerald-700"
+                      >NEW LOGO</span
+                    ><span class="text-xs text-gray-500 ml-1.5"
+                      >— Account name has never appeared in any prior Closed Won
+                      deal</span
+                    >
+                  </div>
+                </div>
+                <div class="flex items-start gap-2.5">
+                  <span
+                    class="mt-0.5 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"
+                    ><svg
+                      class="w-3 h-3 text-blue-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2.5"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path
+                        d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
+                      />
+                      <path d="M3 3v5h5" /></svg
+                  ></span>
+                  <div>
+                    <span class="text-xs font-semibold text-blue-700"
+                      >REPEAT</span
+                    ><span class="text-xs text-gray-500 ml-1.5"
+                      >— Account's last Closed Won was in the immediately
+                      preceding fiscal year</span
+                    >
+                  </div>
+                </div>
+                <div class="flex items-start gap-2.5">
+                  <span
+                    class="mt-0.5 w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"
+                    ><svg
+                      class="w-3 h-3 text-amber-600"
+                      viewBox="0 0 24 24"
+                      fill="currentColor"
+                    >
+                      <polygon
+                        points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"
+                      /></svg
+                  ></span>
+                  <div>
+                    <span class="text-xs font-semibold text-amber-700"
+                      >REACTIVE</span
+                    ><span class="text-xs text-gray-500 ml-1.5"
+                      >— Account appeared before but skipped ≥ 1 fiscal year
+                      before returning</span
+                    >
+                  </div>
+                </div>
+                <div class="flex items-start gap-2.5">
+                  <span
+                    class="mt-0.5 w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"
+                    ><svg
+                      class="w-3 h-3 text-gray-500"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <circle cx="12" cy="12" r="10" />
+                      <path d="M12 8v4M12 16h.01" /></svg
+                  ></span>
+                  <div>
+                    <span class="text-xs font-semibold text-gray-600"
+                      >DUPLICATE RULE</span
+                    ><span class="text-xs text-gray-500 ml-1.5"
+                      >— Same account twice in same FY: both get the same status
+                      · Exception: after a gap (REACTIVE), the 2nd becomes
+                      REPEAT</span
+                    >
+                  </div>
                 </div>
               </div>
-              <div class="flex items-start gap-2.5">
-                <span
-                  class="mt-0.5 w-5 h-5 rounded-full bg-blue-100 flex items-center justify-center flex-shrink-0"
+            </div>
+
+            <!-- ── TAB 2: PS Revenue % ── -->
+            <div id="chartTab-revenue" class="chart-tab-content p-6 hidden">
+              <div class="flex items-center gap-3 mb-4">
+                <div
+                  class="w-8 h-8 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0"
                 >
                   <svg
-                    class="w-3 h-3 text-blue-600"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2.5"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
-                  >
-                    <path
-                      d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"
-                    />
-                    <path d="M3 3v5h5" />
-                  </svg>
-                </span>
-                <div>
-                  <span class="text-xs font-semibold text-blue-700">REPEAT</span
-                  ><span class="text-xs text-gray-500 ml-1.5"
-                    >— Account's last Closed Won was in the immediately
-                    preceding fiscal year</span
-                  >
-                </div>
-              </div>
-              <div class="flex items-start gap-2.5">
-                <span
-                  class="mt-0.5 w-5 h-5 rounded-full bg-amber-100 flex items-center justify-center flex-shrink-0"
-                >
-                  <svg
-                    class="w-3 h-3 text-amber-600"
-                    viewBox="0 0 24 24"
-                    fill="currentColor"
-                  >
-                    <polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2" />
-                  </svg>
-                </span>
-                <div>
-                  <span class="text-xs font-semibold text-amber-700"
-                    >REACTIVE</span
-                  ><span class="text-xs text-gray-500 ml-1.5"
-                    >— Account appeared before but skipped ≥ 1 fiscal year
-                    before returning</span
-                  >
-                </div>
-              </div>
-              <div class="flex items-start gap-2.5">
-                <span
-                  class="mt-0.5 w-5 h-5 rounded-full bg-gray-100 flex items-center justify-center flex-shrink-0"
-                >
-                  <svg
-                    class="w-3 h-3 text-gray-500"
+                    class="w-4 h-4 text-violet-600"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
@@ -730,19 +796,54 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
-                    <circle cx="12" cy="12" r="10" />
-                    <path d="M12 8v4M12 16h.01" />
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path
+                      d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                    />
                   </svg>
-                </span>
-                <div>
-                  <span class="text-xs font-semibold text-gray-600"
-                    >DUPLICATE RULE</span
-                  ><span class="text-xs text-gray-500 ml-1.5"
-                    >— Same account twice in same FY: both get the same status ·
-                    Exception: after a gap (REACTIVE), the 2nd becomes
-                    REPEAT</span
-                  >
                 </div>
+                <div>
+                  <h3 class="font-semibold text-gray-900">
+                    PS Revenue by Fiscal Year
+                  </h3>
+                  <p class="text-xs text-gray-500 mt-0.5">
+                    Closed Won · PS product lines only (Apr – Mar)
+                  </p>
+                </div>
+              </div>
+              <div style="height: 300px">
+                <canvas id="psRevenueChart"></canvas>
+              </div>
+            </div>
+
+            <!-- ── TAB 3: Placeholder ── -->
+            <div id="chartTab-tab3" class="chart-tab-content p-6 hidden">
+              <div
+                class="flex flex-col items-center justify-center"
+                style="height: 300px"
+              >
+                <div
+                  class="w-16 h-16 bg-gray-100 rounded-2xl flex items-center justify-center mb-4"
+                >
+                  <svg
+                    class="w-8 h-8 text-gray-400"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="1.5"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <rect x="3" y="3" width="18" height="18" rx="2" />
+                    <path d="M3 9h18M9 21V9" />
+                  </svg>
+                </div>
+                <p class="text-gray-500 font-medium text-sm">
+                  Chart 3 — Coming Soon
+                </p>
+                <p class="text-gray-400 text-xs mt-1">
+                  Name and data will be configured in a future update
+                </p>
               </div>
             </div>
           </div>

@@ -29,7 +29,22 @@ function fiscalMonths(fy) {
 const FISCAL_WHERE = `((year = ? AND month >= 4) OR (year = ? AND month <= 3))`;
 const fiscalParams = fy => [fy, fy + 1];
 
-/* ─── Display cutoff: only show projects from Oct 2025 onwards ── */
+/* ─── PS Revenue by fiscal year ───────────────────────────────── */
+app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
+  const rows = db.prepare('SELECT product_amount, opp_amount, end_date, stage, product_name FROM projects').all();
+  const fyRevenue = {};
+  for (const r of rows) {
+    if (r.stage !== 'Closed Won') continue;
+    if (!isPSProduct(r.product_name)) continue;
+    const fy = getFiscalYear(r.end_date);
+    if (fy === null) continue;
+    fyRevenue[fy] = (fyRevenue[fy] || 0) + (r.product_amount || 0);
+  }
+  const result = Object.entries(fyRevenue)
+    .sort((a, b) => +a[0] - +b[0])
+    .map(([fy, revenue]) => ({ fy: +fy, label: fyLabel(+fy), revenue: +revenue.toFixed(2) }));
+  res.json(result);
+});
 const DISPLAY_CUTOFF = '2025-10-01';
 
 
@@ -42,8 +57,13 @@ function getFiscalYear(dateStr) {
 }
 function fyLabel(fy) { return `FY ${fy + 1}`; }
 
+/* ─── Only count projects whose product_name is PS-related ─────── */
+function isPSProduct(name) {
+  return name && name.trim().toUpperCase().startsWith('PS ');
+}
+
 function calcDealStatuses(allProjects) {
-  /* ── 1. Build Closed Won history keyed by account_name ─────── */
+  /* ── 1. Build Closed Won history keyed by account_name (PS products only) ── */
   const acctMap = {};
   for (const p of allProjects) {
     if (p.stage !== 'Closed Won') continue;
@@ -139,7 +159,7 @@ app.delete('/api/employees/:id', (req, res) => {
 /* ─── projects ────────────────────────────────────────────────── */
 const PROJECT_FIELDS = [
   'code', 'name', 'client', 'budget', 'spent_pct', 'end_date', 'stage', 'progress', 'color', 'priority',
-  'product_amount', 'account_name', 'product_name', 'opportunity_owner', 'opp_amount', 'probability',
+  'product_amount', 'account_name', 'product_name', 'product_family', 'opportunity_owner', 'opp_amount', 'probability',
   'created_date', 'project_closing_date',
 ];
 
@@ -155,15 +175,16 @@ app.post('/api/projects', (req, res) => {
   try {
     const info = db.prepare(`
       INSERT INTO projects (code,name,client,budget,spent_pct,end_date,stage,progress,color,priority,
-        product_amount,account_name,product_name,opportunity_owner,opp_amount,probability,
+        product_amount,account_name,product_name,product_family,opportunity_owner,opp_amount,probability,
         created_date,project_closing_date)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       b.code, b.name, b.client || b.account_name || null,
       safeNum(b.budget ?? b.opp_amount, 0), safeNum(b.spent_pct, 0),
       b.end_date || null, b.stage || 'Prospect', safeNum(b.progress, 0),
       b.color || '#8B5CF6', b.priority || 'Medium',
       safeNum(b.product_amount, 0), b.account_name || null, b.product_name || null,
+      b.product_family || null,
       b.opportunity_owner || null, safeNum(b.opp_amount, 0), safeNum(b.probability, 0),
       b.created_date || null, b.project_closing_date || null
     );
@@ -359,7 +380,7 @@ app.get('/api/dashboard/deadlines', (_, res) => {
   const today = new Date();
   const rows = db.prepare(`
     SELECT id, code, name, end_date, project_closing_date, product_name,
-           progress, priority, opp_amount, account_name, stage, color, opportunity_owner
+           progress, priority, opp_amount, product_amount, account_name, stage, color, opportunity_owner
       FROM projects
      WHERE stage = 'Closed Won'
        AND end_date >= ?
@@ -369,7 +390,7 @@ app.get('/api/dashboard/deadlines', (_, res) => {
      END ASC
   `).all(DISPLAY_CUTOFF);
 
-  const allProjects = db.prepare('SELECT id, code, account_name, client, end_date, stage FROM projects').all();
+  const allProjects = db.prepare('SELECT id, code, account_name, client, end_date, stage, product_name FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);
 
   const enriched = rows.map(r => {
@@ -383,12 +404,12 @@ app.get('/api/dashboard/deadlines', (_, res) => {
 
 /* ─── New Logo bar chart data ─────────────────────────────────── */
 app.get('/api/dashboard/new-logo-chart', (_, res) => {
-  const allProjects = db.prepare('SELECT id, code, account_name, client, end_date, stage FROM projects').all();
+  const allProjects = db.prepare('SELECT id, code, account_name, client, end_date, stage, product_name FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);
   const fyData = {};
   const fyAccounts = {};
   for (const p of allProjects) {
-    if (p.stage !== 'Closed Won') continue;
+    if (p.stage !== 'Closed Won') continue;   // all departments, all product families
     if (!p.end_date) continue;
     const fy = getFiscalYear(p.end_date);
     if (fy === null) continue;
