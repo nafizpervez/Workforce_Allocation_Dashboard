@@ -189,8 +189,8 @@ function populatePipelineStageFilter() {
 function renderStats(s) {
   const t = s.trends || {};
   const cards = [
-    { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Count of all resources registered in the system`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
-    { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
+    { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', action: 'view-employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Count of all resources registered in the system`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
+    { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', action: 'view-projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
     { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: `Sum of all weekly allocation % ÷ Total assignment slots`, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
     { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
     { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Avg Utilization (${s.avg_utilization}%) ÷ ${s.ps_count} PS Resources = ${s.productivity}`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
@@ -198,7 +198,7 @@ function renderStats(s) {
   ];
   document.getElementById('statsRow').innerHTML = cards.map(c => {
     const td = t[c.tk] || { value: '—', up: true }, up = td.up;
-    return `<div class="dc dc-stat"><div class="dc-handle" title="Drag card"><svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></div>
+    return `<div class="dc dc-stat"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}><div class="dc-handle" title="Drag card"><svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></div>
     <div class="stat-card-inner bg-white rounded-xl border border-gray-200 p-5 relative" style="box-shadow:0 1px 3px rgba(0,0,0,0.1);">
       <div class="stat-tooltip">${esc(c.formula)}</div>
       <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3"><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg></div>
@@ -777,14 +777,144 @@ function openViewAllModal(type) {
 function openAssignmentModal(opts = {}) {
   const editing = !!opts.id, cur = editing ? S.assignments.find(a => a.id === opts.id) : null;
   const empId = (opts.employee_id || (cur && cur.employee_id) || (S.employees[0] && S.employees[0].id));
-  const projId = ((cur && cur.project_id) || (S.projects[0] && S.projects[0].id));
+  const curProj = cur ? S.projects.find(p => p.id === cur.project_id) : null;
   const pct = (cur && cur.percentage) || 50;
   const today = new Date();
   let defStart = today.toISOString().slice(0, 10), defEnd = today.toISOString().slice(0, 10);
-  if (!editing && opts.year && opts.month && opts.week) { defStart = new Date(opts.year, opts.month - 1, { 1: 1, 2: 8, 3: 15, 4: 22 }[opts.week]).toISOString().slice(0, 10); defEnd = new Date(opts.year, opts.month - 1, { 1: 7, 2: 14, 3: 21, 4: 28 }[opts.week]).toISOString().slice(0, 10); }
-  if (editing) { openModal(`${mHdr('Edit Assignment', 'Update workload allocation')}<div class="p-6 space-y-4"><div><label class="field-label">Resource</label><select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select></div><div><label class="field-label">Project</label><select id="fa_proj" class="field-input">${S.projects.map(p => `<option value="${p.id}" ${p.id === projId ? 'selected' : ''}>${esc(p.code)} — ${esc(p.name)}</option>`).join('')}</select></div><div><label class="field-label">Period</label><div class="field-input bg-gray-50 text-gray-700">${MN[cur.month - 1]} ${cur.year} · Week ${cur.week}</div></div><div><label class="field-label flex justify-between"><span>Workload Allocation</span><span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span></label><input id="fa_pct" type="range" min="0" max="150" value="${pct}" class="w-full" oninput="document.getElementById('pctLbl').textContent=this.value+'%'"><div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span><span>150%</span></div></div></div>${mFtr(opts.id, 'saveAssignment', 'deleteAssignment')}`); return; }
-  openModal(`${mHdr('Add Assignment', 'Assign a resource to a project across a date range')}<div class="p-6 space-y-4"><div><label class="field-label">Resource</label><select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select></div><div><label class="field-label">Project</label><select id="fa_proj" class="field-input">${S.projects.map(p => `<option value="${p.id}" ${p.id === projId ? 'selected' : ''}>${esc(p.code)} — ${esc(p.name)}</option>`).join('')}</select></div><div class="grid grid-cols-2 gap-4"><div><label class="field-label">Start Date</label><input id="fa_start" type="date" class="field-input" value="${defStart}" oninput="updateSlotPreview()"></div><div><label class="field-label">End Date</label><input id="fa_end" type="date" class="field-input" value="${defEnd}" oninput="updateSlotPreview()"></div></div><div><label class="field-label">Quick Presets</label><div class="flex flex-wrap gap-2"><button type="button" class="btn-preset" onclick="setDateRange('week')">This Week</button><button type="button" class="btn-preset" onclick="setDateRange('month')">This Month</button><button type="button" class="btn-preset" onclick="setDateRange('3months')">Next 3 Months</button><button type="button" class="btn-preset" onclick="setDateRange('fiscalyear')">Full Fiscal Year</button></div></div><div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800" id="slotPreview">Will create <span class="font-semibold">0</span> weekly assignments</div><div><label class="field-label flex justify-between"><span>Workload % per Week</span><span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span></label><input id="fa_pct" type="range" min="0" max="150" value="${pct}" class="w-full" oninput="document.getElementById('pctLbl').textContent=this.value+'%'"><div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span><span>150%</span></div></div></div>${mFtr(null, 'saveAssignment', 'deleteAssignment')}`);
-  updateSlotPreview();
+  if (!editing && opts.year && opts.month && opts.week) {
+    defStart = new Date(opts.year, opts.month - 1, { 1: 1, 2: 8, 3: 15, 4: 22 }[opts.week]).toISOString().slice(0, 10);
+    defEnd = new Date(opts.year, opts.month - 1, { 1: 7, 2: 14, 3: 21, 4: 28 }[opts.week]).toISOString().slice(0, 10);
+  }
+
+  /* Searchable project combobox markup — shared by add & edit */
+  const projCombo = (selectedId) => {
+    const selProj = S.projects.find(p => p.id === selectedId);
+    const displayVal = selProj ? `${selProj.code} — ${selProj.name}` : '';
+    return `
+      <div class="proj-combo-wrap" style="position:relative">
+        <input id="fa_proj_search" type="text" class="field-input" autocomplete="off"
+          placeholder="Type SA code or project name…"
+          value="${esc(displayVal)}"
+          style="padding-right:2rem">
+        <input type="hidden" id="fa_proj" value="${selectedId || ''}">
+        <div id="fa_proj_dropdown"
+          class="nice-scroll"
+          style="display:none;position:absolute;z-index:9999;left:0;right:0;top:100%;
+                 background:#fff;border:1px solid #e5e7eb;border-radius:0.5rem;
+                 box-shadow:0 4px 16px rgba(0,0,0,0.10);max-height:220px;overflow-y:auto;margin-top:2px">
+        </div>
+      </div>`;
+  };
+
+  if (editing) {
+    openModal(`${mHdr('Edit Assignment', 'Update workload allocation')}
+      <div class="p-6 space-y-4">
+        <div><label class="field-label">Resource</label>
+          <select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
+        </div>
+        <div><label class="field-label">Project</label>${projCombo(cur?.project_id)}</div>
+        <div><label class="field-label">Period</label>
+          <div class="field-input bg-gray-50 text-gray-700">${MN[cur.month - 1]} ${cur.year} · Week ${cur.week}</div>
+        </div>
+        <div><label class="field-label flex justify-between"><span>Workload Allocation</span>
+          <span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span></label>
+          <input id="fa_pct" type="range" min="0" max="150" value="${pct}" class="w-full"
+            oninput="document.getElementById('pctLbl').textContent=this.value+'%'">
+          <div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span><span>150%</span></div>
+        </div>
+      </div>
+      ${mFtr(opts.id, 'saveAssignment', 'deleteAssignment')}`);
+  } else {
+    openModal(`${mHdr('Add Assignment', 'Assign a resource to a project across a date range')}
+      <div class="p-6 space-y-4">
+        <div><label class="field-label">Resource</label>
+          <select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
+        </div>
+        <div><label class="field-label">Project</label>${projCombo(opts.project_id || null)}</div>
+        <div class="grid grid-cols-2 gap-4">
+          <div><label class="field-label">Start Date</label>
+            <input id="fa_start" type="date" class="field-input" value="${defStart}" oninput="updateSlotPreview()"></div>
+          <div><label class="field-label">End Date</label>
+            <input id="fa_end" type="date" class="field-input" value="${defEnd}" oninput="updateSlotPreview()"></div>
+        </div>
+        <div><label class="field-label">Quick Presets</label>
+          <div class="flex flex-wrap gap-2">
+            <button type="button" class="btn-preset" onclick="setDateRange('week')">This Week</button>
+            <button type="button" class="btn-preset" onclick="setDateRange('month')">This Month</button>
+            <button type="button" class="btn-preset" onclick="setDateRange('3months')">Next 3 Months</button>
+            <button type="button" class="btn-preset" onclick="setDateRange('fiscalyear')">Full Fiscal Year</button>
+          </div>
+        </div>
+        <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800" id="slotPreview">
+          Will create <span class="font-semibold">0</span> weekly assignments
+        </div>
+        <div><label class="field-label flex justify-between"><span>Workload % per Week</span>
+          <span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span></label>
+          <input id="fa_pct" type="range" min="0" max="150" value="${pct}" class="w-full"
+            oninput="document.getElementById('pctLbl').textContent=this.value+'%'">
+          <div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span><span>150%</span></div>
+        </div>
+      </div>
+      ${mFtr(null, 'saveAssignment', 'deleteAssignment')}`);
+    updateSlotPreview();
+  }
+
+  /* ── Wire up searchable project combobox ── */
+  const searchInput = document.getElementById('fa_proj_search');
+  const hiddenInput = document.getElementById('fa_proj');
+  const dropdown = document.getElementById('fa_proj_dropdown');
+  if (!searchInput || !dropdown) return;
+
+  /* Distinct projects by id (DB is already deduped after fix, but belt+suspenders) */
+  const projList = S.projects.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
+
+  function renderDropdown(q) {
+    const lq = q.toLowerCase().trim();
+    const matches = lq
+      ? projList.filter(p =>
+        (p.code || '').toLowerCase().includes(lq) ||
+        (p.name || '').toLowerCase().includes(lq) ||
+        (p.product_name || '').toLowerCase().includes(lq))
+      : projList;
+
+    if (!matches.length) {
+      dropdown.innerHTML = `<div class="px-4 py-3 text-sm text-gray-400">No projects found</div>`;
+    } else {
+      dropdown.innerHTML = matches.slice(0, 80).map(p => `
+        <div class="proj-opt px-3 py-2.5 cursor-pointer hover:bg-blue-50 border-b border-gray-50 last:border-0"
+             data-id="${p.id}" data-label="${esc(p.code + ' — ' + p.name)}"
+             style="display:flex;flex-direction:column;gap:1px">
+          <span style="font-size:12px;font-weight:700;color:#2563eb;font-family:monospace">${esc(p.code)}</span>
+          <span style="font-size:13px;color:#111827;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${esc(p.name)}</span>
+          ${p.product_name ? `<span style="font-size:11px;color:#9ca3af">${esc(p.product_name)}</span>` : ''}
+        </div>`).join('');
+    }
+    dropdown.style.display = 'block';
+  }
+
+  searchInput.addEventListener('focus', () => renderDropdown(searchInput.value));
+  searchInput.addEventListener('input', () => {
+    hiddenInput.value = ''; // clear selection when typing
+    renderDropdown(searchInput.value);
+  });
+
+  dropdown.addEventListener('mousedown', e => {
+    const opt = e.target.closest('.proj-opt');
+    if (!opt) return;
+    e.preventDefault();
+    hiddenInput.value = opt.dataset.id;
+    searchInput.value = opt.dataset.label;
+    dropdown.style.display = 'none';
+  });
+
+  document.addEventListener('mousedown', function outsideClick(e) {
+    if (!e.target.closest('.proj-combo-wrap')) {
+      dropdown.style.display = 'none';
+      /* If user typed but didn't pick, restore last valid selection */
+      if (!hiddenInput.value) searchInput.value = '';
+      document.removeEventListener('mousedown', outsideClick);
+    }
+  }, true);
 }
 
 function setDateRange(preset) { const fmt = d => d.toISOString().slice(0, 10), t = new Date(); let s, e; if (preset === 'week') { s = new Date(t); e = new Date(t); e.setDate(e.getDate() + 6); } else if (preset === 'month') { s = new Date(t); e = new Date(t); e.setMonth(e.getMonth() + 1); } else if (preset === '3months') { s = new Date(t); e = new Date(t); e.setMonth(e.getMonth() + 3); } else { s = new Date(S.fiscalYear, 3, 1); e = new Date(S.fiscalYear + 1, 2, 31); } document.getElementById('fa_start').value = fmt(s); document.getElementById('fa_end').value = fmt(e); updateSlotPreview(); }
@@ -847,6 +977,132 @@ async function saveProject(id) {
 }
 
 async function deleteProject(id) { if (!confirm('Delete this project? All its assignments will also be removed.')) return; try { await api('DELETE', `/api/projects/${id}`); closeModal(); toast('Project deleted'); await loadAll(); } catch (e) { toast(e.message, 'error'); } }
+
+/* ── Active Resources drill-down ─────────────────────────────── */
+function openEmployeesModal() {
+  const rows = S.employees.map((e, i) => `
+    <div class="flex items-center gap-4 py-3 px-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer last:border-0" data-action="edit-emp-side" data-emp="${e.id}">
+      <span class="text-xs font-semibold text-gray-400 w-5 flex-shrink-0">${i + 1}</span>
+      <div class="w-9 h-9 avatar-grad rounded-full flex items-center justify-center text-xs flex-shrink-0">${esc(inits(e.name))}</div>
+      <div class="flex-1 min-w-0">
+        <div class="text-sm font-semibold text-gray-900">${esc(e.name)}</div>
+        <div class="text-xs text-gray-500 mono">${esc(e.employee_code || '—')}</div>
+      </div>
+      <div class="text-right flex-shrink-0">
+        <div class="text-xs text-gray-500">${esc(e.dept)}</div>
+        <div class="text-xs text-gray-400 truncate max-w-[160px]">${esc(e.email || '—')}</div>
+      </div>
+      <div class="flex-shrink-0">
+        ${(() => { const u = S.employeeUtil.get(e.id) || 0; return `<span class="px-2 py-0.5 rounded-full text-xs font-semibold ${ub(u)}">${Math.round(u)}%</span>`; })()}
+      </div>
+    </div>`).join('');
+
+  openModal(`${mHdr('Active Resources', `${S.employees.length} team members`)}
+    <div class="overflow-y-auto nice-scroll" style="max-height:65vh">
+      <div class="px-4 py-2 bg-gray-50 border-b border-gray-100 grid grid-cols-4 gap-4">
+        <span class="text-xs font-semibold text-gray-400 col-span-2">Name / ID</span>
+        <span class="text-xs font-semibold text-gray-400 text-right">Dept / Email</span>
+        <span class="text-xs font-semibold text-gray-400 text-right">Util</span>
+      </div>
+      ${rows || '<p class="text-sm text-gray-400 text-center py-8">No employees found</p>'}
+    </div>
+    <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+      <button onclick="closeModal()" class="btn-gray">Close</button>
+    </div>`, 'max-w-2xl');
+}
+
+/* ── Projects drill-down ─────────────────────────────────────── */
+function openProjectsModal() {
+  const sorted = [...S.projects].sort((a, b) => {
+    const so = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
+    return so.indexOf(a.stage) - so.indexOf(b.stage);
+  });
+
+  const stageCounts = {};
+  for (const p of S.projects) stageCounts[p.stage] = (stageCounts[p.stage] || 0) + 1;
+
+  const summaryPills = Object.entries(stageCounts)
+    .sort((a, b) => ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'].indexOf(a[0]) - ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'].indexOf(b[0]))
+    .map(([stage, count]) => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${STAGE_PILL[stage] || 'bg-gray-100 text-gray-700'} cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="${esc(stage)}">${esc(stage)}: ${count}</span>`)
+    .join('');
+
+  function buildRows(filterStage, searchQ) {
+    const q = (searchQ || '').toLowerCase().trim();
+    const filtered = sorted.filter(p => {
+      if (filterStage && p.stage !== filterStage) return false;
+      if (!q) return true;
+      return (p.code || '').toLowerCase().includes(q)
+        || (p.name || '').toLowerCase().includes(q)
+        || (p.product_name || '').toLowerCase().includes(q);
+    });
+
+    const rowsHtml = filtered.map((p, i) => `
+      <div class="flex items-start gap-3 py-3 px-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer last:border-0" data-action="edit-project" data-project="${p.id}">
+        <span class="text-xs font-semibold text-gray-400 w-5 flex-shrink-0 pt-0.5">${i + 1}</span>
+        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5" style="background:${p.color || '#8B5CF6'}"></div>
+        <div class="flex-1 min-w-0">
+          <div class="flex items-center gap-2 mb-0.5">
+            <span class="text-xs font-bold text-blue-600 mono">${esc(p.code)}</span>
+            <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700'}">${esc(p.stage)}</span>
+            ${p.product_family ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span>` : ''}
+          </div>
+          <div class="text-sm font-semibold text-gray-900 truncate">${esc(p.name)}</div>
+          <div class="text-xs text-gray-500 truncate">${esc(p.account_name || p.client || '—')}${p.opportunity_owner ? ` · ${esc(p.opportunity_owner)}` : ''}</div>
+          ${p.product_name ? `<div class="text-xs text-gray-400 truncate mt-0.5">${esc(p.product_name)}</div>` : ''}
+        </div>
+        <div class="text-right flex-shrink-0 min-w-[90px]">
+          <div class="text-xs font-bold text-gray-800 mono">${(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USD</div>
+          <div class="text-xs text-gray-400">${p.end_date || '—'}</div>
+        </div>
+      </div>`).join('');
+
+    return { rowsHtml, count: filtered.length };
+  }
+
+  openModal(`${mHdr('All Projects', `${S.projects.length} total`)}
+    <div class="px-4 py-3 border-b border-gray-100 bg-gray-50 flex flex-wrap gap-1.5" id="projStagePills">
+      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="">All</span>
+      ${summaryPills}
+    </div>
+    <div class="px-4 py-2.5 border-b border-gray-100 bg-white">
+      <input id="projModalSearch" type="text" placeholder="Search by SA code, project name, or product name…"
+        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400">
+    </div>
+    <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:55vh">
+      ${buildRows('', '').rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
+    </div>
+    <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
+      <span class="text-xs text-gray-400" id="projModalCount">${S.projects.length} project${S.projects.length === 1 ? '' : 's'}</span>
+      <button onclick="closeModal()" class="btn-gray">Close</button>
+    </div>`, 'max-w-3xl');
+
+  // Wire up interactivity after modal is in DOM
+  let activeStage = '';
+
+  function refresh() {
+    const q = document.getElementById('projModalSearch')?.value || '';
+    const { rowsHtml, count } = buildRows(activeStage, q);
+    const list = document.getElementById('projModalList');
+    const countEl = document.getElementById('projModalCount');
+    if (list) list.innerHTML = rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>';
+    if (countEl) countEl.textContent = `${count} project${count === 1 ? '' : 's'}`;
+  }
+
+  document.getElementById('projModalSearch')?.addEventListener('input', refresh);
+
+  document.getElementById('projStagePills')?.addEventListener('click', e => {
+    const pill = e.target.closest('[data-stage-pill]');
+    if (!pill) return;
+    activeStage = pill.dataset.stagePill;
+    document.querySelectorAll('#projStagePills [data-stage-pill]').forEach(p => {
+      const isActive = p.dataset.stagePill === activeStage;
+      p.classList.toggle('ring-2', isActive);
+      p.classList.toggle('ring-offset-1', isActive);
+      p.classList.toggle('ring-gray-400', isActive);
+    });
+    refresh();
+  });
+}
 
 /* ================================================================ EVENTS */
 function initEvents() {
@@ -918,6 +1174,11 @@ function initEvents() {
     const ep = e.target.closest('[data-action="edit-emp-side"]'); if (ep) openEmployeeModal({ id: +ep.dataset.emp });
     const pr = e.target.closest('[data-action="edit-project"]'); if (pr) openProjectModal({ id: +pr.dataset.project });
     const va = e.target.closest('[data-view-all]'); if (va) openViewAllModal(va.dataset.viewAll);
+    const sa = e.target.closest('[data-stat-action]');
+    if (sa) {
+      if (sa.dataset.statAction === 'view-employees') openEmployeesModal();
+      if (sa.dataset.statAction === 'view-projects') openProjectsModal();
+    }
   });
 
   /* Chart section tab buttons */

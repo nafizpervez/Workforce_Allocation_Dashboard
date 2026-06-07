@@ -137,7 +137,15 @@ const HISTORICAL_PROJECTS = JSON.parse(
   project_closing_date: '',
 }));
 
-const ALL_PROJECTS = [...PIPELINE_PROJECTS, ...HISTORICAL_PROJECTS];
+// Deduplicate: pipeline takes priority over historical for same SA code
+const _seenCodes = new Set();
+const ALL_PROJECTS = [];
+for (const p of [...PIPELINE_PROJECTS, ...HISTORICAL_PROJECTS]) {
+  if (!_seenCodes.has(p.code)) {
+    _seenCodes.add(p.code);
+    ALL_PROJECTS.push(p);
+  }
+}
 
 function seed(db) {
   console.log('Seeding database…');
