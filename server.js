@@ -452,6 +452,47 @@ app.get('/api/dashboard/new-logo-chart', (_, res) => {
   res.json(result);
 });
 
+/* ─── Chart 3: PS Support vs PS Implementation count per FY ── */
+app.get('/api/dashboard/ps-type-chart', (_, res) => {
+  const rows = db.prepare(`
+    SELECT end_date, product_name, name, code, stage
+    FROM projects
+    WHERE stage = 'Closed Won'
+      AND product_name IS NOT NULL
+      AND product_name != ''
+  `).all();
+
+  const fyData = {};
+  for (const r of rows) {
+    const fy = getFiscalYear(r.end_date);
+    if (fy === null) continue;
+    const pn = (r.product_name || '').trim().toUpperCase();
+    const isSupport = pn.includes('PS SYSTEM SUPPORT');
+    const isImpl = pn.includes('PS PROJECT IMPLEMENTATION') || pn.includes('PS PROJECT IMPLEMETATION');
+    if (!isSupport && !isImpl) continue;
+    if (!fyData[fy]) fyData[fy] = {
+      support: 0, impl: 0,
+      supportProjects: [], implProjects: []
+    };
+    const projName = (r.name || r.code || 'Unknown').trim();
+    if (isSupport) { fyData[fy].support++; fyData[fy].supportProjects.push(projName); }
+    if (isImpl) { fyData[fy].impl++; fyData[fy].implProjects.push(projName); }
+  }
+
+  const result = Object.entries(fyData)
+    .sort((a, b) => +a[0] - +b[0])
+    .map(([fy, d]) => ({
+      fy: +fy,
+      label: fyLabel(+fy),
+      support: d.support,
+      impl: d.impl,
+      supportProjects: d.supportProjects.sort(),
+      implProjects: d.implProjects.sort(),
+    }));
+
+  res.json(result);
+});
+
 /* ─── misc ─────────────────────────────────────────────────────── */
 app.get('/api/fiscal-years', (_, res) => {
   const rows = db.prepare(`SELECT DISTINCT CASE WHEN month>=4 THEN year ELSE year-1 END AS fiscal_year FROM assignments ORDER BY fiscal_year ASC`).all();

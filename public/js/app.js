@@ -4,6 +4,7 @@
 
 /* ================================================================ STATE */
 const S = {
+  psTypeData: [],
   fiscalYear: 2026,
   employees: [], projects: [], assignments: [],
   matrix: {}, employeeUtil: new Map(), charts: {},
@@ -133,7 +134,7 @@ function toast(msg, kind = 'success') { const root = document.getElementById('to
 async function loadAll() {
   try {
     const fy = S.fiscalYear;
-    const [emps, projs, asgs, stats, trends, wl, util, pipe, dl, nlChart, psRevChart] = await Promise.all([
+    const [emps, projs, asgs, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
       api('GET', '/api/employees'), api('GET', '/api/projects'),
       api('GET', `/api/assignments?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/stats?fiscalYear=${fy}`),
@@ -144,6 +145,7 @@ async function loadAll() {
       api('GET', '/api/dashboard/deadlines'),
       api('GET', '/api/dashboard/new-logo-chart'),
       api('GET', '/api/dashboard/ps-revenue-chart'),
+      api('GET', '/api/dashboard/ps-type-chart'),
     ]);
     S.employees = emps; S.projects = projs; S.assignments = asgs;
     buildMatrix();
@@ -152,6 +154,7 @@ async function loadAll() {
     renderMatrix();
     renderTrends(trends); renderWorkload(wl); renderAllocation(wl); renderNewLogoChart(nlChart);
     S.psRevenueData = psRevChart;
+    S.psTypeData = psTypeChart;
     populateProductFamilyDropdowns();
     renderInsights();
     S.lastRunningData = dl;
@@ -167,16 +170,12 @@ function buildMatrix() { S.matrix = {}; for (const a of S.assignments) { const k
 
 /* ================================================================ FILTER POPULATION */
 function populateMatrixFilter() {
-  /* Project */
   const ps = document.getElementById('matrixProjectFilter');
   if (ps) { const pids = new Set(S.assignments.map(a => a.project_id)); ps.innerHTML = '<option value="">All Projects</option>' + S.projects.filter(p => pids.has(p.id)).map(p => `<option value="${p.id}">${esc(p.code)} — ${esc(p.name)}</option>`).join(''); ps.value = String(S.matrixProjectFilter || ''); }
-  /* Resource */
   const rs = document.getElementById('matrixResourceFilter');
   if (rs) { rs.innerHTML = '<option value="">All Resources</option>' + S.employees.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join(''); rs.value = String(S.matrixResourceFilter || ''); }
-  /* Month */
   const ms = document.getElementById('matrixMonthFilter');
   if (ms && ms.options.length <= 1) { ms.innerHTML = '<option value="">All Months</option>' + fiscalMonths(S.fiscalYear).map(m => `<option value="${m.y}-${m.m}">${esc(m.label)}</option>`).join(''); }
-  /* Stage */
   const ss = document.getElementById('matrixStageFilter');
   if (ss && ss.options.length <= 1) { ss.innerHTML = '<option value="">All Stages</option>' + STAGES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join(''); }
 }
@@ -189,7 +188,6 @@ function populatePipelineStageFilter() {
 /* ================================================================ STATS */
 function renderStats(s) {
   const t = s.trends || {};
-  const n = s.active_employees || 1;
   const cards = [
     { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Count of all resources registered in the system`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
     { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
@@ -222,19 +220,17 @@ function renderMatrix() {
   th += `<th class="sticky-dept col-dept border-b-2 border-gray-300 px-4 py-3 text-left text-xs font-semibold text-gray-700 border-r border-gray-200" rowspan="2"><div style="position:relative;display:flex;align-items:center;height:100%">Department<div class="col-resizer" data-col="dept"></div></div></th>`;
   for (let i = 0; i < months.length; i++) { const m = months[i]; th += `<th colspan="4" class="border-b border-gray-200 px-2 py-3 text-center text-xs font-semibold text-gray-700 bg-gray-50 ${i < months.length - 1 ? 'border-r border-gray-200' : ''}">${esc(m.label)}</th>`; }
   th += '</tr><tr class="weeks">';
-  for (let i = 0; i < months.length; i++)for (let w = 1; w <= 4; w++)th += `<th class="border-b border-gray-200 px-2 py-2 text-center text-xs text-gray-500 font-medium bg-gray-50 col-week ${w === 4 ? 'border-r border-gray-200' : 'border-r border-dotted border-gray-200'}" style="min-width:110px">W${w}</th>`;
+  for (let i = 0; i < months.length; i++) for (let w = 1; w <= 4; w++) th += `<th class="border-b border-gray-200 px-2 py-2 text-center text-xs text-gray-500 font-medium bg-gray-50 col-week ${w === 4 ? 'border-r border-gray-200' : 'border-r border-dotted border-gray-200'}" style="min-width:110px">W${w}</th>`;
   th += '</tr>';
   t.querySelector('thead').innerHTML = th;
 
   const q = S.searchQuery.toLowerCase();
   let emps = S.employees.filter(e => !q || e.name.toLowerCase().includes(q) || e.dept.toLowerCase().includes(q));
 
-  /* ── apply all matrix filters ── */
   if (S.matrixProjectFilter) { const pid = +S.matrixProjectFilter; emps = emps.filter(e => S.assignments.some(a => a.employee_id === e.id && a.project_id === pid)); }
   if (S.matrixResourceFilter) { emps = emps.filter(e => e.id === +S.matrixResourceFilter); }
   if (S.matrixMonthFilter) { const [fy, fm] = S.matrixMonthFilter.split('-').map(Number); emps = emps.filter(e => S.assignments.some(a => a.employee_id === e.id && a.year === fy && a.month === fm)); }
 
-  /* filters based on project properties */
   if (S.matrixStageFilt || S.matrixAmountFilt || S.matrixCloseDateFilt || S.matrixProjCloseFilt) {
     const okPids = new Set(S.projects.filter(p => {
       if (S.matrixStageFilt && p.stage !== S.matrixStageFilt) return false;
@@ -246,7 +242,6 @@ function renderMatrix() {
     emps = emps.filter(e => S.assignments.some(a => a.employee_id === e.id && okPids.has(a.project_id)));
   }
 
-  /* ── sort ── */
   if (S.matrixSortAssigned) { emps = [...emps].sort((a, b) => S.assignments.filter(x => x.employee_id === b.id).length - S.assignments.filter(x => x.employee_id === a.id).length); }
   else if (S.matrixSortHigh) { emps = [...emps].sort((a, b) => (S.employeeUtil.get(b.id) || 0) - (S.employeeUtil.get(a.id) || 0)); }
   else if (S.matrixSortLow) { emps = [...emps].sort((a, b) => (S.employeeUtil.get(a.id) || 0) - (S.employeeUtil.get(b.id) || 0)); }
@@ -273,7 +268,7 @@ function renderTrends(data) { if (S.charts.trends) S.charts.trends.destroy(); co
 
 function renderWorkload(data) { if (S.charts.workload) S.charts.workload.destroy(); const ctx = document.getElementById('workloadChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.workload = new Chart(ctx, { type: 'bar', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderRadius: 4, borderSkipped: false }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } } }, scales: { x: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } }, y: { ticks: { font: { size: 12 }, color: '#374151' }, grid: { display: false } } } } }); }
 
-function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }) }
+function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }); }
 
 function insightRow(e) { const u = e.utilization, clr = uc(u), badge = ub(u), label = us(u); return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" data-action="edit-emp-side" data-emp="${e.id}"><div class="relative flex-shrink-0"><div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style="background:${clr}"></div></div><div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-900 truncate">${esc(e.name)}</div><div class="text-xs text-gray-500">${esc(e.dept)}</div></div><span class="px-3 py-1 rounded-full text-xs font-medium ${badge} flex-shrink-0">${esc(label)}</span><div class="text-right flex-shrink-0"><div class="text-base font-semibold" style="color:${clr}">${u.toFixed(0)}%</div><div class="w-16 h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100, u)}%;background:${clr}"></div></div></div></div>`; }
 
@@ -296,16 +291,16 @@ function dealStatusBadge(status) {
   return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${s.cls} flex-shrink-0"><svg class="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="${status === 'NEW LOGO' ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${s.icon}</svg>${status}</span>`;
 }
 
-/* ── Deal breakdown modal (click on any bar) ─────────────────── */
+/* ── Deal breakdown modal ─────────────────────────────────────── */
 function openDealModal(fyData) {
   const { label, projects } = fyData;
   const section = (status, badgeCls, icon) => {
     const list = projects[status] || [];
-    if (!list.length) return `<div class="mb-4"><div class="flex items-center gap-2 mb-1.5"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span><span class="text-xs text-gray-400">0 accounts</span></div></div>`;
+    if (!list.length) return `<div class="mb-4"><div class="flex items-center gap-2 mb-1.5"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span><span class="text-xs text-gray-400">0 projects</span></div></div>`;
     return `<div class="mb-5">
       <div class="flex items-center gap-2 mb-2">
         <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span>
-        <span class="text-xs text-gray-400">${list.length} account${list.length === 1 ? '' : 's'}</span>
+        <span class="text-xs text-gray-400">${list.length} project${list.length === 1 ? '' : 's'}</span>
       </div>
       <div class="space-y-1">${list.map(a => `<div class="text-sm text-gray-800 py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">${esc(a)}</div>`).join('')}</div>
     </div>`;
@@ -350,17 +345,10 @@ function renderNewLogoChart(data, filter) {
       borderRadius: 5, borderSkipped: false,
       barPercentage: 0.88, categoryPercentage: 0.75,
     }));
-    plugins = [centerLabelPlugin];
-    showLegend = true;
+    plugins = [centerLabelPlugin]; showLegend = true;
   } else {
-    datasets = [{
-      label: f, data: d.map(x => x[f] || 0),
-      backgroundColor: COLORS[f].bg, hoverBackgroundColor: COLORS[f].hover,
-      borderRadius: 8, borderSkipped: false,
-      barPercentage: 1.0, categoryPercentage: 0.55
-    }];
-    plugins = [centerLabelPlugin];
-    showLegend = false;
+    datasets = [{ label: f, data: d.map(x => x[f] || 0), backgroundColor: COLORS[f].bg, hoverBackgroundColor: COLORS[f].hover, borderRadius: 8, borderSkipped: false, barPercentage: 1.0, categoryPercentage: 0.55 }];
+    plugins = [centerLabelPlugin]; showLegend = false;
   }
 
   S.charts.newLogo = new Chart(ctx, {
@@ -382,18 +370,9 @@ function renderNewLogoChart(data, filter) {
       plugins: {
         legend: {
           display: showLegend, position: 'bottom',
-          labels: {
-            boxWidth: 12, boxHeight: 12, padding: 20, font: { size: 12, weight: '600' },
-            generateLabels: chart => chart.data.datasets.map((ds, i) => ({
-              text: ds.label, fillStyle: ['#14b8a6', '#3b82f6', '#f59e0b'][i],
-              strokeStyle: 'transparent', index: i,
-            }))
-          }
+          labels: { boxWidth: 12, boxHeight: 12, padding: 20, font: { size: 12, weight: '600' }, generateLabels: chart => chart.data.datasets.map((ds, i) => ({ text: ds.label, fillStyle: ['#14b8a6', '#3b82f6', '#f59e0b'][i], strokeStyle: 'transparent', index: i })) }
         },
-        tooltip: {
-          bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10,
-          callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} deal${c.parsed.y === 1 ? '' : 's'}` }
-        },
+        tooltip: { bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10, callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} deal${c.parsed.y === 1 ? '' : 's'}` } },
       },
       scales: {
         x: { ticks: { font: { size: 13, weight: '600' }, color: '#374151' }, grid: { display: false }, border: { display: false } },
@@ -405,9 +384,7 @@ function renderNewLogoChart(data, filter) {
 
 /* ── Revenue chart drill-down modal ──────────────────────────── */
 function openRevenueModal(d) {
-  const fmtUsdK = v => v >= 1_000_000 ? '$' + (v / 1_000_000).toFixed(3) + 'M'
-    : v >= 1_000 ? '$' + (v / 1_000).toFixed(1) + 'K' : '$' + Number(v).toFixed(2);
-
+  const fmtUsdK = v => v >= 1_000_000 ? '$' + (v / 1_000_000).toFixed(3) + 'M' : v >= 1_000 ? '$' + (v / 1_000).toFixed(1) + 'K' : '$' + Number(v).toFixed(2);
   const projRow = (p, showFamily) => `
     <div class="flex items-center justify-between gap-3 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors">
       <div class="min-w-0">
@@ -416,14 +393,9 @@ function openRevenueModal(d) {
       </div>
       <span class="text-xs font-bold text-gray-700 mono flex-shrink-0">${fmtUsdK(p.amount)}</span>
     </div>`;
-
-  const allProjs = d.all_projects || [];
-  const psProjs = d.ps_projects || [];
-
+  const allProjs = d.all_projects || [], psProjs = d.ps_projects || [];
   openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · product_amount per project')}
     <div class="p-6 overflow-y-auto nice-scroll space-y-6" style="max-height:65vh">
-
-      <!-- Total Amount -->
       <div>
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
@@ -433,12 +405,8 @@ function openRevenueModal(d) {
           </div>
           <span class="text-sm font-bold text-sky-600 mono">${fmtUsdK(d.total_amount)}</span>
         </div>
-        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
-          ${allProjs.map(p => projRow(p, true)).join('') || '<p class="text-xs text-gray-400 px-3">No projects</p>'}
-        </div>
+        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">${allProjs.map(p => projRow(p, true)).join('') || '<p class="text-xs text-gray-400 px-3">No projects</p>'}</div>
       </div>
-
-      <!-- PS Amount -->
       <div>
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
@@ -448,26 +416,16 @@ function openRevenueModal(d) {
           </div>
           <span class="text-sm font-bold text-violet-600 mono">${fmtUsdK(d.ps_amount)}</span>
         </div>
-        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
-          ${psProjs.map(p => projRow(p, false)).join('') || '<p class="text-xs text-gray-400 px-3">No PS projects this FY</p>'}
-        </div>
+        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">${psProjs.map(p => projRow(p, false)).join('') || '<p class="text-xs text-gray-400 px-3">No PS projects this FY</p>'}</div>
       </div>
-
-      <!-- PS Share % Calculation -->
       <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
         <div class="flex items-center gap-2 mb-3">
           <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#10b981"></span>
           <span class="text-sm font-semibold text-emerald-800">PS Share % — Calculation</span>
         </div>
         <div class="font-mono text-sm text-emerald-900 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-emerald-700">PS Amount</span>
-            <span class="font-bold">${fmtUsdK(d.ps_amount)}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-emerald-700">Total Amount</span>
-            <span class="font-bold">${fmtUsdK(d.total_amount)}</span>
-          </div>
+          <div class="flex items-center justify-between"><span class="text-emerald-700">PS Amount</span><span class="font-bold">${fmtUsdK(d.ps_amount)}</span></div>
+          <div class="flex items-center justify-between"><span class="text-emerald-700">Total Amount</span><span class="font-bold">${fmtUsdK(d.total_amount)}</span></div>
           <div class="border-t border-emerald-200 my-2"></div>
           <div class="flex items-center justify-between text-base">
             <span class="text-emerald-700">${fmtUsdK(d.ps_amount)} ÷ ${fmtUsdK(d.total_amount)} × 100</span>
@@ -475,13 +433,11 @@ function openRevenueModal(d) {
           </div>
         </div>
       </div>
-
     </div>
     <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
       <button onclick="closeModal()" class="btn-gray">Close</button>
     </div>`, 'max-w-xl');
 }
-
 
 /* ================================================================ PS REVENUE CHART */
 function renderPsRevenueChart(data) {
@@ -490,23 +446,15 @@ function renderPsRevenueChart(data) {
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  const fmtUsdK = v => v >= 1_000_000 ? '$' + (v / 1_000_000).toFixed(2) + 'M'
-    : v >= 1_000 ? '$' + (v / 1_000).toFixed(1) + 'K' : '$' + Number(v).toFixed(0);
+  const fmtUsdK = v => v >= 1_000_000 ? '$' + (v / 1_000_000).toFixed(2) + 'M' : v >= 1_000 ? '$' + (v / 1_000).toFixed(1) + 'K' : '$' + Number(v).toFixed(0);
 
-  /* ── gradients ── */
   const gradTotal = ctx.createLinearGradient(0, 0, 0, 300);
-  gradTotal.addColorStop(0, 'rgba(14,165,233,0.88)');
-  gradTotal.addColorStop(1, 'rgba(56,189,248,0.55)');
-
+  gradTotal.addColorStop(0, 'rgba(14,165,233,0.88)'); gradTotal.addColorStop(1, 'rgba(56,189,248,0.55)');
   const gradPS = ctx.createLinearGradient(0, 0, 0, 300);
-  gradPS.addColorStop(0, 'rgba(139,92,246,0.88)');
-  gradPS.addColorStop(1, 'rgba(99,102,241,0.55)');
-
+  gradPS.addColorStop(0, 'rgba(139,92,246,0.88)'); gradPS.addColorStop(1, 'rgba(99,102,241,0.55)');
   const gradPct = ctx.createLinearGradient(0, 0, 0, 300);
-  gradPct.addColorStop(0, 'rgba(16,185,129,0.88)');
-  gradPct.addColorStop(1, 'rgba(52,211,153,0.55)');
+  gradPct.addColorStop(0, 'rgba(16,185,129,0.88)'); gradPct.addColorStop(1, 'rgba(52,211,153,0.55)');
 
-  /* ── label plugin: show value above each bar ── */
   const labelPlugin = {
     id: 'barTopLabel',
     afterDatasetsDraw(chart) {
@@ -516,17 +464,8 @@ function renderPsRevenueChart(data) {
           const val = ds.data[i];
           if (!val && val !== 0) return;
           const { x, y } = bar.getProps(['x', 'y'], true);
-          c.save();
-          c.fillStyle = '#1f2937';
-          c.font = 'bold 11px Inter,sans-serif';
-          c.textAlign = 'center';
-          c.textBaseline = 'bottom';
-          /* Format label per dataset */
-          let lbl;
-          if (dsIdx === 0) lbl = fmtUsdK(val);       // Total Amount
-          else if (dsIdx === 1) lbl = fmtUsdK(val);  // PS Amount
-          else lbl = val.toFixed(1) + '%';            // PS Share
-          c.fillText(lbl, x, y - 3);
+          c.save(); c.fillStyle = '#1f2937'; c.font = 'bold 11px Inter,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'bottom';
+          c.fillText(dsIdx === 0 ? fmtUsdK(val) : dsIdx === 1 ? fmtUsdK(val) : val.toFixed(1) + '%', x, y - 3);
           c.restore();
         });
       });
@@ -539,38 +478,13 @@ function renderPsRevenueChart(data) {
     data: {
       labels: data.map(d => d.label),
       datasets: [
-        {
-          label: 'Total Amount',
-          data: data.map(d => d.total_amount),
-          backgroundColor: gradTotal,
-          hoverBackgroundColor: '#0ea5e9',
-          borderRadius: 5, borderSkipped: false,
-          yAxisID: 'yAmt',
-          barPercentage: 0.85, categoryPercentage: 0.75,
-        },
-        {
-          label: 'PS Amount',
-          data: data.map(d => d.ps_amount),
-          backgroundColor: gradPS,
-          hoverBackgroundColor: '#7c3aed',
-          borderRadius: 5, borderSkipped: false,
-          yAxisID: 'yAmt',
-          barPercentage: 0.85, categoryPercentage: 0.75,
-        },
-        {
-          label: 'PS Share %',
-          data: data.map(d => d.pct),
-          backgroundColor: gradPct,
-          hoverBackgroundColor: '#059669',
-          borderRadius: 5, borderSkipped: false,
-          yAxisID: 'yPct',
-          barPercentage: 0.85, categoryPercentage: 0.75,
-        },
+        { label: 'Total Amount', data: data.map(d => d.total_amount), backgroundColor: gradTotal, hoverBackgroundColor: '#0ea5e9', borderRadius: 5, borderSkipped: false, yAxisID: 'yAmt', barPercentage: 0.85, categoryPercentage: 0.75 },
+        { label: 'PS Amount', data: data.map(d => d.ps_amount), backgroundColor: gradPS, hoverBackgroundColor: '#7c3aed', borderRadius: 5, borderSkipped: false, yAxisID: 'yAmt', barPercentage: 0.85, categoryPercentage: 0.75 },
+        { label: 'PS Share %', data: data.map(d => d.pct), backgroundColor: gradPct, hoverBackgroundColor: '#059669', borderRadius: 5, borderSkipped: false, yAxisID: 'yPct', barPercentage: 0.85, categoryPercentage: 0.75 },
       ]
     },
     options: {
-      responsive: true,
-      maintainAspectRatio: false,
+      responsive: true, maintainAspectRatio: false,
       onClick: (event, elements) => {
         if (!elements.length) return;
         const idx = elements[0].index;
@@ -584,12 +498,9 @@ function renderPsRevenueChart(data) {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: {
-          display: true,
-          position: 'bottom',
+          display: true, position: 'bottom',
           labels: {
-            boxWidth: 12, boxHeight: 12, padding: 18,
-            font: { size: 12, weight: '600' },
-            generateLabels: chart => [
+            boxWidth: 12, boxHeight: 12, padding: 18, font: { size: 12, weight: '600' }, generateLabels: () => [
               { text: 'Total Amount', fillStyle: '#0ea5e9', strokeStyle: 'transparent', index: 0 },
               { text: 'PS Amount', fillStyle: '#8b5cf6', strokeStyle: 'transparent', index: 1 },
               { text: 'PS Share %', fillStyle: '#10b981', strokeStyle: 'transparent', index: 2 },
@@ -600,33 +511,120 @@ function renderPsRevenueChart(data) {
           bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 12,
           callbacks: {
             title: items => items[0].label,
-            label: c => {
-              if (c.datasetIndex === 0) return `  Total Amount: ${fmtUsdK(c.parsed.y)}`;
-              if (c.datasetIndex === 1) return `  PS Amount:    ${fmtUsdK(c.parsed.y)}`;
-              return `  PS Share:     ${c.parsed.y.toFixed(1)}%`;
-            }
+            label: c => c.datasetIndex === 0 ? `  Total Amount: ${fmtUsdK(c.parsed.y)}` : c.datasetIndex === 1 ? `  PS Amount:    ${fmtUsdK(c.parsed.y)}` : `  PS Share:     ${c.parsed.y.toFixed(1)}%`
           }
         },
       },
       scales: {
-        x: {
-          ticks: { font: { size: 13, weight: '600' }, color: '#374151' },
-          grid: { display: false }, border: { display: false }
+        x: { ticks: { font: { size: 13, weight: '600' }, color: '#374151' }, grid: { display: false }, border: { display: false } },
+        yAmt: { type: 'linear', position: 'left', beginAtZero: true, ticks: { font: { size: 11 }, color: '#6B7280', callback: v => fmtUsdK(v) }, grid: { color: '#F3F4F6' }, border: { display: false }, title: { display: true, text: 'Amount (USD)', font: { size: 11 }, color: '#9CA3AF' } },
+        yPct: { type: 'linear', position: 'right', beginAtZero: true, max: 100, ticks: { font: { size: 11 }, color: '#6B7280', callback: v => v + '%' }, grid: { display: false }, border: { display: false }, title: { display: true, text: 'PS Share %', font: { size: 11 }, color: '#9CA3AF' } }
+      }
+    }
+  });
+}
+
+/* ── PS Type chart drill-down modal ──────────────────────────── */
+function openPsTypeModal(d) {
+  const section = (title, count, color, projects) => {
+    const empty = '<p class="text-xs text-gray-400 px-3 py-2">No projects this FY</p>';
+    return `<div>
+      <div class="flex items-center justify-between mb-2">
+        <div class="flex items-center gap-2">
+          <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:${color}"></span>
+          <span class="text-sm font-semibold text-gray-800">${esc(title)}</span>
+          <span class="text-xs text-gray-400">${count} project${count === 1 ? '' : 's'}</span>
+        </div>
+      </div>
+      <div class="space-y-1 max-h-60 overflow-y-auto nice-scroll pr-1">
+        ${projects.length
+        ? projects.map((name, i) => `
+            <div class="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors">
+              <span class="text-xs font-medium text-gray-400 w-5 flex-shrink-0">${i + 1}.</span>
+              <span class="text-sm text-gray-800">${esc(name)}</span>
+            </div>`).join('')
+        : empty}
+      </div>
+    </div>`;
+  };
+
+  openModal(`${mHdr(d.label + ' — PS Service Mix', 'Closed Won projects by engagement type')}
+    <div class="p-6 overflow-y-auto nice-scroll space-y-6" style="max-height:65vh">
+      ${section('PS System Support', d.support, '#3b82f6', d.supportProjects || [])}
+      <div class="border-t border-gray-100"></div>
+      ${section('PS Project Implementation', d.impl, '#10b981', d.implProjects || [])}
+    </div>
+    <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+      <button onclick="closeModal()" class="btn-gray">Close</button>
+    </div>`, 'max-w-lg');
+}
+
+/* ================================================================ PS TYPE CHART (Chart 3) */
+function renderPsTypeChart(data) {
+  if (S.charts.psType) S.charts.psType.destroy();
+  const canvas = document.getElementById('psTypeChart');
+  if (!canvas) return;
+  const ctx = canvas.getContext('2d');
+
+  const gradSupport = ctx.createLinearGradient(0, 0, 0, 300);
+  gradSupport.addColorStop(0, 'rgba(59,130,246,0.90)'); gradSupport.addColorStop(1, 'rgba(99,102,241,0.60)');
+  const gradImpl = ctx.createLinearGradient(0, 0, 0, 300);
+  gradImpl.addColorStop(0, 'rgba(16,185,129,0.90)'); gradImpl.addColorStop(1, 'rgba(52,211,153,0.60)');
+
+  const labelPlugin = {
+    id: 'psTypeLabel',
+    afterDatasetsDraw(chart) {
+      const { ctx: c } = chart;
+      chart.data.datasets.forEach((ds, di) => {
+        chart.getDatasetMeta(di).data.forEach((bar, i) => {
+          const val = ds.data[i];
+          if (!val || val < 1) return;
+          const { x, y } = bar.getProps(['x', 'y'], true);
+          c.save(); c.fillStyle = '#1f2937'; c.font = 'bold 12px Inter,sans-serif'; c.textAlign = 'center'; c.textBaseline = 'bottom';
+          c.fillText(val, x, y - 3); c.restore();
+        });
+      });
+    }
+  };
+
+  S.charts.psType = new Chart(ctx, {
+    type: 'bar',
+    plugins: [labelPlugin],
+    data: {
+      labels: data.map(d => d.label),
+      datasets: [
+        { label: 'PS System Support', data: data.map(d => d.support), backgroundColor: gradSupport, hoverBackgroundColor: '#2563eb', borderRadius: 5, borderSkipped: false, barPercentage: 0.85, categoryPercentage: 0.72 },
+        { label: 'PS Project Implementation', data: data.map(d => d.impl), backgroundColor: gradImpl, hoverBackgroundColor: '#059669', borderRadius: 5, borderSkipped: false, barPercentage: 0.85, categoryPercentage: 0.72 },
+      ]
+    },
+    options: {
+      responsive: true, maintainAspectRatio: false,
+      layout: { padding: { top: 24, left: 4, right: 4, bottom: 0 } },
+      interaction: { mode: 'index', intersect: false },
+      onClick: (event, elements) => {
+        if (!elements.length) return;
+        const idx = elements[0].index;
+        if (S.psTypeData[idx]) openPsTypeModal(S.psTypeData[idx]);
+      },
+      onHover: (event, elements) => {
+        const target = event.native?.target;
+        if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
+      plugins: {
+        legend: {
+          display: true, position: 'bottom',
+          labels: {
+            boxWidth: 12, boxHeight: 12, padding: 20, font: { size: 12, weight: '600' }, generateLabels: () => [
+              { text: 'PS System Support', fillStyle: '#3b82f6', strokeStyle: 'transparent', index: 0 },
+              { text: 'PS Project Implementation', fillStyle: '#10b981', strokeStyle: 'transparent', index: 1 },
+            ]
+          }
         },
-        yAmt: {
-          type: 'linear', position: 'left',
-          beginAtZero: true,
-          ticks: { font: { size: 11 }, color: '#6B7280', callback: v => fmtUsdK(v) },
-          grid: { color: '#F3F4F6' }, border: { display: false },
-          title: { display: true, text: 'Amount (USD)', font: { size: 11 }, color: '#9CA3AF' }
-        },
-        yPct: {
-          type: 'linear', position: 'right',
-          beginAtZero: true, max: 100,
-          ticks: { font: { size: 11 }, color: '#6B7280', callback: v => v + '%' },
-          grid: { display: false }, border: { display: false },
-          title: { display: true, text: 'PS Share %', font: { size: 11 }, color: '#9CA3AF' }
-        }
+        tooltip: { bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10, callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} deal${c.parsed.y === 1 ? '' : 's'}` } },
+      },
+      scales: {
+        x: { ticks: { font: { size: 13, weight: '600' }, color: '#374151' }, grid: { display: false }, border: { display: false } },
+        y: { beginAtZero: true, ticks: { stepSize: 1, font: { size: 12 }, color: '#6B7280' }, grid: { color: '#F3F4F6' }, border: { display: false } },
       }
     }
   });
@@ -638,11 +636,12 @@ function switchChartTab(tab) {
   document.querySelectorAll('.chart-tab-content').forEach(c => c.classList.toggle('hidden', !c.id.endsWith('-' + tab)));
   const filters = document.getElementById('dealAcqFilters');
   if (filters) filters.classList.toggle('hidden', tab !== 'acquisition');
-  /* Re-render charts when switching to ensure canvas is sized */
   if (tab === 'revenue' && S.psRevenueData) renderPsRevenueChart(S.psRevenueData);
+  if (tab === 'tab3' && S.psTypeData) renderPsTypeChart(S.psTypeData);
   if (tab === 'acquisition') renderNewLogoChart(null, S.newLogoFilter);
 }
 
+/* ================================================================ RUNNING PROJECTS */
 function runningProjectRowHtml(d) {
   const barColor = '#10B981';
   const amount = fmtUsd(d.product_amount || 0);
@@ -680,7 +679,7 @@ function runningProjectRowHtml(d) {
         <span class="text-gray-500">${esc(closingDate)}</span>
         <span class="font-semibold ${daysColor}">${daysLabel}</span>
         <span class="ml-auto font-semibold ${statC}">${status}</span>
-      </div>`: '<div class="mb-2"></div>'}
+      </div>` : '<div class="mb-2"></div>'}
       <div class="flex items-center gap-2">
         <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${d.progress || 0}%;background:${barColor}"></div></div>
         <span class="text-xs font-medium text-gray-600 w-8 text-right">${d.progress || 0}%</span>
@@ -698,12 +697,10 @@ function applyAndRenderRunning() {
 
 function renderRunningProjects(data) { S.lastRunningData = data; applyAndRenderRunning(); }
 
-/* ================================================================ SERVICE PIPELINE — rich layout + proj closing date */
+/* ================================================================ SERVICE PIPELINE */
 function servicePipelineRowHtml(p) {
   const barColor = STAGE_COLOR[p.stage] || '#6B7280', pillCls = STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700';
   const amount = fmtUsd(p.product_amount ?? 0);
-  /* Project Closing Date line */
-  /* Project Close Date — right-aligned, under Close Date, days in red */
   let projCloseDateHtml = '<div class="text-xs text-gray-400 mt-0.5">Project Close Date: —</div>';
   if (p.project_closing_date) {
     const today = new Date(), dv = Math.round((new Date(p.project_closing_date) - today) / 864e5);
@@ -735,7 +732,7 @@ function applyAndRenderPipeline() {
 
 function renderServicePipeline(projects) { applyAndRenderPipeline(); }
 
-/* ── Populate Product Family dropdowns dynamically from loaded data ── */
+/* ── Populate Product Family dropdowns ───────────────────────── */
 function populateProductFamilyDropdowns() {
   const runFamilies = [...new Set((S.lastRunningData || []).map(d => d.product_family).filter(Boolean))].sort();
   const pipeFamilies = [...new Set((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost').map(p => p.product_family).filter(Boolean))].sort();
@@ -749,13 +746,12 @@ function populateProductFamilyDropdowns() {
   fillSelect('pipeProdFamilyFilt', pipeFamilies);
 }
 
-/* ================================================================ MODALS — NO outside-click close */
+/* ================================================================ MODALS */
 function openModal(html, width = 'max-w-lg') {
   const root = document.getElementById('modalRoot');
   root.innerHTML = `<div class="fixed inset-0 modal-bd flex items-center justify-center z-50 p-4" id="mbd">
     <div class="bg-white rounded-2xl shadow-2xl w-full ${width} modal-enter">${html}</div>
   </div>`;
-  /* INTENTIONALLY no backdrop click listener — only X button closes */
 }
 function closeModal() { document.getElementById('modalRoot').innerHTML = ''; }
 
@@ -771,7 +767,6 @@ function openViewAllModal(type) {
     listHtml = items.map(servicePipelineRowHtml).join('');
   } else {
     title = 'All Running Projects';
-    const today = new Date();
     items = applyRunningFilters(S.lastRunningData);
     listHtml = items.map(runningProjectRowHtml).join('');
   }
@@ -868,8 +863,8 @@ function initEvents() {
   document.getElementById('searchBox').addEventListener('input', e => { S.searchQuery = e.target.value; renderMatrix(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
-  /* ── Matrix filter listeners ── */
-  const mfBind = (id, key, cb) => { const el = document.getElementById(id); if (el) el.addEventListener('change', e => { S[key] = e.target.value || null; if (cb) cb(); renderMatrix(); }); };
+  /* Matrix filter listeners */
+  const mfBind = (id, key) => { const el = document.getElementById(id); if (el) el.addEventListener('change', e => { S[key] = e.target.value || null; renderMatrix(); }); };
   mfBind('matrixProjectFilter', 'matrixProjectFilter');
   mfBind('matrixResourceFilter', 'matrixResourceFilter');
   document.getElementById('matrixMonthFilter')?.addEventListener('change', e => { S.matrixMonthFilter = e.target.value; renderMatrix(); });
@@ -878,7 +873,6 @@ function initEvents() {
   document.getElementById('matrixCloseDateFilter')?.addEventListener('change', e => { S.matrixCloseDateFilt = e.target.value; renderMatrix(); });
   document.getElementById('matrixProjCloseFilter')?.addEventListener('change', e => { S.matrixProjCloseFilt = e.target.value; renderMatrix(); });
 
-  /* Sort buttons - mutually exclusive High/Low, independent Assigned */
   function bindSortBtn(id, activeKey, clearKeys) {
     const btn = document.getElementById(id); if (!btn) return;
     btn.addEventListener('click', () => {
@@ -893,7 +887,7 @@ function initEvents() {
   bindSortBtn('matrixSortLowBtn', 'matrixSortLow', ['matrixSortHigh', 'matrixSortAssigned']);
   bindSortBtn('matrixSortAssignedBtn', 'matrixSortAssigned', ['matrixSortHigh', 'matrixSortLow']);
 
-  /* ── Pipeline filter listeners ── */
+  /* Pipeline filter listeners */
   document.getElementById('pipeStageFilt')?.addEventListener('change', e => { S.pipelineStageFilt = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeDealStatusFilt')?.addEventListener('change', e => { S.pipelineDealStatusFilt = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeAmountFilt')?.addEventListener('change', e => { S.pipelineAmountFilt = e.target.value; applyAndRenderPipeline(); });
@@ -903,7 +897,7 @@ function initEvents() {
   document.getElementById('pipeSearch')?.addEventListener('input', e => { S.pipelineSearch = e.target.value; applyAndRenderPipeline(); });
   document.getElementById('pipeSortAssignedBtn')?.addEventListener('click', () => { S.pipelineSortAssigned = !S.pipelineSortAssigned; document.getElementById('pipeSortAssignedBtn').classList.toggle('active', S.pipelineSortAssigned); applyAndRenderPipeline(); });
 
-  /* ── Running filter listeners ── */
+  /* Running filter listeners */
   document.getElementById('runAmountFilt')?.addEventListener('change', e => { S.runAmountFilt = e.target.value; applyAndRenderRunning(); });
   document.getElementById('runCloseFilt')?.addEventListener('change', e => { S.runCloseFilt = e.target.value; applyAndRenderRunning(); });
   document.getElementById('runProjCloseFilt')?.addEventListener('change', e => { S.runProjCloseFilt = e.target.value; applyAndRenderRunning(); });
@@ -911,7 +905,7 @@ function initEvents() {
   document.getElementById('runSearch')?.addEventListener('input', e => { S.runSearch = e.target.value; applyAndRenderRunning(); });
   document.getElementById('runSortAssignedBtn')?.addEventListener('click', () => { S.runSortAssigned = !S.runSortAssigned; document.getElementById('runSortAssignedBtn').classList.toggle('active', S.runSortAssigned); applyAndRenderRunning(); });
 
-  /* ── Matrix table click ── */
+  /* Matrix table click */
   document.getElementById('matrixTable').addEventListener('click', e => {
     const del = e.target.closest('[data-action="delete-assign"]'); if (del) { e.stopPropagation(); deleteAssignment(+del.dataset.id); return; }
     const chip = e.target.closest('[data-action="edit-assign"]'); if (chip) { e.stopPropagation(); openAssignmentModal({ id: +chip.dataset.id }); return; }
@@ -919,17 +913,17 @@ function initEvents() {
     const cell = e.target.closest('td.cell'); if (cell) openAssignmentModal({ employee_id: +cell.dataset.emp, year: +cell.dataset.year, month: +cell.dataset.month, week: +cell.dataset.week });
   });
 
-  /* ── Body delegation ── */
+  /* Body delegation */
   document.body.addEventListener('click', e => {
     const ep = e.target.closest('[data-action="edit-emp-side"]'); if (ep) openEmployeeModal({ id: +ep.dataset.emp });
     const pr = e.target.closest('[data-action="edit-project"]'); if (pr) openProjectModal({ id: +pr.dataset.project });
     const va = e.target.closest('[data-view-all]'); if (va) openViewAllModal(va.dataset.viewAll);
   });
 
-  /* ── Chart section tab buttons ── */
+  /* Chart section tab buttons */
   document.querySelectorAll('.chart-tab-btn').forEach(b => b.addEventListener('click', () => switchChartTab(b.dataset.chartTab)));
 
-  /* ── New Logo chart filter buttons ── */
+  /* New Logo chart filter buttons */
   document.querySelectorAll('.nl-filter-btn').forEach(b => b.addEventListener('click', () => renderNewLogoChart(null, b.dataset.status)));
 
   initColResize(); initSectionDrag();
