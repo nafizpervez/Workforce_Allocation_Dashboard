@@ -75,6 +75,10 @@ function applyPipelineFilters(list) {
   return list.filter(p => {
     if (p.stage === 'Closed Lost') return false;
     if (p.end_date && p.end_date < DISPLAY_CUTOFF) return false;
+    // Exclude Personal Use and Student Use
+    const _pn = (p.product_name || '').toUpperCase();
+    if (_pn.includes('PERSONAL USE')) return false;
+    if (_pn.includes('STUDENT USE')) return false;
     if (S.pipelineDealStatusFilt && p.deal_status !== S.pipelineDealStatusFilt) return false;
     if (S.pipelineStageFilt && p.stage !== S.pipelineStageFilt) return false;
     if (!getAmountOk(p.opp_amount, S.pipelineAmountFilt)) return false;
@@ -304,9 +308,9 @@ function classifyProduct(pn, pf) {
   // PS Only: PS System Support or PS Project Implementation (covers typo variant)
   if (n.includes('PS SYSTEM SUPPORT') || n.includes('PS PROJECT IMPLEMENT')) return 'PS';
   // Personal Use
-  if (n.includes('ARCGIS FOR PERSONAL USE ONE YEAR ANNUAL SUBSCRIPTION')) return 'PERSONAL';
+  if (n.includes('PERSONAL USE')) return 'PERSONAL';
   // Student Use
-  if (n.includes('ARCGIS FOR STUDENT USE ONE YEAR TIMEOUT LICENSE')) return 'STUDENT';
+  if (n.includes('STUDENT USE')) return 'STUDENT';
   // Subscription: has license/renew/subscription keywords but not caught above
   if (n.includes('LICENSE') || n.includes('RENEW') || n.includes('SUBSCRIPTION')) return 'SUBSCRIPTION';
   // Software: product_family is Software

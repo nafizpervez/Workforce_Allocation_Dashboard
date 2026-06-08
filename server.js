@@ -391,6 +391,8 @@ app.get('/api/dashboard/deadlines', (_, res) => {
      WHERE stage = 'Closed Won'
        AND end_date >= ?
        AND (progress IS NULL OR progress < 100)
+       AND UPPER(COALESCE(product_name,'')) NOT LIKE '%PERSONAL USE%'
+       AND UPPER(COALESCE(product_name,'')) NOT LIKE '%STUDENT USE%'
      ORDER BY CASE
        WHEN project_closing_date IS NOT NULL AND project_closing_date != '' THEN project_closing_date
        ELSE COALESCE(end_date, '9999-12-31')
