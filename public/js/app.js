@@ -12,6 +12,7 @@ const S = {
   insightsPeriodHigh: 'month',
   insightsPeriodLow: 'month',
   newLogoFilter: 'COMBINED',
+  nlProductFilter: 'ALL',        // product category filter for Deal Acquisition chart
   newLogoChartData: [],
   psRevenueData: [],
   /* matrix filters */
@@ -291,9 +292,60 @@ function dealStatusBadge(status) {
   return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${s.cls} flex-shrink-0"><svg class="w-2.5 h-2.5 flex-shrink-0" viewBox="0 0 24 24" fill="${status === 'NEW LOGO' ? 'currentColor' : 'none'}" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${s.icon}</svg>${status}</span>`;
 }
 
+/* ================================================================ PRODUCT CATEGORY FILTER (Deal Acquisition Chart) */
+
+/**
+ * Classifies a project into a product bucket based on product_name and product_family.
+ * Priority order: PS > Personal Use > Student Use > Subscription > Software > OTHER
+ */
+function classifyProduct(pn, pf) {
+  const n = (pn || '').toUpperCase();
+  const f = (pf || '').toUpperCase();
+  // PS Only: PS System Support or PS Project Implementation (covers typo variant)
+  if (n.includes('PS SYSTEM SUPPORT') || n.includes('PS PROJECT IMPLEMENT')) return 'PS';
+  // Personal Use
+  if (n.includes('ARCGIS FOR PERSONAL USE ONE YEAR ANNUAL SUBSCRIPTION')) return 'PERSONAL';
+  // Student Use
+  if (n.includes('ARCGIS FOR STUDENT USE ONE YEAR TIMEOUT LICENSE')) return 'STUDENT';
+  // Subscription: has license/renew/subscription keywords but not caught above
+  if (n.includes('LICENSE') || n.includes('RENEW') || n.includes('SUBSCRIPTION')) return 'SUBSCRIPTION';
+  // Software: product_family is Software
+  if (f === 'SOFTWARE') return 'SOFTWARE';
+  return 'OTHER';
+}
+
+/**
+ * Returns a filtered copy of a single FY chart entry,
+ * keeping only projects matching the given product filter bucket.
+ * When prodFilter is 'ALL', returns the entry unchanged.
+ */
+function applyProductFilter(fyEntry, prodFilter) {
+  if (prodFilter === 'ALL') return fyEntry;
+
+  const filterProjects = list =>
+    list.filter(p => classifyProduct(p.product_name, p.product_family) === prodFilter);
+
+  const newLogoProjs = filterProjects(fyEntry.projects['NEW LOGO'] || []);
+  const repeatProjs = filterProjects(fyEntry.projects['REPEAT'] || []);
+  const reactiveProjs = filterProjects(fyEntry.projects['REACTIVE'] || []);
+
+  return {
+    ...fyEntry,
+    'NEW LOGO': newLogoProjs.length,
+    'REPEAT': repeatProjs.length,
+    'REACTIVE': reactiveProjs.length,
+    projects: {
+      'NEW LOGO': newLogoProjs,
+      'REPEAT': repeatProjs,
+      'REACTIVE': reactiveProjs,
+    }
+  };
+}
+
 /* ── Deal breakdown modal ─────────────────────────────────────── */
 function openDealModal(fyData) {
   const { label, projects } = fyData;
+
   const section = (status, badgeCls, icon) => {
     const list = projects[status] || [];
     if (!list.length) return `<div class="mb-4"><div class="flex items-center gap-2 mb-1.5"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span><span class="text-xs text-gray-400">0 projects</span></div></div>`;
@@ -302,9 +354,18 @@ function openDealModal(fyData) {
         <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span>
         <span class="text-xs text-gray-400">${list.length} project${list.length === 1 ? '' : 's'}</span>
       </div>
-      <div class="space-y-1">${list.map(a => `<div class="text-sm text-gray-800 py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">${esc(a)}</div>`).join('')}</div>
+      <div class="space-y-1">${list.map(p => {
+      // Support both old plain-string format and new object format {name, product_name, product_family}
+      const name = typeof p === 'string' ? p : (p.name || '');
+      const sub = typeof p === 'string' ? '' : [p.product_name, p.product_family].filter(Boolean).join(' · ');
+      return `<div class="py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
+          <div class="text-sm text-gray-800">${esc(name)}</div>
+          ${sub ? `<div class="text-xs text-gray-400 mt-0.5">${esc(sub)}</div>` : ''}
+        </div>`;
+    }).join('')}</div>
     </div>`;
   };
+
   openModal(`${mHdr(label + ' — Deal Breakdown', 'Closed Won project names by acquisition type')}
     <div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
       ${section('NEW LOGO', 'bg-emerald-100 text-emerald-700', '⭐')}
@@ -317,20 +378,63 @@ function openDealModal(fyData) {
 }
 
 /* ================================================================ NEW LOGO CHART */
-const centerLabelPlugin = { id: 'centerLabel', afterDatasetsDraw(chart) { const { ctx } = chart; chart.data.datasets.forEach((ds, i) => { chart.getDatasetMeta(i).data.forEach((bar, idx) => { const val = ds.data[idx]; if (!val || val < 1) return; const { x, y } = bar.getProps(['x', 'y'], true); ctx.save(); ctx.fillStyle = '#1f2937'; ctx.font = 'bold 13px Inter,sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'bottom'; ctx.fillText(val, x, y - 4); ctx.restore(); }); }); } };
+const centerLabelPlugin = {
+  id: 'centerLabel',
+  afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, i) => {
+      chart.getDatasetMeta(i).data.forEach((bar, idx) => {
+        const val = ds.data[idx];
+        if (!val || val < 1) return;
+        const { x, y } = bar.getProps(['x', 'y'], true);
+        ctx.save();
+        ctx.fillStyle = '#1f2937';
+        ctx.font = 'bold 13px Inter,sans-serif';
+        ctx.textAlign = 'center';
+        ctx.textBaseline = 'bottom';
+        ctx.fillText(val, x, y - 4);
+        ctx.restore();
+      });
+    });
+  }
+};
 
-function renderNewLogoChart(data, filter) {
+function renderNewLogoChart(data, filter, prodFilter) {
   if (data) S.newLogoChartData = data;
-  const d = S.newLogoChartData || [];
-  const f = filter || S.newLogoFilter || 'COMBINED';
+  const rawData = S.newLogoChartData || [];
+
+  // Resolve active filters (keep existing state if not explicitly passed)
+  const f = filter !== undefined ? filter : S.newLogoFilter;
+  const pf = prodFilter !== undefined ? prodFilter : S.nlProductFilter;
   S.newLogoFilter = f;
-  document.querySelectorAll('.nl-filter-btn').forEach(b => b.classList.toggle('active', b.dataset.status === f));
+  S.nlProductFilter = pf;
+
+  // Apply product category filter to raw data (client-side, no API call needed)
+  const d = rawData.map(entry => applyProductFilter(entry, pf));
+
+  // Sync deal-status button active states
+  document.querySelectorAll('.nl-filter-btn').forEach(b =>
+    b.classList.toggle('active', b.dataset.status === f)
+  );
+
+  // Sync product category button visual states
+  document.querySelectorAll('.nl-prod-btn').forEach(b => {
+    const isActive = b.dataset.prod === pf;
+    b.style.background = isActive ? '#1e40af' : 'white';
+    b.style.color = isActive ? 'white' : '#374151';
+    b.style.borderColor = isActive ? '#1e40af' : '#e5e7eb';
+  });
+
   if (S.charts.newLogo) S.charts.newLogo.destroy();
   const canvas = document.getElementById('newLogoChart');
   if (!canvas) return;
   const ctx = canvas.getContext('2d');
 
-  const mkGrad = (c1, c2) => { const g = ctx.createLinearGradient(0, 0, 0, 300); g.addColorStop(0, c1); g.addColorStop(1, c2); return g; };
+  const mkGrad = (c1, c2) => {
+    const g = ctx.createLinearGradient(0, 0, 0, 300);
+    g.addColorStop(0, c1); g.addColorStop(1, c2);
+    return g;
+  };
   const COLORS = {
     'NEW LOGO': { bg: mkGrad('rgba(20,184,166,0.92)', 'rgba(14,165,233,0.72)'), hover: '#0d9488' },
     'REPEAT': { bg: mkGrad('rgba(59,130,246,0.92)', 'rgba(99,102,241,0.72)'), hover: '#2563eb' },
@@ -340,19 +444,29 @@ function renderNewLogoChart(data, filter) {
   let datasets, plugins, showLegend;
   if (f === 'COMBINED') {
     datasets = ['NEW LOGO', 'REPEAT', 'REACTIVE'].map(st => ({
-      label: st, data: d.map(x => x[st] || 0),
-      backgroundColor: COLORS[st].bg, hoverBackgroundColor: COLORS[st].hover,
+      label: st,
+      data: d.map(x => x[st] || 0),
+      backgroundColor: COLORS[st].bg,
+      hoverBackgroundColor: COLORS[st].hover,
       borderRadius: 5, borderSkipped: false,
       barPercentage: 0.88, categoryPercentage: 0.75,
     }));
     plugins = [centerLabelPlugin]; showLegend = true;
   } else {
-    datasets = [{ label: f, data: d.map(x => x[f] || 0), backgroundColor: COLORS[f].bg, hoverBackgroundColor: COLORS[f].hover, borderRadius: 8, borderSkipped: false, barPercentage: 1.0, categoryPercentage: 0.55 }];
+    datasets = [{
+      label: f,
+      data: d.map(x => x[f] || 0),
+      backgroundColor: COLORS[f].bg,
+      hoverBackgroundColor: COLORS[f].hover,
+      borderRadius: 8, borderSkipped: false,
+      barPercentage: 1.0, categoryPercentage: 0.55,
+    }];
     plugins = [centerLabelPlugin]; showLegend = false;
   }
 
   S.charts.newLogo = new Chart(ctx, {
-    type: 'bar', plugins,
+    type: 'bar',
+    plugins,
     data: { labels: d.map(x => x.label), datasets },
     options: {
       responsive: true, maintainAspectRatio: false,
@@ -360,8 +474,7 @@ function renderNewLogoChart(data, filter) {
       onClick: (event, elements) => {
         if (!elements.length) return;
         const idx = elements[0].index;
-        const data = S.newLogoChartData[idx];
-        if (data) openDealModal(data);
+        if (d[idx]) openDealModal(d[idx]);
       },
       onHover: (event, elements) => {
         const target = event.native?.target;
@@ -369,10 +482,23 @@ function renderNewLogoChart(data, filter) {
       },
       plugins: {
         legend: {
-          display: showLegend, position: 'bottom',
-          labels: { boxWidth: 12, boxHeight: 12, padding: 20, font: { size: 12, weight: '600' }, generateLabels: chart => chart.data.datasets.map((ds, i) => ({ text: ds.label, fillStyle: ['#14b8a6', '#3b82f6', '#f59e0b'][i], strokeStyle: 'transparent', index: i })) }
+          display: showLegend,
+          position: 'bottom',
+          labels: {
+            boxWidth: 12, boxHeight: 12, padding: 20,
+            font: { size: 12, weight: '600' },
+            generateLabels: chart => chart.data.datasets.map((ds, i) => ({
+              text: ds.label,
+              fillStyle: ['#14b8a6', '#3b82f6', '#f59e0b'][i],
+              strokeStyle: 'transparent',
+              index: i,
+            }))
+          }
         },
-        tooltip: { bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10, callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} deal${c.parsed.y === 1 ? '' : 's'}` } },
+        tooltip: {
+          bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10,
+          callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} deal${c.parsed.y === 1 ? '' : 's'}` },
+        },
       },
       scales: {
         x: { ticks: { font: { size: 13, weight: '600' }, color: '#374151' }, grid: { display: false }, border: { display: false } },
@@ -638,7 +764,7 @@ function switchChartTab(tab) {
   if (filters) filters.classList.toggle('hidden', tab !== 'acquisition');
   if (tab === 'revenue' && S.psRevenueData) renderPsRevenueChart(S.psRevenueData);
   if (tab === 'tab3' && S.psTypeData) renderPsTypeChart(S.psTypeData);
-  if (tab === 'acquisition') renderNewLogoChart(null, S.newLogoFilter);
+  if (tab === 'acquisition') renderNewLogoChart(null, S.newLogoFilter, S.nlProductFilter);
 }
 
 /* ================================================================ RUNNING PROJECTS */
@@ -777,7 +903,6 @@ function openViewAllModal(type) {
 function openAssignmentModal(opts = {}) {
   const editing = !!opts.id, cur = editing ? S.assignments.find(a => a.id === opts.id) : null;
   const empId = (opts.employee_id || (cur && cur.employee_id) || (S.employees[0] && S.employees[0].id));
-  const curProj = cur ? S.projects.find(p => p.id === cur.project_id) : null;
   const pct = (cur && cur.percentage) || 50;
   const today = new Date();
   let defStart = today.toISOString().slice(0, 10), defEnd = today.toISOString().slice(0, 10);
@@ -865,7 +990,7 @@ function openAssignmentModal(opts = {}) {
   const dropdown = document.getElementById('fa_proj_dropdown');
   if (!searchInput || !dropdown) return;
 
-  /* Distinct projects by id (DB is already deduped after fix, but belt+suspenders) */
+  /* Distinct projects by id */
   const projList = S.projects.filter((p, i, arr) => arr.findIndex(x => x.id === p.id) === i);
 
   function renderDropdown(q) {
@@ -910,7 +1035,6 @@ function openAssignmentModal(opts = {}) {
   document.addEventListener('mousedown', function outsideClick(e) {
     if (!e.target.closest('.proj-combo-wrap')) {
       dropdown.style.display = 'none';
-      /* If user typed but didn't pick, restore last valid selection */
       if (!hiddenInput.value) searchInput.value = '';
       document.removeEventListener('mousedown', outsideClick);
     }
@@ -922,10 +1046,21 @@ function setDateRange(preset) { const fmt = d => d.toISOString().slice(0, 10), t
 function updateSlotPreview() { const s = document.getElementById('fa_start'), e = document.getElementById('fa_end'), pv = document.getElementById('slotPreview'); if (!s || !e || !pv) return; const slots = expandDateRange(s.value, e.value); pv.innerHTML = `Will create <span class="font-semibold">${slots.length}</span> weekly assignment${slots.length === 1 ? '' : 's'}`; pv.className = slots.length > 0 ? 'bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800' : 'bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800'; }
 
 async function saveAssignment(id) {
-  if (id) { try { await api('PUT', `/api/assignments/${id}`, { employee_id: +document.getElementById('fa_emp').value, project_id: +document.getElementById('fa_proj').value, percentage: +document.getElementById('fa_pct').value }); closeModal(); toast('Assignment updated'); await loadAll(); } catch (e) { toast(e.message, 'error'); } return; }
+  const projId = document.getElementById('fa_proj')?.value;
+  if (!projId) { toast('Please select a project', 'error'); return; }
+  if (id) {
+    try {
+      await api('PUT', `/api/assignments/${id}`, { employee_id: +document.getElementById('fa_emp').value, project_id: +projId, percentage: +document.getElementById('fa_pct').value });
+      closeModal(); toast('Assignment updated'); await loadAll();
+    } catch (e) { toast(e.message, 'error'); }
+    return;
+  }
   const slots = expandDateRange(document.getElementById('fa_start').value, document.getElementById('fa_end').value);
   if (!slots.length) { toast('Invalid date range', 'error'); return; }
-  try { const r = await api('POST', '/api/assignments/bulk', { employee_id: +document.getElementById('fa_emp').value, project_id: +document.getElementById('fa_proj').value, percentage: +document.getElementById('fa_pct').value, slots }); closeModal(); toast(`Created ${r.created} assignment${r.created === 1 ? '' : 's'}`); await loadAll(); } catch (e) { toast(e.message, 'error'); }
+  try {
+    const r = await api('POST', '/api/assignments/bulk', { employee_id: +document.getElementById('fa_emp').value, project_id: +projId, percentage: +document.getElementById('fa_pct').value, slots });
+    closeModal(); toast(`Created ${r.created} assignment${r.created === 1 ? '' : 's'}`); await loadAll();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteAssignment(id) { if (!confirm('Delete this assignment?')) return; try { await api('DELETE', `/api/assignments/${id}`); closeModal(); toast('Assignment deleted'); await loadAll(); } catch (e) { toast(e.message, 'error'); } }
@@ -1076,7 +1211,6 @@ function openProjectsModal() {
       <button onclick="closeModal()" class="btn-gray">Close</button>
     </div>`, 'max-w-3xl');
 
-  // Wire up interactivity after modal is in DOM
   let activeStage = '';
 
   function refresh() {
@@ -1184,8 +1318,15 @@ function initEvents() {
   /* Chart section tab buttons */
   document.querySelectorAll('.chart-tab-btn').forEach(b => b.addEventListener('click', () => switchChartTab(b.dataset.chartTab)));
 
-  /* New Logo chart filter buttons */
-  document.querySelectorAll('.nl-filter-btn').forEach(b => b.addEventListener('click', () => renderNewLogoChart(null, b.dataset.status)));
+  /* New Logo deal-status filter buttons (COMBINED / NEW LOGO / REPEAT / REACTIVE) */
+  document.querySelectorAll('.nl-filter-btn').forEach(b =>
+    b.addEventListener('click', () => renderNewLogoChart(null, b.dataset.status, S.nlProductFilter))
+  );
+
+  /* New Logo product category filter buttons (All / Software / PS Only / Personal / Student / Subscription) */
+  document.querySelectorAll('.nl-prod-btn').forEach(b =>
+    b.addEventListener('click', () => renderNewLogoChart(null, S.newLogoFilter, b.dataset.prod))
+  );
 
   initColResize(); initSectionDrag();
 }

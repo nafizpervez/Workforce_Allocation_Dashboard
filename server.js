@@ -411,9 +411,9 @@ app.get('/api/dashboard/deadlines', (_, res) => {
 
 /* ─── New Logo bar chart data ─────────────────────────────────── */
 app.get('/api/dashboard/new-logo-chart', (_, res) => {
-  /* ★ FIX: include `name` so p.name resolves to project name, not p.code ★ */
+  /* Include product_name and product_family for client-side product category filtering */
   const allProjects = db.prepare(
-    'SELECT id, code, name, account_name, client, end_date, stage, product_name FROM projects'
+    'SELECT id, code, name, account_name, client, end_date, stage, product_name, product_family FROM projects'
   ).all();
 
   const statusMap = calcDealStatuses(allProjects);
@@ -426,12 +426,18 @@ app.get('/api/dashboard/new-logo-chart', (_, res) => {
     const fy = getFiscalYear(p.end_date);
     if (fy === null) continue;
     const st = statusMap[p.id] || 'NEW LOGO';
-    /* Use project name (p.name); fall back to code only if name is blank */
     const projName = (p.name || p.code || 'Unknown').trim();
+
     if (!fyData[fy]) fyData[fy] = { 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0 };
-    if (!fyProjects[fy]) fyProjects[fy] = { 'NEW LOGO': new Set(), 'REPEAT': new Set(), 'REACTIVE': new Set() };
+    if (!fyProjects[fy]) fyProjects[fy] = { 'NEW LOGO': [], 'REPEAT': [], 'REACTIVE': [] };
+
     fyData[fy][st]++;
-    fyProjects[fy][st].add(projName);
+    /* Store full project object with product_name + product_family for client filtering */
+    fyProjects[fy][st].push({
+      name: projName,
+      product_name: (p.product_name || '').trim(),
+      product_family: (p.product_family || '').trim(),
+    });
   }
 
   const result = Object.entries(fyData)
@@ -443,9 +449,9 @@ app.get('/api/dashboard/new-logo-chart', (_, res) => {
       'REPEAT': c['REPEAT'],
       'REACTIVE': c['REACTIVE'],
       projects: {
-        'NEW LOGO': [...(fyProjects[+fy]?.['NEW LOGO'] || [])].sort(),
-        'REPEAT': [...(fyProjects[+fy]?.['REPEAT'] || [])].sort(),
-        'REACTIVE': [...(fyProjects[+fy]?.['REACTIVE'] || [])].sort(),
+        'NEW LOGO': (fyProjects[+fy]?.['NEW LOGO'] || []).sort((a, b) => a.name.localeCompare(b.name)),
+        'REPEAT': (fyProjects[+fy]?.['REPEAT'] || []).sort((a, b) => a.name.localeCompare(b.name)),
+        'REACTIVE': (fyProjects[+fy]?.['REACTIVE'] || []).sort((a, b) => a.name.localeCompare(b.name)),
       }
     }));
 
