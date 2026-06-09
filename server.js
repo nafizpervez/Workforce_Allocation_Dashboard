@@ -390,12 +390,18 @@ app.get('/api/dashboard/stats', (req, res) => {
   const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage != 'Closed Won'`).get().c;
   const assignedProjects = db.prepare(`SELECT COUNT(DISTINCT project_id) AS c FROM assignments WHERE ${FISCAL_WHERE}`).get(...fiscalParams(fy)).c;
 
-  const avgUtil = db.prepare(`
-    SELECT AVG(weekly_total) AS u FROM (
-      SELECT employee_id,year,month,week,SUM(percentage) AS weekly_total
-        FROM assignments WHERE ${FISCAL_WHERE} GROUP BY employee_id,year,month,week
-    )
-  `).get(...fiscalParams(fy)).u || 0;
+  // Avg utilization = average across active employees of (their weighted slots / 48 FY weeks * 100)
+  const TOTAL_FY_WEEKS = 48;
+  const utilRows = db.prepare(`
+    SELECT COALESCE(SUM(a.percentage / 100.0), 0) AS weighted_slots
+      FROM employees e
+      LEFT JOIN assignments a ON a.employee_id = e.id
+        AND ((a.year = ? AND a.month >= 4) OR (a.year = ? AND a.month <= 3))
+     WHERE COALESCE(e.active,1)=1
+     GROUP BY e.id
+  `).all(...fiscalParams(fy));
+  const activeCount = utilRows.length || 1;
+  avgUtil = utilRows.reduce((s, r) => s + Math.min(r.weighted_slots / TOTAL_FY_WEEKS * 100, 100), 0) / activeCount;
 
   const psCount = db.prepare(`SELECT COUNT(*) AS c FROM employees WHERE dept='Professional Services' AND COALESCE(active,1)=1`).get().c || 1;
   const productivity = psCount > 0 ? +(avgUtil / psCount).toFixed(2) : 0;
