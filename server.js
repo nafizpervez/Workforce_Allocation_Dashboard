@@ -466,17 +466,22 @@ app.get('/api/dashboard/workload', (req, res) => {
 
 app.get('/api/dashboard/utilization', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
+  // Utilization = sum(percentage/100 per slot) / TOTAL_FY_WEEKS * 100
+  // TOTAL_FY_WEEKS = 48 (12 months × 4 weeks per month)
+  const TOTAL_FY_WEEKS = 48;
   const rows = db.prepare(`
-    SELECT e.id, e.name, e.dept, COALESCE(AVG(weekly_total),0) AS avg_util
+    SELECT e.id, e.name, e.dept,
+           COALESCE(SUM(a.percentage / 100.0), 0) AS weighted_slots
       FROM employees e
-      LEFT JOIN (
-        SELECT employee_id,year,month,week,SUM(percentage) AS weekly_total
-          FROM assignments WHERE ${FISCAL_WHERE}
-         GROUP BY employee_id,year,month,week
-      ) w ON w.employee_id=e.id
-     WHERE COALESCE(e.active,1)=1 GROUP BY e.id ORDER BY avg_util ASC
+      LEFT JOIN assignments a ON a.employee_id = e.id
+        AND ((a.year = ? AND a.month >= 4) OR (a.year = ? AND a.month <= 3))
+     WHERE COALESCE(e.active,1)=1
+     GROUP BY e.id ORDER BY weighted_slots ASC
   `).all(...fiscalParams(fy));
-  const cleaned = rows.map(r => ({ id: r.id, name: r.name, dept: r.dept, utilization: +Number(r.avg_util).toFixed(1) }));
+  const cleaned = rows.map(r => ({
+    id: r.id, name: r.name, dept: r.dept,
+    utilization: +Math.min((r.weighted_slots / TOTAL_FY_WEEKS * 100), 100).toFixed(1)
+  }));
   res.json({ all: cleaned, top_available: cleaned.slice(0, 5), high_workload: [...cleaned].reverse().slice(0, 5) });
 });
 

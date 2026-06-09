@@ -101,25 +101,39 @@ function applyRunningFilters(list) {
 
 /* ── local utilization (for period selector) ─────────────────── */
 function calcLocalUtil(period) {
+  // Utilization = sum(percentage/100 per slot) / TOTAL_PERIOD_WEEKS * 100
+  // Full day slot = 100%, half day = 50% → weight 1.0 or 0.5
+  const TOTAL_FY_WEEKS = 48; // 12 months × 4 weeks
   const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1, curD = now.getDate();
   const curW = curD <= 7 ? 1 : curD <= 14 ? 2 : curD <= 21 ? 3 : 4;
   const fy = S.fiscalYear;
-  let rel;
-  if (period === 'week') rel = S.assignments.filter(a => a.year === curY && a.month === curM && a.week === curW);
-  else if (period === 'month') rel = S.assignments.filter(a => a.year === curY && a.month === curM);
-  else {
-    // Fiscal Year: April (fy) → March (fy+1)
+  let rel, totalWeeks;
+
+  if (period === 'week') {
+    rel = S.assignments.filter(a => a.year === curY && a.month === curM && a.week === curW);
+    totalWeeks = 1;
+  } else if (period === 'month') {
+    rel = S.assignments.filter(a => a.year === curY && a.month === curM);
+    totalWeeks = 4;
+  } else {
     rel = S.assignments.filter(a =>
       (a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3)
     );
+    totalWeeks = TOTAL_FY_WEEKS;
   }
-  const wMap = {};
-  for (const a of rel) { const k = `${a.employee_id}|${a.year}|${a.month}|${a.week}`; wMap[k] = (wMap[k] || 0) + a.percentage; }
-  const emp = {};
-  for (const [k, v] of Object.entries(wMap)) { const id = +k.split('|')[0]; (emp[id] || (emp[id] = [])).push(v); }
-  // Only include ACTIVE employees
+
+  // Sum weighted slots per employee (percentage/100 per slot)
+  const empWeighted = {};
+  for (const a of rel) {
+    empWeighted[a.employee_id] = (empWeighted[a.employee_id] || 0) + (a.percentage / 100);
+  }
+
   const active = S.employees.filter(e => e.active !== 0);
-  const all = active.map(e => ({ id: e.id, name: e.name, dept: e.dept, utilization: emp[e.id] ? +(emp[e.id].reduce((a, b) => a + b, 0) / emp[e.id].length).toFixed(1) : 0 })).sort((a, b) => a.utilization - b.utilization);
+  const all = active.map(e => ({
+    id: e.id, name: e.name, dept: e.dept,
+    utilization: +Math.min(((empWeighted[e.id] || 0) / totalWeeks * 100), 100).toFixed(1)
+  })).sort((a, b) => a.utilization - b.utilization);
+
   return { all, top_available: all.slice(0, 5), high_workload: [...all].reverse().slice(0, 5) };
 }
 
@@ -165,11 +179,15 @@ function openEmployeeDetailModal(empId) {
   const weekLabel = a => `${MONTHS[a.month - 1]} ${a.year} W${a.week}`;
 
   // Overall utilization for FY
+  // Utilization = weighted slots / 48 FY weeks * 100
+  const TOTAL_FY_WEEKS = 48;
+  const weightedTotal = empAsgs.reduce((s, a) => s + a.percentage / 100, 0);
+  const avgUtil = +Math.min((weightedTotal / TOTAL_FY_WEEKS * 100), 100).toFixed(1);
+  // Peak week = highest single week's combined percentage
   const wMap = {};
   for (const a of empAsgs) { const k = `${a.year}|${a.month}|${a.week}`; wMap[k] = (wMap[k] || 0) + a.percentage; }
-  const weekVals = Object.values(wMap);
-  const avgUtil = weekVals.length ? +(weekVals.reduce((a, b) => a + b, 0) / weekVals.length).toFixed(1) : 0;
-  const maxUtil = weekVals.length ? Math.max(...weekVals) : 0;
+  const maxUtil = Object.values(wMap).length ? Math.max(...Object.values(wMap)) : 0;
+  const assignedWeeks = Object.keys(wMap).length;
 
   const projCards = Object.values(projMap).map(({ proj, weeks, totalPct, slotCount }) => {
     const name = proj ? esc(proj.name) : 'Unknown';
@@ -207,10 +225,14 @@ function openEmployeeDetailModal(empId) {
     mHdr(`${emp.name} — FY${fy + 1} Workload`, `${emp.dept || '—'} · ${emp.email || '—'}`)
     + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
         <!-- Summary cards -->
-        <div class="grid grid-cols-3 gap-3 mb-5">
+        <div class="grid grid-cols-4 gap-3 mb-5">
           <div class="bg-indigo-50 rounded-xl p-3 text-center">
             <div class="text-2xl font-bold ${uClr}">${avgUtil}%</div>
-            <div class="text-xs text-gray-500 mt-0.5">Avg Utilization</div>
+            <div class="text-xs text-gray-500 mt-0.5">FY Utilization</div>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-3 text-center">
+            <div class="text-2xl font-bold text-gray-800">${assignedWeeks}</div>
+            <div class="text-xs text-gray-500 mt-0.5">Weeks Assigned</div>
           </div>
           <div class="bg-gray-50 rounded-xl p-3 text-center">
             <div class="text-2xl font-bold text-gray-800">${maxUtil}%</div>
@@ -221,9 +243,8 @@ function openEmployeeDetailModal(empId) {
             <div class="text-xs text-gray-500 mt-0.5">Projects</div>
           </div>
         </div>
-        <!-- Calculation note -->
         <div class="text-xs text-gray-400 mb-3 px-1">
-          Avg Utilization = sum of all weekly % slots ÷ number of week slots in FY${fy + 1} (Apr ${fy} – Mar ${fy + 1})
+          FY Utilization = weeks assigned (weighted by %) ÷ 48 FY weeks × 100 &nbsp;·&nbsp; Half-day slot = 0.5 weeks
         </div>
         <!-- Per-project breakdown -->
         <div class="text-sm font-semibold text-gray-700 mb-2">Project Assignments</div>
@@ -1173,11 +1194,18 @@ function openAssignmentModal(opts = {}) {
         <div><label class="field-label">Period</label>
           <div class="field-input bg-gray-50 text-gray-700">${MN[cur.month - 1]} ${cur.year} · Week ${cur.week}</div>
         </div>
-        <div><label class="field-label flex justify-between"><span>Workload Allocation</span>
-          <span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span></label>
-          <input id="fa_pct" type="range" min="0" max="150" value="${pct}" class="w-full"
-            oninput="document.getElementById('pctLbl').textContent=this.value+'%'">
-          <div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span><span>150%</span></div>
+        <div>
+          <label class="field-label flex justify-between"><span>Workload Allocation</span>
+            <span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span>
+          </label>
+          <div class="flex gap-2 mb-2">
+            <button type="button" onclick="setPct(50)"  class="pct-preset-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all">½ Day (50%)</button>
+            <button type="button" onclick="setPct(100)" class="pct-preset-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all">Full Day (100%)</button>
+            <button type="button" onclick="setPct(0)"   class="pct-preset-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all">Off (0%)</button>
+          </div>
+          <input id="fa_pct" type="range" min="0" max="100" step="50" value="${pct}" class="w-full accent-blue-600"
+            oninput="syncPctLabel(this.value)">
+          <div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50% (½ day)</span><span>100% (full day)</span></div>
         </div>
       </div>
       ${mFtr(opts.id, 'saveAssignment', 'deleteAssignment')}`);
@@ -1205,16 +1233,43 @@ function openAssignmentModal(opts = {}) {
         <div class="bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800" id="slotPreview">
           Will create <span class="font-semibold">0</span> weekly assignments
         </div>
-        <div><label class="field-label flex justify-between"><span>Workload % per Week</span>
-          <span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span></label>
-          <input id="fa_pct" type="range" min="0" max="150" value="${pct}" class="w-full"
-            oninput="document.getElementById('pctLbl').textContent=this.value+'%'">
-          <div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50%</span><span>100%</span><span>150%</span></div>
+        <div>
+          <label class="field-label flex justify-between"><span>Workload per Week</span>
+            <span class="text-blue-600 font-semibold" id="pctLbl">${pct}%</span>
+          </label>
+          <div class="flex gap-2 mb-2">
+            <button type="button" onclick="setPct(50)"  class="pct-preset-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all">½ Day (50%)</button>
+            <button type="button" onclick="setPct(100)" class="pct-preset-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all">Full Day (100%)</button>
+            <button type="button" onclick="setPct(0)"   class="pct-preset-btn flex-1 py-1.5 rounded-lg border text-xs font-semibold transition-all">Off (0%)</button>
+          </div>
+          <input id="fa_pct" type="range" min="0" max="100" step="50" value="${pct}" class="w-full accent-blue-600"
+            oninput="syncPctLabel(this.value)">
+          <div class="flex justify-between text-xs text-gray-400 mt-1"><span>0%</span><span>50% (½ day)</span><span>100% (full day)</span></div>
         </div>
       </div>
       ${mFtr(null, 'saveAssignment', 'deleteAssignment')}`);
     updateSlotPreview();
   }
+
+  /* ── Wire up percentage preset buttons ── */
+  window.setPct = function (val) {
+    const slider = document.getElementById('fa_pct');
+    if (slider) { slider.value = val; syncPctLabel(val); }
+  };
+  window.syncPctLabel = function (val) {
+    const lbl = document.getElementById('pctLbl');
+    if (lbl) lbl.textContent = val + '%';
+    // Highlight active preset button
+    document.querySelectorAll('.pct-preset-btn').forEach(b => {
+      const m = b.getAttribute('onclick'); const bVal = m && m.match(/setPct.(\d+)/)?.[1];
+      const isActive = bVal && +bVal === +val;
+      b.style.background = isActive ? '#1e40af' : 'white';
+      b.style.color = isActive ? 'white' : '#374151';
+      b.style.borderColor = isActive ? '#1e40af' : '#e5e7eb';
+    });
+  };
+  // Sync on open
+  syncPctLabel(document.getElementById('fa_pct')?.value || 100);
 
   /* ── Wire up searchable project combobox ── */
   const searchInput = document.getElementById('fa_proj_search');
