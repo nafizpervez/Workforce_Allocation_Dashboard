@@ -9,12 +9,12 @@ const S = {
   employees: [], projects: [], assignments: [],
   matrix: {}, employeeUtil: new Map(), charts: {},
   searchQuery: '',
-  insightsPeriodHigh: 'month',
-  insightsPeriodLow: 'month',
+  insightsPeriodHigh: 'fiscal',
+  insightsPeriodLow: 'fiscal',
   newLogoFilter: 'COMBINED',
-  nlProductFilter: 'ALL',        // product category filter for Deal Acquisition chart
-  newLogoChartData: [],
-  psRevenueData: [],
+  nlProductFilter: new Set(['ALL']),  // multi-select category filter for Deal Acquisition + Revenue chart
+  newLogoChartData: {},          // keyed by category: { ALL: [...], ALLCLEAN: [...], ... }
+  psRevenueData: {},             // keyed by category
   /* matrix filters */
   matrixProjectFilter: null, matrixResourceFilter: null,
   matrixMonthFilter: '', matrixStageFilt: '', matrixAmountFilt: '',
@@ -75,10 +75,6 @@ function applyPipelineFilters(list) {
   return list.filter(p => {
     if (p.stage === 'Closed Lost') return false;
     if (p.end_date && p.end_date < DISPLAY_CUTOFF) return false;
-    // Exclude Personal Use and Student Use
-    const _pn = (p.product_name || '').toUpperCase();
-    if (_pn.includes('PERSONAL USE')) return false;
-    if (_pn.includes('STUDENT USE')) return false;
     if (S.pipelineDealStatusFilt && p.deal_status !== S.pipelineDealStatusFilt) return false;
     if (S.pipelineStageFilt && p.stage !== S.pipelineStageFilt) return false;
     if (!getAmountOk(p.opp_amount, S.pipelineAmountFilt)) return false;
@@ -107,15 +103,23 @@ function applyRunningFilters(list) {
 function calcLocalUtil(period) {
   const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1, curD = now.getDate();
   const curW = curD <= 7 ? 1 : curD <= 14 ? 2 : curD <= 21 ? 3 : 4;
+  const fy = S.fiscalYear;
   let rel;
   if (period === 'week') rel = S.assignments.filter(a => a.year === curY && a.month === curM && a.week === curW);
   else if (period === 'month') rel = S.assignments.filter(a => a.year === curY && a.month === curM);
-  else rel = S.assignments;
+  else {
+    // Fiscal Year: April (fy) → March (fy+1)
+    rel = S.assignments.filter(a =>
+      (a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3)
+    );
+  }
   const wMap = {};
   for (const a of rel) { const k = `${a.employee_id}|${a.year}|${a.month}|${a.week}`; wMap[k] = (wMap[k] || 0) + a.percentage; }
   const emp = {};
   for (const [k, v] of Object.entries(wMap)) { const id = +k.split('|')[0]; (emp[id] || (emp[id] = [])).push(v); }
-  const all = S.employees.map(e => ({ id: e.id, name: e.name, dept: e.dept, utilization: emp[e.id] ? +(emp[e.id].reduce((a, b) => a + b, 0) / emp[e.id].length).toFixed(1) : 0 })).sort((a, b) => a.utilization - b.utilization);
+  // Only include ACTIVE employees
+  const active = S.employees.filter(e => e.active !== 0);
+  const all = active.map(e => ({ id: e.id, name: e.name, dept: e.dept, utilization: emp[e.id] ? +(emp[e.id].reduce((a, b) => a + b, 0) / emp[e.id].length).toFixed(1) : 0 })).sort((a, b) => a.utilization - b.utilization);
   return { all, top_available: all.slice(0, 5), high_workload: [...all].reverse().slice(0, 5) };
 }
 
@@ -127,6 +131,109 @@ function setInsightsPeriod(card, period) {
   const empty = '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
   if (card === 'high') document.getElementById('highWorkloadList').innerHTML = util.high_workload.map(insightRow).join('') || empty;
   else document.getElementById('topAvailableList').innerHTML = util.top_available.map(insightRow).join('') || empty;
+}
+
+function renderInsights() {
+  const empty = '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
+  document.getElementById('highWorkloadList').innerHTML = calcLocalUtil(S.insightsPeriodHigh).high_workload.map(insightRow).join('') || empty;
+  document.getElementById('topAvailableList').innerHTML = calcLocalUtil(S.insightsPeriodLow).top_available.map(insightRow).join('') || empty;
+}
+
+function openEmployeeDetailModal(empId) {
+  const emp = S.employees.find(e => e.id === empId);
+  if (!emp) return;
+  const fy = S.fiscalYear;
+  // All assignments for this employee in the fiscal year
+  const empAsgs = S.assignments.filter(a => a.employee_id === empId &&
+    ((a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3))
+  ).sort((a, b) => a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.week - b.week);
+
+  // Build per-project totals
+  const projMap = {};
+  for (const a of empAsgs) {
+    if (!projMap[a.project_id]) {
+      const proj = S.projects.find(p => p.id === a.project_id);
+      projMap[a.project_id] = { proj, weeks: [], totalPct: 0, slotCount: 0 };
+    }
+    projMap[a.project_id].weeks.push(a);
+    projMap[a.project_id].totalPct += a.percentage;
+    projMap[a.project_id].slotCount++;
+  }
+
+  // Weekly breakdown per project
+  const MONTHS = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const weekLabel = a => `${MONTHS[a.month - 1]} ${a.year} W${a.week}`;
+
+  // Overall utilization for FY
+  const wMap = {};
+  for (const a of empAsgs) { const k = `${a.year}|${a.month}|${a.week}`; wMap[k] = (wMap[k] || 0) + a.percentage; }
+  const weekVals = Object.values(wMap);
+  const avgUtil = weekVals.length ? +(weekVals.reduce((a, b) => a + b, 0) / weekVals.length).toFixed(1) : 0;
+  const maxUtil = weekVals.length ? Math.max(...weekVals) : 0;
+
+  const projCards = Object.values(projMap).map(({ proj, weeks, totalPct, slotCount }) => {
+    const name = proj ? esc(proj.name) : 'Unknown';
+    const code = proj ? esc(proj.code || '') : '';
+    const avgW = slotCount ? +(totalPct / slotCount).toFixed(1) : 0;
+    const weekRows = weeks.map(a =>
+      `<div class="flex items-center justify-between py-0.5 text-xs text-gray-600">
+        <span class="mono text-gray-400 w-28 flex-shrink-0">${weekLabel(a)}</span>
+        <div class="flex-1 mx-2 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div class="h-full rounded-full bg-indigo-400" style="width:${Math.min(a.percentage, 100)}%"></div>
+        </div>
+        <span class="font-semibold w-10 text-right">${a.percentage}%</span>
+      </div>`
+    ).join('');
+    return `<div class="rounded-xl border border-gray-100 bg-gray-50 p-3 mb-3">
+      <div class="flex items-center justify-between mb-1">
+        <div>
+          <span class="text-xs font-bold text-blue-600 mono">${code}</span>
+          <div class="text-sm font-semibold text-gray-900">${name}</div>
+        </div>
+        <div class="text-right">
+          <div class="text-xs text-gray-400">${slotCount} week slot${slotCount === 1 ? '' : 's'}</div>
+          <div class="text-sm font-bold text-indigo-600">${avgW}% avg</div>
+        </div>
+      </div>
+      <div class="mt-2 space-y-0.5">${weekRows}</div>
+    </div>`;
+  }).join('') || '<p class="text-xs text-gray-400 py-4 text-center">No assignments this FY</p>';
+
+  const uClr = avgUtil >= 80 ? 'text-red-600' : avgUtil >= 50 ? 'text-amber-600' : 'text-emerald-600';
+  const initials = inits(emp.name);
+  const badge = ub(avgUtil);
+
+  openModal(
+    mHdr(`${emp.name} — FY${fy + 1} Workload`, `${emp.dept || '—'} · ${emp.email || '—'}`)
+    + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
+        <!-- Summary cards -->
+        <div class="grid grid-cols-3 gap-3 mb-5">
+          <div class="bg-indigo-50 rounded-xl p-3 text-center">
+            <div class="text-2xl font-bold ${uClr}">${avgUtil}%</div>
+            <div class="text-xs text-gray-500 mt-0.5">Avg Utilization</div>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-3 text-center">
+            <div class="text-2xl font-bold text-gray-800">${maxUtil}%</div>
+            <div class="text-xs text-gray-500 mt-0.5">Peak Week</div>
+          </div>
+          <div class="bg-gray-50 rounded-xl p-3 text-center">
+            <div class="text-2xl font-bold text-gray-800">${Object.keys(projMap).length}</div>
+            <div class="text-xs text-gray-500 mt-0.5">Projects</div>
+          </div>
+        </div>
+        <!-- Calculation note -->
+        <div class="text-xs text-gray-400 mb-3 px-1">
+          Avg Utilization = sum of all weekly % slots ÷ number of week slots in FY${fy + 1} (Apr ${fy} – Mar ${fy + 1})
+        </div>
+        <!-- Per-project breakdown -->
+        <div class="text-sm font-semibold text-gray-700 mb-2">Project Assignments</div>
+        ${projCards}
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+        <button onclick="closeModal()" class="btn-gray">Close</button>
+      </div>`,
+    'max-w-2xl'
+  );
 }
 
 /* ================================================================ API */
@@ -158,7 +265,14 @@ async function loadAll() {
     renderStats(stats);
     renderMatrix();
     renderTrends(trends); renderWorkload(wl); renderAllocation(wl); renderNewLogoChart(nlChart);
-    S.psRevenueData = psRevChart;
+    // Sync initial category button states
+    document.querySelectorAll('.nl-prod-btn').forEach(b => {
+      const isActive = S.nlProductFilter.has(b.dataset.prod);
+      b.style.background = isActive ? '#1e40af' : 'white';
+      b.style.color = isActive ? 'white' : '#374151';
+      b.style.borderColor = isActive ? '#1e40af' : '#e5e7eb';
+    });
+    S.psRevenueData = psRevChart;  // keyed by category
     S.psTypeData = psTypeChart;
     populateProductFamilyDropdowns();
     renderInsights();
@@ -194,11 +308,11 @@ function populatePipelineStageFilter() {
 function renderStats(s) {
   const t = s.trends || {};
   const cards = [
-    { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', action: 'view-employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Count of all resources registered in the system`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
+    { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', action: 'view-employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Active team members · click to manage active\/inactive status`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
     { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', action: 'view-projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
     { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: `Sum of all weekly allocation % ÷ Total assignment slots`, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
     { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
-    { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Avg Utilization (${s.avg_utilization}%) ÷ ${s.ps_count} PS Resources = ${s.productivity}`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
+    { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Active PS Resources: ${s.ps_count} · Avg Utilization: ${s.avg_utilization}% · Score = avg util ÷ PS count`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
     { v: s.on_time_pct + '%', label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: `On-track projects ÷ Total projects × 100`, icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
   ];
   document.getElementById('statsRow').innerHTML = cards.map(c => {
@@ -275,13 +389,22 @@ function renderWorkload(data) { if (S.charts.workload) S.charts.workload.destroy
 
 function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }); }
 
-function insightRow(e) { const u = e.utilization, clr = uc(u), badge = ub(u), label = us(u); return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" data-action="edit-emp-side" data-emp="${e.id}"><div class="relative flex-shrink-0"><div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white" style="background:${clr}"></div></div><div class="flex-1 min-w-0"><div class="text-sm font-medium text-gray-900 truncate">${esc(e.name)}</div><div class="text-xs text-gray-500">${esc(e.dept)}</div></div><span class="px-3 py-1 rounded-full text-xs font-medium ${badge} flex-shrink-0">${esc(label)}</span><div class="text-right flex-shrink-0"><div class="text-base font-semibold" style="color:${clr}">${u.toFixed(0)}%</div><div class="w-16 h-1.5 bg-gray-200 rounded-full mt-1 overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(100, u)}%;background:${clr}"></div></div></div></div>`; }
-
-/* ================================================================ INSIGHTS */
-function renderInsights() {
-  const empty = '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
-  document.getElementById('highWorkloadList').innerHTML = calcLocalUtil(S.insightsPeriodHigh).high_workload.map(insightRow).join('') || empty;
-  document.getElementById('topAvailableList').innerHTML = calcLocalUtil(S.insightsPeriodLow).top_available.map(insightRow).join('') || empty;
+function insightRow(e) {
+  const u = e.utilization, clr = uc(u), badge = ub(u), label = us(u);
+  return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" onclick="openEmployeeDetailModal(${e.id})">
+    <div class="relative flex-shrink-0">
+      <div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div>
+      <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${u === 0 ? 'bg-emerald-400' : u >= 80 ? 'bg-red-400' : 'bg-amber-400'}"></div>
+    </div>
+    <div class="flex-1 min-w-0">
+      <div class="text-sm font-semibold text-gray-900 truncate">${esc(e.name)}</div>
+      <div class="text-xs text-gray-500">${esc(e.dept || '—')}</div>
+    </div>
+    <div class="flex items-center gap-2 flex-shrink-0">
+      <span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${label}</span>
+      <span class="text-sm font-bold ${clr}">${u}%</span>
+    </div>
+  </div>`;
 }
 
 /* ── Deal status badge ────────────────────────────────────────── */
@@ -308,9 +431,9 @@ function classifyProduct(pn, pf) {
   // PS Only: PS System Support or PS Project Implementation (covers typo variant)
   if (n.includes('PS SYSTEM SUPPORT') || n.includes('PS PROJECT IMPLEMENT')) return 'PS';
   // Personal Use
-  if (n.includes('PERSONAL USE')) return 'PERSONAL';
+  if (n.includes('ARCGIS FOR PERSONAL USE ONE YEAR ANNUAL SUBSCRIPTION')) return 'PERSONAL';
   // Student Use
-  if (n.includes('STUDENT USE')) return 'STUDENT';
+  if (n.includes('ARCGIS FOR STUDENT USE ONE YEAR TIMEOUT LICENSE')) return 'STUDENT';
   // Subscription: has license/renew/subscription keywords but not caught above
   if (n.includes('LICENSE') || n.includes('RENEW') || n.includes('SUBSCRIPTION')) return 'SUBSCRIPTION';
   // Software: product_family is Software
@@ -323,63 +446,67 @@ function classifyProduct(pn, pf) {
  * keeping only projects matching the given product filter bucket.
  * When prodFilter is 'ALL', returns the entry unchanged.
  */
-function applyProductFilter(fyEntry, prodFilter) {
-  if (prodFilter === 'ALL') return fyEntry;
 
-  const filterProjects = list =>
-    list.filter(p => classifyProduct(p.product_name, p.product_family) === prodFilter);
-
-  const newLogoProjs = filterProjects(fyEntry.projects['NEW LOGO'] || []);
-  const repeatProjs = filterProjects(fyEntry.projects['REPEAT'] || []);
-  const reactiveProjs = filterProjects(fyEntry.projects['REACTIVE'] || []);
-
-  return {
-    ...fyEntry,
-    'NEW LOGO': newLogoProjs.length,
-    'REPEAT': repeatProjs.length,
-    'REACTIVE': reactiveProjs.length,
-    projects: {
-      'NEW LOGO': newLogoProjs,
-      'REPEAT': repeatProjs,
-      'REACTIVE': reactiveProjs,
-    }
-  };
-}
 
 /* ── Deal breakdown modal ─────────────────────────────────────── */
 function openDealModal(fyData) {
   const { label, projects } = fyData;
 
-  const section = (status, badgeCls, icon) => {
-    const list = projects[status] || [];
-    if (!list.length) return `<div class="mb-4"><div class="flex items-center gap-2 mb-1.5"><span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span><span class="text-xs text-gray-400">0 projects</span></div></div>`;
-    return `<div class="mb-5">
-      <div class="flex items-center gap-2 mb-2">
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls}">${icon} ${status}</span>
-        <span class="text-xs text-gray-400">${list.length} project${list.length === 1 ? '' : 's'}</span>
-      </div>
-      <div class="space-y-1">${list.map(p => {
-      // Support both old plain-string format and new object format {name, product_name, product_family}
-      const name = typeof p === 'string' ? p : (p.name || '');
-      const sub = typeof p === 'string' ? '' : [p.product_name, p.product_family].filter(Boolean).join(' · ');
-      return `<div class="py-1.5 px-3 bg-gray-50 rounded-lg border border-gray-100 hover:bg-gray-100 transition-colors">
-          <div class="text-sm text-gray-800">${esc(name)}</div>
-          ${sub ? `<div class="text-xs text-gray-400 mt-0.5">${esc(sub)}</div>` : ''}
-        </div>`;
-    }).join('')}</div>
-    </div>`;
+  const rowHtml = (p) => {
+    const name = typeof p === 'string' ? p : (p.name || '');
+    const saCode = typeof p === 'object' && p.code ? p.code : '';
+    const oppName = typeof p === 'object' && p.opp_name ? p.opp_name : '';
+    const prodName = typeof p === 'object' ? (p.product_name || '') : '';
+    const prodFam = typeof p === 'object' ? (p.product_family || '') : '';
+    const proj = saCode ? S.projects.find(x => x.code === saCode) : null;
+    const projId = proj ? proj.id : null;
+    const clickable = projId ? 'cursor-pointer deal-modal-row hover:bg-blue-50 hover:border-blue-200' : '';
+    const dataAttr = projId ? ('data-proj-id="' + projId + '"') : '';
+    const sub = [prodName, prodFam].filter(Boolean).join(' · ');
+    return '<div class="py-2 px-3 bg-gray-50 rounded-lg border border-gray-100 transition-colors ' + clickable + '" ' + dataAttr + '>'
+      + '<div class="flex items-start justify-between gap-2">'
+      + '<div class="min-w-0 flex-1">'
+      + '<div class="text-sm font-semibold text-gray-900 leading-snug">' + esc(name) + '</div>'
+      + (oppName ? '<div class="text-xs text-gray-600 mt-0.5 truncate">' + esc(oppName) + '</div>' : '')
+      + (sub ? '<div class="text-xs text-gray-400 mt-0.5">' + esc(sub) + '</div>' : '')
+      + '</div>'
+      + (saCode ? '<span class="text-xs font-bold text-blue-600 mono flex-shrink-0 mt-0.5">' + esc(saCode) + '</span>' : '')
+      + '</div></div>';
   };
 
-  openModal(`${mHdr(label + ' — Deal Breakdown', 'Closed Won project names by acquisition type')}
-    <div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
-      ${section('NEW LOGO', 'bg-emerald-100 text-emerald-700', '⭐')}
-      ${section('REPEAT', 'bg-blue-100 text-blue-700', '↺')}
-      ${section('REACTIVE', 'bg-amber-100 text-amber-700', '⚡')}
-    </div>
-    <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
-      <button onclick="closeModal()" class="btn-gray">Close</button>
-    </div>`, 'max-w-lg');
+  const section = (status, badgeCls, icon) => {
+    const list = projects[status] || [];
+    if (!list.length) return '<div class="mb-4"><div class="flex items-center gap-2 mb-1.5">'
+      + '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + badgeCls + '">' + icon + ' ' + status + '</span>'
+      + '<span class="text-xs text-gray-400">0 accounts</span></div></div>';
+    return '<div class="mb-5">'
+      + '<div class="flex items-center gap-2 mb-2">'
+      + '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + badgeCls + '">' + icon + ' ' + status + '</span>'
+      + '<span class="text-xs text-gray-400">' + list.length + ' account' + (list.length === 1 ? '' : 's') + '</span>'
+      + '</div>'
+      + '<div class="space-y-1.5">' + list.map(rowHtml).join('') + '</div>'
+      + '</div>';
+  };
+
+  openModal(mHdr(label + ' \u2014 Deal Breakdown', 'Unique accounts \u00b7 click a row to open project details')
+    + '<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">'
+    + section('NEW LOGO', 'bg-emerald-100 text-emerald-700', '\u2b50')
+    + section('REPEAT', 'bg-blue-100 text-blue-700', '\u21ba')
+    + section('REACTIVE', 'bg-amber-100 text-amber-700', '\u26a1')
+    + '</div>'
+    + '<div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">'
+    + '<button onclick="closeModal()" class="btn-gray">Close</button>'
+    + '</div>', 'max-w-xl');
+
+  // Wire up click-to-open-project
+  document.querySelectorAll('#modalRoot .deal-modal-row[data-proj-id]').forEach(el => {
+    el.addEventListener('click', () => {
+      closeModal();
+      openProjectModal({ id: +el.dataset.projId });
+    });
+  });
 }
+
 
 /* ================================================================ NEW LOGO CHART */
 const centerLabelPlugin = {
@@ -405,25 +532,50 @@ const centerLabelPlugin = {
 
 function renderNewLogoChart(data, filter, prodFilter) {
   if (data) S.newLogoChartData = data;
-  const rawData = S.newLogoChartData || [];
 
-  // Resolve active filters (keep existing state if not explicitly passed)
   const f = filter !== undefined ? filter : S.newLogoFilter;
-  const pf = prodFilter !== undefined ? prodFilter : S.nlProductFilter;
   S.newLogoFilter = f;
-  S.nlProductFilter = pf;
+  if (prodFilter !== undefined) S.nlProductFilter = prodFilter instanceof Set ? prodFilter : new Set([prodFilter]);
+  const pf = S.nlProductFilter;
 
-  // Apply product category filter to raw data (client-side, no API call needed)
-  const d = rawData.map(entry => applyProductFilter(entry, pf));
+  // Merge multi-category data: sum counts per FY across all selected categories
+  const allCats = [...pf];
+  const isAllMode = allCats.includes('ALL');
+  const cats = isAllMode ? ['ALL'] : allCats;
 
-  // Sync deal-status button active states
+  // Build merged dataset
+  const fyMap = {};
+  for (const cat of cats) {
+    const catData = S.newLogoChartData[cat] || [];
+    for (const fy of catData) {
+      if (!fyMap[fy.fy]) fyMap[fy.fy] = { fy: fy.fy, label: fy.label, 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0, projects: { 'NEW LOGO': [], 'REPEAT': [], 'REACTIVE': [] } };
+      const entry = fyMap[fy.fy];
+      for (const st of ['NEW LOGO', 'REPEAT', 'REACTIVE']) {
+        if (isAllMode || cats.length === 1) {
+          entry[st] = fy[st];
+          entry.projects[st] = fy.projects[st];
+        } else {
+          // Multi-category: deduplicate accounts across categories
+          const existing = new Set(entry.projects[st].map(p => (p.name || '').toLowerCase()));
+          for (const proj of (fy.projects[st] || [])) {
+            const key = (proj.name || '').toLowerCase();
+            if (!existing.has(key)) { existing.add(key); entry.projects[st].push(proj); }
+          }
+          entry[st] = entry.projects[st].length;
+        }
+      }
+    }
+  }
+  const d = Object.values(fyMap).sort((a, b) => a.fy - b.fy);
+
+  // Sync deal-status buttons
   document.querySelectorAll('.nl-filter-btn').forEach(b =>
     b.classList.toggle('active', b.dataset.status === f)
   );
 
-  // Sync product category button visual states
+  // Sync category buttons
   document.querySelectorAll('.nl-prod-btn').forEach(b => {
-    const isActive = b.dataset.prod === pf;
+    const isActive = pf.has(b.dataset.prod);
     b.style.background = isActive ? '#1e40af' : 'white';
     b.style.color = isActive ? 'white' : '#374151';
     b.style.borderColor = isActive ? '#1e40af' : '#e5e7eb';
@@ -477,8 +629,8 @@ function renderNewLogoChart(data, filter, prodFilter) {
       layout: { padding: { top: 28, left: 4, right: 4, bottom: 0 } },
       onClick: (event, elements) => {
         if (!elements.length) return;
-        const idx = elements[0].index;
-        if (d[idx]) openDealModal(d[idx]);
+        const idx2 = elements[0].index;
+        if (d[idx2]) openDealModal(d[idx2]);
       },
       onHover: (event, elements) => {
         const target = event.native?.target;
@@ -501,7 +653,7 @@ function renderNewLogoChart(data, filter, prodFilter) {
         },
         tooltip: {
           bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10,
-          callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} deal${c.parsed.y === 1 ? '' : 's'}` },
+          callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} account${c.parsed.y === 1 ? '' : 's'}` },
         },
       },
       scales: {
@@ -512,20 +664,34 @@ function renderNewLogoChart(data, filter, prodFilter) {
   });
 }
 
+
 /* ── Revenue chart drill-down modal ──────────────────────────── */
 function openRevenueModal(d) {
-  const fmtUsdK = v => v >= 1_000_000 ? '$' + (v / 1_000_000).toFixed(3) + 'M' : v >= 1_000 ? '$' + (v / 1_000).toFixed(1) + 'K' : '$' + Number(v).toFixed(2);
+  // Format full number with commas, no K abbreviation
+  const fmtFull = v => {
+    if (!v && v !== 0) return '$0.00';
+    return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  };
+
   const projRow = (p, showFamily) => `
     <div class="flex items-center justify-between gap-3 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors">
       <div class="min-w-0">
         <div class="text-xs font-semibold text-gray-800 truncate">${esc(p.name)}</div>
         <div class="text-xs text-gray-400 mono">${esc(p.code)}${showFamily && p.product_family ? ` · ${esc(p.product_family)}` : ''}</div>
       </div>
-      <span class="text-xs font-bold text-gray-700 mono flex-shrink-0">${fmtUsdK(p.amount)}</span>
+      <span class="text-xs font-bold text-gray-700 mono flex-shrink-0">${fmtFull(p.amount)}</span>
     </div>`;
-  const allProjs = d.all_projects || [], psProjs = d.ps_projects || [];
-  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · product_amount per project')}
+
+  const allProjs = d.all_projects || [];
+  const psProjs = d.ps_projects || [];
+  const totalAmt = d.total_amount || 0;
+  const psAmt = d.ps_amount || 0;
+  const pct = totalAmt > 0 ? (psAmt / totalAmt * 100) : 0;
+
+  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · Total = opp_amount per SA code · PS = sum of PS product lines')}
     <div class="p-6 overflow-y-auto nice-scroll space-y-6" style="max-height:65vh">
+
+      <!-- Total Amount section -->
       <div>
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
@@ -533,10 +699,14 @@ function openRevenueModal(d) {
             <span class="text-sm font-semibold text-gray-800">Total Amount</span>
             <span class="text-xs text-gray-400">${allProjs.length} project${allProjs.length === 1 ? '' : 's'}</span>
           </div>
-          <span class="text-sm font-bold text-sky-600 mono">${fmtUsdK(d.total_amount)}</span>
+          <span class="text-sm font-bold text-sky-600 mono">${fmtFull(totalAmt)}</span>
         </div>
-        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">${allProjs.map(p => projRow(p, true)).join('') || '<p class="text-xs text-gray-400 px-3">No projects</p>'}</div>
+        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
+          ${allProjs.map(p => projRow(p, true)).join('') || '<p class="text-xs text-gray-400 px-3">No projects</p>'}
+        </div>
       </div>
+
+      <!-- PS Amount section -->
       <div>
         <div class="flex items-center justify-between mb-2">
           <div class="flex items-center gap-2">
@@ -544,33 +714,87 @@ function openRevenueModal(d) {
             <span class="text-sm font-semibold text-gray-800">PS Amount</span>
             <span class="text-xs text-gray-400">${psProjs.length} PS project${psProjs.length === 1 ? '' : 's'}</span>
           </div>
-          <span class="text-sm font-bold text-violet-600 mono">${fmtUsdK(d.ps_amount)}</span>
+          <span class="text-sm font-bold text-violet-600 mono">${fmtFull(psAmt)}</span>
         </div>
-        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">${psProjs.map(p => projRow(p, false)).join('') || '<p class="text-xs text-gray-400 px-3">No PS projects this FY</p>'}</div>
+        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
+          ${psProjs.map(p => projRow(p, false)).join('') || '<p class="text-xs text-gray-400 px-3">No PS projects this FY</p>'}
+        </div>
       </div>
+
+      <!-- PS Share % calculation -->
       <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
         <div class="flex items-center gap-2 mb-3">
           <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#10b981"></span>
           <span class="text-sm font-semibold text-emerald-800">PS Share % — Calculation</span>
         </div>
         <div class="font-mono text-sm text-emerald-900 space-y-1">
-          <div class="flex items-center justify-between"><span class="text-emerald-700">PS Amount</span><span class="font-bold">${fmtUsdK(d.ps_amount)}</span></div>
-          <div class="flex items-center justify-between"><span class="text-emerald-700">Total Amount</span><span class="font-bold">${fmtUsdK(d.total_amount)}</span></div>
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-700">PS Amount (sum of PS product lines)</span>
+            <span class="font-bold">${fmtFull(psAmt)}</span>
+          </div>
+          <div class="flex items-center justify-between">
+            <span class="text-emerald-700">Total Amount (opp_amount per SA code)</span>
+            <span class="font-bold">${fmtFull(totalAmt)}</span>
+          </div>
           <div class="border-t border-emerald-200 my-2"></div>
           <div class="flex items-center justify-between text-base">
-            <span class="text-emerald-700">${fmtUsdK(d.ps_amount)} ÷ ${fmtUsdK(d.total_amount)} × 100</span>
-            <span class="font-bold text-emerald-800 text-lg">${d.pct.toFixed(1)}%</span>
+            <span class="text-emerald-700">${fmtFull(psAmt)} ÷ ${fmtFull(totalAmt)} × 100</span>
+            <span class="font-bold text-emerald-800 text-lg">${pct.toFixed(1)}%</span>
           </div>
         </div>
       </div>
+
     </div>
     <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
       <button onclick="closeModal()" class="btn-gray">Close</button>
     </div>`, 'max-w-xl');
 }
 
+
 /* ================================================================ PS REVENUE CHART */
-function renderPsRevenueChart(data) {
+function renderPsRevenueChart(data, prodFilter) {
+  if (data) S.psRevenueData = data;
+  if (prodFilter !== undefined) S.nlProductFilter = prodFilter instanceof Set ? prodFilter : new Set([prodFilter]);
+  const pf = S.nlProductFilter;
+
+  // Merge multi-category revenue data
+  const allCats = [...pf];
+  const isAllMode = allCats.includes('ALL');
+  const cats = isAllMode ? ['ALL'] : allCats;
+
+  const fyMap = {};
+  for (const cat of cats) {
+    const catData = S.psRevenueData[cat] || [];
+    for (const fy of catData) {
+      if (!fyMap[fy.fy]) fyMap[fy.fy] = { ...fy, total_amount: 0, ps_amount: 0, all_projects: [], ps_projects: [] };
+      const entry = fyMap[fy.fy];
+      if (isAllMode || cats.length === 1) {
+        entry.total_amount = fy.total_amount;
+        entry.ps_amount = fy.ps_amount;
+        entry.pct = fy.pct;
+        entry.all_projects = fy.all_projects;
+        entry.ps_projects = fy.ps_projects;
+      } else {
+        // Multi-category: sum amounts, dedup projects by code
+        const seenAll = new Set(entry.all_projects.map(p => p.code));
+        const seenPS = new Set(entry.ps_projects.map(p => p.code));
+        for (const p of (fy.all_projects || [])) { if (!seenAll.has(p.code)) { seenAll.add(p.code); entry.all_projects.push(p); entry.total_amount += p.amount || 0; } }
+        for (const p of (fy.ps_projects || [])) { if (!seenPS.has(p.code)) { seenPS.add(p.code); entry.ps_projects.push(p); entry.ps_amount += p.amount || 0; } }
+        entry.pct = entry.total_amount > 0 ? +((entry.ps_amount / entry.total_amount) * 100).toFixed(1) : 0;
+      }
+    }
+  }
+  const data2 = Object.values(fyMap).sort((a, b) => a.fy - b.fy);
+
+  // Sync category buttons
+  document.querySelectorAll('.nl-prod-btn').forEach(b => {
+    const isActive = pf.has(b.dataset.prod);
+    b.style.background = isActive ? '#1e40af' : 'white';
+    b.style.color = isActive ? 'white' : '#374151';
+    b.style.borderColor = isActive ? '#1e40af' : '#e5e7eb';
+  });
+
+  if (S.charts.psRevenue) S.charts.psRevenue.destroy();
   if (S.charts.psRevenue) S.charts.psRevenue.destroy();
   const canvas = document.getElementById('psRevenueChart');
   if (!canvas) return;
@@ -606,11 +830,11 @@ function renderPsRevenueChart(data) {
     type: 'bar',
     plugins: [labelPlugin],
     data: {
-      labels: data.map(d => d.label),
+      labels: data2.map(d => d.label),
       datasets: [
-        { label: 'Total Amount', data: data.map(d => d.total_amount), backgroundColor: gradTotal, hoverBackgroundColor: '#0ea5e9', borderRadius: 5, borderSkipped: false, yAxisID: 'yAmt', barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'PS Amount', data: data.map(d => d.ps_amount), backgroundColor: gradPS, hoverBackgroundColor: '#7c3aed', borderRadius: 5, borderSkipped: false, yAxisID: 'yAmt', barPercentage: 0.85, categoryPercentage: 0.75 },
-        { label: 'PS Share %', data: data.map(d => d.pct), backgroundColor: gradPct, hoverBackgroundColor: '#059669', borderRadius: 5, borderSkipped: false, yAxisID: 'yPct', barPercentage: 0.85, categoryPercentage: 0.75 },
+        { label: 'Total Amount', data: data2.map(d => d.total_amount), backgroundColor: gradTotal, hoverBackgroundColor: '#0ea5e9', borderRadius: 5, borderSkipped: false, yAxisID: 'yAmt', barPercentage: 0.85, categoryPercentage: 0.75 },
+        { label: 'PS Amount', data: data2.map(d => d.ps_amount), backgroundColor: gradPS, hoverBackgroundColor: '#7c3aed', borderRadius: 5, borderSkipped: false, yAxisID: 'yAmt', barPercentage: 0.85, categoryPercentage: 0.75 },
+        { label: 'PS Share %', data: data2.map(d => d.pct), backgroundColor: gradPct, hoverBackgroundColor: '#059669', borderRadius: 5, borderSkipped: false, yAxisID: 'yPct', barPercentage: 0.85, categoryPercentage: 0.75 },
       ]
     },
     options: {
@@ -618,7 +842,7 @@ function renderPsRevenueChart(data) {
       onClick: (event, elements) => {
         if (!elements.length) return;
         const idx = elements[0].index;
-        if (data[idx]) openRevenueModal(data[idx]);
+        if (data2[idx]) openRevenueModal(data2[idx]);
       },
       onHover: (event, elements) => {
         const target = event.native?.target;
@@ -765,9 +989,13 @@ function switchChartTab(tab) {
   document.querySelectorAll('.chart-tab-btn').forEach(b => b.classList.toggle('active', b.dataset.chartTab === tab));
   document.querySelectorAll('.chart-tab-content').forEach(c => c.classList.toggle('hidden', !c.id.endsWith('-' + tab)));
   const filters = document.getElementById('dealAcqFilters');
-  if (filters) filters.classList.toggle('hidden', tab !== 'acquisition');
-  if (tab === 'revenue' && S.psRevenueData) renderPsRevenueChart(S.psRevenueData);
-  if (tab === 'tab3' && S.psTypeData) renderPsTypeChart(S.psTypeData);
+  // Category filter visible on acquisition + revenue; hidden on PS Engagement tab
+  if (filters) filters.classList.toggle('hidden', tab === 'tab3');
+  // Status filter row (COMBINED / NEW LOGO / REPEAT / REACTIVE) only on acquisition tab
+  const statusRow = document.getElementById('dealStatusFilterRow');
+  if (statusRow) statusRow.classList.toggle('hidden', tab !== 'acquisition');
+  if (tab === 'revenue') renderPsRevenueChart(null, S.nlProductFilter);
+  if (tab === 'tab3') renderPsTypeChart(S.psTypeData);
   if (tab === 'acquisition') renderNewLogoChart(null, S.newLogoFilter, S.nlProductFilter);
 }
 
@@ -1314,7 +1542,7 @@ function initEvents() {
     const va = e.target.closest('[data-view-all]'); if (va) openViewAllModal(va.dataset.viewAll);
     const sa = e.target.closest('[data-stat-action]');
     if (sa) {
-      if (sa.dataset.statAction === 'view-employees') openEmployeesModal();
+      if (sa.dataset.statAction === 'view-employees') openResourceModal();
       if (sa.dataset.statAction === 'view-projects') openProjectsModal();
     }
   });
@@ -1327,9 +1555,42 @@ function initEvents() {
     b.addEventListener('click', () => renderNewLogoChart(null, b.dataset.status, S.nlProductFilter))
   );
 
-  /* New Logo product category filter buttons (All / Software / PS Only / Personal / Student / Subscription) */
+  /* Category filter buttons — multi-select, shared across Deal Acquisition + Revenue tabs */
   document.querySelectorAll('.nl-prod-btn').forEach(b =>
-    b.addEventListener('click', () => renderNewLogoChart(null, S.newLogoFilter, b.dataset.prod))
+    b.addEventListener('click', () => {
+      const prod = b.dataset.prod;
+      const pf = S.nlProductFilter;
+
+      if (prod === 'ALL') {
+        // ALL clears everything and selects only ALL
+        S.nlProductFilter = new Set(['ALL']);
+      } else {
+        // Remove ALL when selecting specific categories
+        pf.delete('ALL');
+        if (pf.has(prod)) {
+          pf.delete(prod);
+          // If nothing left, fall back to ALL
+          if (pf.size === 0) S.nlProductFilter = new Set(['ALL']);
+        } else {
+          pf.add(prod);
+        }
+      }
+
+      // Sync button visuals
+      document.querySelectorAll('.nl-prod-btn').forEach(btn => {
+        const active = S.nlProductFilter.has(btn.dataset.prod);
+        btn.style.background = active ? '#1e40af' : 'white';
+        btn.style.color = active ? 'white' : '#374151';
+        btn.style.borderColor = active ? '#1e40af' : '#e5e7eb';
+      });
+
+      const activeTab = document.querySelector('.chart-tab-btn.active')?.dataset?.chartTab;
+      if (activeTab === 'revenue') {
+        renderPsRevenueChart(null, S.nlProductFilter);
+      } else {
+        renderNewLogoChart(null, S.newLogoFilter, S.nlProductFilter);
+      }
+    })
   );
 
   initColResize(); initSectionDrag();
@@ -1348,3 +1609,84 @@ function initCardDrag() { document.querySelectorAll('.dc:not([data-drag-init])')
 /* ================================================================ INIT */
 async function init() { initEvents(); await loadAll(); }
 init();
+
+function openResourceModal() {
+  const activeEmps = S.employees.filter(e => e.active !== 0);
+  const inactiveEmps = S.employees.filter(e => e.active === 0);
+
+  const empRow = (e) => {
+    const isActive = e.active !== 0;
+    const util = S.employeeUtil ? (S.employeeUtil.get(e.id) || 0) : 0;
+    const clr = uc(util), badge = ub(util);
+    return `<tr class="${isActive ? '' : 'opacity-50'} hover:bg-gray-50 transition-colors">
+      <td class="py-2.5 px-4 text-sm text-gray-500">${esc(e.employee_code || '')}</td>
+      <td class="py-2.5 px-4">
+        <div class="flex items-center gap-2">
+          <div class="w-7 h-7 avatar-grad rounded-full flex items-center justify-center text-xs flex-shrink-0">${esc(inits(e.name))}</div>
+          <div>
+            <div class="text-sm font-semibold text-gray-900">${esc(e.name)}</div>
+            <div class="text-xs text-gray-400">${esc(e.email || '')}</div>
+          </div>
+        </div>
+      </td>
+      <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.dept || '—')}</td>
+      <td class="py-2.5 px-4">
+        <span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${util}%</span>
+      </td>
+      <td class="py-2.5 px-4">
+        <button onclick="toggleEmployeeActive(${e.id})"
+          class="text-xs font-semibold px-3 py-1 rounded-full border transition-all ${isActive
+        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'
+        : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'}">
+          ${isActive ? '✓ Active' : '✗ Inactive'}
+        </button>
+      </td>
+    </tr>`;
+  };
+
+  const tableHtml = (emps) => emps.length
+    ? `<table class="w-full text-left border-collapse">
+        <thead><tr class="border-b border-gray-200">
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Code</th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Name</th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Dept</th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Util</th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Status</th>
+        </tr></thead>
+        <tbody>${emps.map(empRow).join('')}</tbody>
+      </table>`
+    : '<p class="text-sm text-gray-400 py-4 px-4">None</p>';
+
+  openModal(
+    mHdr('Team Resources', `${activeEmps.length} active · ${inactiveEmps.length} inactive · productivity calculated on active only`)
+    + `<div class="overflow-y-auto nice-scroll" style="max-height:65vh">
+        <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-500 uppercase tracking-wider">Active Members (${activeEmps.length})</div>
+        ${tableHtml(activeEmps)}
+        ${inactiveEmps.length ? `
+        <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Inactive Members (${inactiveEmps.length})</div>
+        ${tableHtml(inactiveEmps)}` : ''}
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+        <button onclick="closeModal()" class="btn-gray">Close</button>
+      </div>`,
+    'max-w-2xl'
+  );
+}
+
+async function toggleEmployeeActive(empId) {
+  try {
+    const updated = await api('PATCH', `/api/employees/${empId}/active`);
+    // Update local state
+    const idx = S.employees.findIndex(e => e.id === empId);
+    if (idx >= 0) S.employees[idx] = { ...S.employees[idx], ...updated };
+    S.employeeUtil = S.employeeUtil || new Map();
+    // Re-render resource modal in place
+    openResourceModal();
+    // Refresh insights list
+    renderInsights();
+    // Reload stats so Active Resources count + Productivity Score update live
+    const fy = S.fiscalYear;
+    api('GET', `/api/dashboard/stats?fiscalYear=${fy}`).then(stats => renderStats(stats)).catch(() => { });
+    toast(updated.active ? `${updated.name} set to Active` : `${updated.name} set to Inactive`);
+  } catch (e) { toast('Failed to update status', 'error'); }
+}

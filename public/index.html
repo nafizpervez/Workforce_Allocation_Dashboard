@@ -610,7 +610,9 @@
                 <div class="flex items-center gap-1.5 flex-wrap">
                   <span
                     class="text-xs font-semibold text-gray-400 whitespace-nowrap mr-0.5"
-                    >Category:</span
+                    >Category
+                    <span class="font-normal text-gray-300">(multi-select)</span
+                    >:</span
                   >
                   <button
                     class="nl-prod-btn active"
@@ -629,6 +631,24 @@
                     "
                   >
                     All
+                  </button>
+                  <button
+                    class="nl-prod-btn"
+                    data-prod="ALLCLEAN"
+                    style="
+                      background: white;
+                      color: #374151;
+                      border: 1px solid #e5e7eb;
+                      padding: 3px 10px;
+                      border-radius: 14px;
+                      font-size: 11px;
+                      font-weight: 600;
+                      cursor: pointer;
+                      transition: all 0.15s;
+                      white-space: nowrap;
+                    "
+                  >
+                    ✂️ All w/o Personal &amp; Student
                   </button>
                   <button
                     class="nl-prod-btn"
@@ -703,9 +723,11 @@
                     🎓 Student Use
                   </button>
                 </div>
-
-                <!-- Row 2: Deal status filter (existing COMBINED / NEW LOGO / REPEAT / REACTIVE) -->
-                <div class="flex items-center gap-1.5 flex-wrap">
+                <!-- Row 2: Deal status filter (acquisition tab only) -->
+                <div
+                  id="dealStatusFilterRow"
+                  class="flex items-center gap-1.5 flex-wrap"
+                >
                   <span
                     class="text-xs font-semibold text-gray-400 whitespace-nowrap mr-0.5"
                     >Status:</span
@@ -1039,26 +1061,10 @@
                   </div>
                   <div class="flex items-center gap-1 mr-10">
                     <button
-                      onclick="setInsightsPeriod('high','week')"
-                      data-pd="week"
-                      data-card="high"
-                      class="period-btn"
-                    >
-                      Week
-                    </button>
-                    <button
-                      onclick="setInsightsPeriod('high','month')"
-                      data-pd="month"
+                      onclick="setInsightsPeriod('high','fiscal')"
+                      data-pd="fiscal"
                       data-card="high"
                       class="period-btn active"
-                    >
-                      Month
-                    </button>
-                    <button
-                      onclick="setInsightsPeriod('high','year')"
-                      data-pd="year"
-                      data-card="high"
-                      class="period-btn"
                     >
                       Year
                     </button>
@@ -1119,26 +1125,10 @@
                   </div>
                   <div class="flex items-center gap-1 mr-10">
                     <button
-                      onclick="setInsightsPeriod('low','week')"
-                      data-pd="week"
-                      data-card="low"
-                      class="period-btn"
-                    >
-                      Week
-                    </button>
-                    <button
-                      onclick="setInsightsPeriod('low','month')"
-                      data-pd="month"
+                      onclick="setInsightsPeriod('low','fiscal')"
+                      data-pd="fiscal"
                       data-card="low"
                       class="period-btn active"
-                    >
-                      Month
-                    </button>
-                    <button
-                      onclick="setInsightsPeriod('low','year')"
-                      data-pd="year"
-                      data-card="low"
-                      class="period-btn"
                     >
                       Year
                     </button>
@@ -1164,7 +1154,7 @@
           </div>
           <div class="grid grid-cols-2 gap-6 pb-4">
             <!-- Running Projects (LEFT) -->
-            <div class="dc">
+            <div class="dc flex flex-col">
               <div class="dc-handle">
                 <svg
                   width="11"
@@ -1181,7 +1171,7 @@
                 </svg>
               </div>
               <div
-                class="bg-white rounded-xl overflow-hidden"
+                class="bg-white rounded-xl overflow-hidden flex flex-col h-full"
                 style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
               >
                 <div class="px-6 py-4 border-b border-gray-200">
@@ -1251,7 +1241,7 @@
                 <div
                   id="runningProjectsList"
                   class="overflow-y-auto nice-scroll"
-                  style="height: 700px"
+                  style="height: 560px; min-height: 0"
                 ></div>
                 <div
                   class="px-6 py-3 border-t border-gray-200 flex justify-end"
@@ -1277,7 +1267,7 @@
             </div>
 
             <!-- Service Pipeline (RIGHT) -->
-            <div class="dc">
+            <div class="dc flex flex-col">
               <div class="dc-handle">
                 <svg
                   width="11"
@@ -1294,7 +1284,7 @@
                 </svg>
               </div>
               <div
-                class="bg-white rounded-xl overflow-hidden"
+                class="bg-white rounded-xl overflow-hidden flex flex-col h-full"
                 style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
               >
                 <div class="px-6 py-4 border-b border-gray-200">
@@ -1352,10 +1342,21 @@
                     <option value="50000-100000">$50K–$100K</option>
                     <option value="100000+">Over $100K</option>
                   </select>
-                  <select id="pipeProjCloseFilt" class="flt-select">
+                  <select id="pipeCloseFilt" class="flt-select">
+                    <option value="">All Close Dates</option>
                     <option value="overdue">Overdue</option>
                     <option value="thismonth">This Month</option>
                     <option value="next3months">Next 3 Months</option>
+                    <option value="thisyear">This Year</option>
+                  </select>
+                  <select id="pipeProjCloseFilt" class="flt-select">
+                    <option value="">All Proj Closes</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="thismonth">This Month</option>
+                    <option value="next3months">Next 3 Months</option>
+                  </select>
+                  <select id="pipeProdFamilyFilt" class="flt-select">
+                    <option value="">All Families</option>
                   </select>
                   <button id="pipeSortAssignedBtn" class="flt-sort-btn">
                     Most Assigned
@@ -1364,7 +1365,7 @@
                 <div
                   id="pipelineList"
                   class="overflow-y-auto nice-scroll"
-                  style="height: 700px"
+                  style="height: 560px; min-height: 0"
                 ></div>
                 <div
                   class="px-6 py-3 border-t border-gray-200 flex justify-end"
