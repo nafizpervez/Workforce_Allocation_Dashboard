@@ -332,7 +332,8 @@ app.get('/api/assignments', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
   res.json(db.prepare(`
     SELECT a.id, a.employee_id, a.project_id, a.year, a.month, a.week, a.percentage,
-           p.code AS project_code, p.name AS project_name, p.color AS project_color
+           p.code AS project_code, p.name AS project_name, p.color AS project_color,
+           COALESCE(p.account_name, p.client, p.name) AS account_name
       FROM assignments a JOIN projects p ON p.id=a.project_id
      WHERE ${FISCAL_WHERE}
   `).all(...fiscalParams(fy)));
