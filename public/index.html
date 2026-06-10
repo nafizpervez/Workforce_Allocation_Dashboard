@@ -17,6 +17,28 @@
     />
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/css/style.css" />
+    <style>
+      /* Thicker horizontal scrollbar on matrix table */
+      #matrixWrap::-webkit-scrollbar {
+        height: 10px;
+      }
+      #matrixWrap::-webkit-scrollbar-track {
+        background: #f1f5f9;
+        border-radius: 8px;
+      }
+      #matrixWrap::-webkit-scrollbar-thumb {
+        background: #94a3b8;
+        border-radius: 8px;
+      }
+      #matrixWrap::-webkit-scrollbar-thumb:hover {
+        background: #64748b;
+      }
+      /* Firefox */
+      #matrixWrap {
+        scrollbar-width: auto;
+        scrollbar-color: #94a3b8 #f1f5f9;
+      }
+    </style>
   </head>
   <body>
     <!-- HEADER -->

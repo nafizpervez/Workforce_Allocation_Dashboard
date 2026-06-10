@@ -360,7 +360,7 @@ function renderMatrix() {
   th += `<th class="sticky-dept col-dept border-b-2 border-gray-300 px-4 py-3 text-left text-xs font-semibold text-gray-700 border-r border-gray-200" rowspan="2"><div style="position:relative;display:flex;align-items:center;height:100%">Department<div class="col-resizer" data-col="dept"></div></div></th>`;
   for (let i = 0; i < months.length; i++) { const m = months[i]; th += `<th colspan="4" class="border-b border-gray-200 px-2 py-3 text-center text-xs font-semibold text-gray-700 bg-gray-50 ${i < months.length - 1 ? 'border-r border-gray-200' : ''}">${esc(m.label)}</th>`; }
   th += '</tr><tr class="weeks">';
-  for (let i = 0; i < months.length; i++) for (let w = 1; w <= 4; w++) th += `<th class="border-b border-gray-200 px-2 py-2 text-center text-xs text-gray-500 font-medium bg-gray-50 col-week ${w === 4 ? 'border-r border-gray-200' : 'border-r border-dotted border-gray-200'}" style="min-width:180px">W${w}</th>`;
+  for (let i = 0; i < months.length; i++) for (let w = 1; w <= 4; w++) th += `<th class="border-b border-gray-200 px-2 py-2 text-center text-xs text-gray-500 font-medium bg-gray-50 col-week ${w === 4 ? 'border-r border-gray-200' : 'border-r border-dotted border-gray-200'}" style="min-width:110px">W${w}</th>`;
   th += '</tr>';
   t.querySelector('thead').innerHTML = th;
 
@@ -626,7 +626,7 @@ function renderNewLogoChart(data, filter, prodFilter) {
       backgroundColor: COLORS[st].bg,
       hoverBackgroundColor: COLORS[st].hover,
       borderRadius: 5, borderSkipped: false,
-      barPercentage: 0.88, categoryPercentage: 0.75,
+      barPercentage: 0.85, categoryPercentage: 0.82,
     }));
     plugins = [centerLabelPlugin]; showLegend = true;
   } else {
@@ -636,7 +636,7 @@ function renderNewLogoChart(data, filter, prodFilter) {
       backgroundColor: COLORS[f].bg,
       hoverBackgroundColor: COLORS[f].hover,
       borderRadius: 8, borderSkipped: false,
-      barPercentage: 1.0, categoryPercentage: 0.55,
+      barPercentage: 0.85, categoryPercentage: 0.65,
     }];
     plugins = [centerLabelPlugin]; showLegend = false;
   }
