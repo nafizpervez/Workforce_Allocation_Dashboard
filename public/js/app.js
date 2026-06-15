@@ -71,9 +71,110 @@ function matchDateFilter(dateStr, filter) {
   return true;
 }
 
+function matchPipelineCloseDateFilter(dateStr, filter) {
+  if (!dateStr || !filter) return true;
+
+  const d = new Date(dateStr + 'T00:00:00');
+
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+
+  if (isNaN(d)) return false;
+
+  const addDays = (base, days) => {
+    const t = new Date(base);
+    t.setDate(t.getDate() + days);
+    t.setHours(23, 59, 59, 999);
+    return t;
+  };
+
+  if (filter === 'overdue') {
+    return d < today;
+  }
+
+  if (filter === 'thismonth') {
+    // Today to next 30 days
+    return d >= today && d <= addDays(today, 30);
+  }
+
+  if (filter === 'next2months') {
+    // Today to next 60 days
+    return d >= today && d <= addDays(today, 60);
+  }
+
+  if (filter === 'next3months') {
+    // Today to next 90 days
+    return d >= today && d <= addDays(today, 90);
+  }
+
+  if (filter === 'thisyear') {
+    // Today to 31 Dec of the current year
+    const yearEnd = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
+    return d >= today && d <= yearEnd;
+  }
+
+  return true;
+}
+
 function getAmountOk(opp_amount, filt) { if (!filt) return true; const [min, max] = parseAmountRange(filt); const a = Number(opp_amount) || 0; return a >= min && (max === Infinity || a <= max); }
 
+function normalizeProductTypeName(value) {
+  const s = String(value || '').trim();
+  const u = s.toUpperCase().replace(/\s+/g, ' ');
+
+  // Normalize all PS Project Implementation variants
+  if (
+    u.includes('PS PROJECT IMPLEMENTATION') ||
+    u.includes('PS PROJECT IMPLEMENT') ||
+    u.includes('PS PROJECT IMPLEMETATION')
+  ) {
+    return 'PS Project Implementation';
+  }
+
+  // Normalize all PS System Support variants
+  if (u.includes('PS SYSTEM SUPPORT')) {
+    return 'PS System Support';
+  }
+
+  return s;
+}
+
+function sameProductType(actual, selected) {
+  if (!selected) return true;
+
+  return (
+    normalizeProductTypeName(actual).toUpperCase() ===
+    normalizeProductTypeName(selected).toUpperCase()
+  );
+}
+
+function uniqueNormalizedProductTypes(list) {
+  const m = new Map();
+
+  for (const item of list || []) {
+    const label = normalizeProductTypeName(item.product_name);
+    if (!label) continue;
+
+    const key = label.toUpperCase();
+    if (!m.has(key)) m.set(key, label);
+  }
+
+  return [...m.values()].sort((a, b) => a.localeCompare(b));
+}
+
 function getFteCount(projId) { return new Set(S.assignments.filter(a => a.project_id === projId).map(a => a.employee_id)).size; }
+
+function getAssignedTaskCount(projId) {
+  const fy = S.fiscalYear;
+
+  return S.assignments.filter(a =>
+    a.project_id === projId &&
+    (
+      (a.year === fy && a.month >= 4) ||
+      (a.year === fy + 1 && a.month <= 3)
+    )
+  ).length;
+}
 
 const DISPLAY_CUTOFF = '2025-10-01';
 
@@ -85,13 +186,20 @@ function applyPipelineFilters(list) {
     if (S.pipelineDealStatusFilt && p.deal_status !== S.pipelineDealStatusFilt) return false;
     if (S.pipelineStageFilt && p.stage !== S.pipelineStageFilt) return false;
     if (!getAmountOk(p.opp_amount, S.pipelineAmountFilt)) return false;
-    if (!matchDateFilter(p.end_date, S.pipelineCloseFilt)) return false;
+    if (!matchPipelineCloseDateFilter(p.end_date, S.pipelineCloseFilt)) return false;
     if (!matchDateFilter(p.project_closing_date, S.pipelineProjCloseFilt)) return false;
     if (S.pipelineProdFamilyFilt && p.product_family !== S.pipelineProdFamilyFilt) return false;
-    if (S.pipelineProductTypeFilt && p.product_name !== S.pipelineProductTypeFilt) return false;
+    if (S.pipelineProductTypeFilt && !sameProductType(p.product_name, S.pipelineProductTypeFilt)) return false;
     if (q && !(p.name || '').toLowerCase().includes(q) && !(p.code || '').toLowerCase().includes(q)) return false;
     return true;
-  }).sort((a, b) => S.pipelineSortAssigned ? (getFteCount(b.id) - getFteCount(a.id)) : 0);
+  }).sort((a, b) => {
+    if (!S.pipelineSortAssigned) return 0;
+
+    const diff = getAssignedTaskCount(b.id) - getAssignedTaskCount(a.id);
+    if (diff !== 0) return diff;
+
+    return String(a.name || '').localeCompare(String(b.name || ''));
+  });
 }
 
 function applyRunningFilters(list) {
@@ -102,7 +210,7 @@ function applyRunningFilters(list) {
     if (S.runCloseFilt && !matchDateFilter(cd, S.runCloseFilt)) return false;
     if (S.runProjCloseFilt && !matchDateFilter(d.project_closing_date, S.runProjCloseFilt)) return false;
     if (S.runProdFamilyFilt && d.product_family !== S.runProdFamilyFilt) return false;
-    if (S.runProductTypeFilt && d.product_name !== S.runProductTypeFilt) return false;
+    if (S.runProductTypeFilt && !sameProductType(d.product_name, S.runProductTypeFilt)) return false;
     if (q && !(d.name || '').toLowerCase().includes(q) && !(d.code || '').toLowerCase().includes(q)) return false;
     return true;
   }).sort((a, b) => S.runSortAssigned ? (getFteCount(b.id) - getFteCount(a.id)) : 0);
@@ -1194,19 +1302,50 @@ function renderServicePipeline(projects) { applyAndRenderPipeline(); }
 /* ── Populate Product Family / Product Type dropdowns ───────────────────────── */
 function populateProductFamilyDropdowns() {
   const runFamilies = [...new Set((S.lastRunningData || []).map(d => d.product_family).filter(Boolean))].sort();
-  const pipeFamilies = [...new Set((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost').map(p => p.product_family).filter(Boolean))].sort();
-  const runProductTypes = [...new Set((S.lastRunningData || []).map(d => d.product_name).filter(Boolean))].sort();
-  const pipeProductTypes = [...new Set((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost').map(p => p.product_name).filter(Boolean))].sort();
+
+  const pipeFamilies = [...new Set(
+    (S.projects || [])
+      .filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost')
+      .map(p => p.product_family)
+      .filter(Boolean)
+  )].sort();
+
+  // Product types normalized so duplicate case variants appear once
+  const runProductTypes = uniqueNormalizedProductTypes(S.lastRunningData || []);
+
+  const pipeProductTypes = uniqueNormalizedProductTypes(
+    (S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost')
+  );
 
   const fillSelect = (id, opts, allLabel) => {
-    const el = document.getElementById(id); if (!el) return;
-    const cur = el.value;
-    el.innerHTML = `<option value="">${allLabel}</option>` + opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const cur = normalizeProductTypeName(el.value);
+
+    el.innerHTML =
+      `<option value="">${allLabel}</option>` +
+      opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+
     el.value = opts.includes(cur) ? cur : '';
   };
 
-  fillSelect('runProdFamilyFilt', runFamilies, 'All Families');
-  fillSelect('pipeProdFamilyFilt', pipeFamilies, 'All Families');
+  const fillPlainSelect = (id, opts, allLabel) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const cur = el.value;
+
+    el.innerHTML =
+      `<option value="">${allLabel}</option>` +
+      opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
+
+    el.value = opts.includes(cur) ? cur : '';
+  };
+
+  fillPlainSelect('runProdFamilyFilt', runFamilies, 'All Families');
+  fillPlainSelect('pipeProdFamilyFilt', pipeFamilies, 'All Families');
+
   fillSelect('runProductTypeFilt', runProductTypes, 'All Product Types');
   fillSelect('pipeProductTypeFilt', pipeProductTypes, 'All Product Types');
 }

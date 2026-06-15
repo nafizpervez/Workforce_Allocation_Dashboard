@@ -35,7 +35,11 @@ function fiscalMonths(fy) {
 const FISCAL_WHERE = `((year = ? AND month >= 4) OR (year = ? AND month <= 3))`;
 const fiscalParams = fy => [fy, fy + 1];
 
-const DISPLAY_CUTOFF = '2025-10-01';
+function getRunningProjectCutoffDate() {
+  const currentYear = new Date().getFullYear();
+  const cutoffYear = currentYear - 2;
+  return `${cutoffYear}-01-01`;
+}
 
 function getFiscalYear(dateStr) {
   if (!dateStr) return null;
@@ -499,33 +503,46 @@ app.get('/api/dashboard/pipeline', (_, res) => {
   res.json(rows);
 });
 
-/* Running Projects: Closed Won, progress < 100, from cutoff date, PS only */
+/* Running Projects: All Closed Won projects from Jan 1 two years before current year */
 app.get('/api/dashboard/deadlines', (_, res) => {
   const today = new Date();
+  const runningProjectCutoff = getRunningProjectCutoffDate();
+
   const rows = db.prepare(`
     SELECT id, code, name, end_date, project_closing_date, product_name, product_family,
            progress, priority, opp_amount, product_amount, account_name, stage, color, opportunity_owner
       FROM projects
      WHERE stage = 'Closed Won'
        AND end_date >= ?
-       AND (progress IS NULL OR progress < 100)
        AND UPPER(COALESCE(product_name,'')) NOT LIKE '%PERSONAL USE%'
        AND UPPER(COALESCE(product_name,'')) NOT LIKE '%STUDENT USE%'
      ORDER BY CASE
        WHEN project_closing_date IS NOT NULL AND project_closing_date != '' THEN project_closing_date
        ELSE COALESCE(end_date, '9999-12-31')
      END ASC
-  `).all(DISPLAY_CUTOFF);
+  `).all(runningProjectCutoff);
 
-  const allProjects = db.prepare('SELECT id, code, name, account_name, client, end_date, stage, product_name FROM projects').all();
+  const allProjects = db.prepare(`
+    SELECT id, code, name, account_name, client, end_date, stage, product_name
+    FROM projects
+  `).all();
+
   const statusMap = calcDealStatuses(allProjects);
 
   const enriched = rows.map(r => {
     const closingDate = r.project_closing_date || r.end_date;
     const days = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
     const status = days === null ? '—' : days < 0 ? 'Overdue' : days < 14 ? 'Due Soon' : 'On Track';
-    return { ...r, closing_date: closingDate, days, status, deal_status: statusMap[r.id] || 'NEW LOGO' };
+
+    return {
+      ...r,
+      closing_date: closingDate,
+      days,
+      status,
+      deal_status: statusMap[r.id] || 'NEW LOGO'
+    };
   });
+
   res.json(enriched);
 });
 
