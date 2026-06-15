@@ -176,6 +176,45 @@ function getAssignedTaskCount(projId) {
   ).length;
 }
 
+function getRunningSortDate(row) {
+  const dateStr = row.closing_date || row.project_closing_date || row.end_date;
+  const d = dateStr ? new Date(dateStr + 'T00:00:00') : null;
+  return d && !isNaN(d) ? d : new Date('9999-12-31T00:00:00');
+}
+
+function getRunningYearRank(row) {
+  const d = getRunningSortDate(row);
+  const y = d.getFullYear();
+  const currentYear = new Date().getFullYear();
+
+  // 1st: future years, nearest future first
+  // Example in 2026: 2027 before 2028
+  if (y > currentYear) {
+    return y - currentYear - 1;
+  }
+
+  // 2nd: current year
+  if (y === currentYear) {
+    return 1000;
+  }
+
+  // Last: previous years, latest previous year first
+  // Example in 2026: 2025 before 2024
+  return 1000 + (currentYear - y);
+}
+
+function sortRunningProjects(a, b) {
+  const rankA = getRunningYearRank(a);
+  const rankB = getRunningYearRank(b);
+
+  if (rankA !== rankB) return rankA - rankB;
+
+  const dateA = getRunningSortDate(a);
+  const dateB = getRunningSortDate(b);
+
+  return dateA - dateB;
+}
+
 const DISPLAY_CUTOFF = '2025-10-01';
 
 function applyPipelineFilters(list) {
@@ -204,16 +243,34 @@ function applyPipelineFilters(list) {
 
 function applyRunningFilters(list) {
   const q = (S.runSearch || '').toLowerCase().trim();
+
   return list.filter(d => {
     if (!getAmountOk(d.opp_amount, S.runAmountFilt)) return false;
+
     const cd = d.closing_date || d.project_closing_date || d.end_date;
+
     if (S.runCloseFilt && !matchDateFilter(cd, S.runCloseFilt)) return false;
     if (S.runProjCloseFilt && !matchDateFilter(d.project_closing_date, S.runProjCloseFilt)) return false;
     if (S.runProdFamilyFilt && d.product_family !== S.runProdFamilyFilt) return false;
     if (S.runProductTypeFilt && !sameProductType(d.product_name, S.runProductTypeFilt)) return false;
-    if (q && !(d.name || '').toLowerCase().includes(q) && !(d.code || '').toLowerCase().includes(q)) return false;
+
+    if (
+      q &&
+      !(d.name || '').toLowerCase().includes(q) &&
+      !(d.code || '').toLowerCase().includes(q)
+    ) {
+      return false;
+    }
+
     return true;
-  }).sort((a, b) => S.runSortAssigned ? (getFteCount(b.id) - getFteCount(a.id)) : 0);
+  }).sort((a, b) => {
+    if (S.runSortAssigned) {
+      const diff = getAssignedTaskCount(b.id) - getAssignedTaskCount(a.id);
+      if (diff !== 0) return diff;
+    }
+
+    return sortRunningProjects(a, b);
+  });
 }
 
 /* ── local utilization (for period selector) ─────────────────── */
@@ -545,19 +602,27 @@ function renderWorkload(data) { if (S.charts.workload) S.charts.workload.destroy
 function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }); }
 
 function insightRow(e) {
-  const u = e.utilization, clr = uc(u), badge = ub(u), label = us(u);
+  const u = e.utilization;
+  const displayU = Math.round(Number(u) || 0);
+
+  const clr = uc(u);
+  const badge = ub(u);
+  const label = us(u);
+
   return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" onclick="openEmployeeDetailModal(${e.id})">
     <div class="relative flex-shrink-0">
       <div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div>
       <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${u === 0 ? 'bg-emerald-400' : u >= 80 ? 'bg-red-400' : 'bg-amber-400'}"></div>
     </div>
+
     <div class="flex-1 min-w-0">
       <div class="text-sm font-semibold text-gray-900 truncate">${esc(e.name)}</div>
       <div class="text-xs text-gray-500">${esc(e.dept || '—')}</div>
     </div>
+
     <div class="flex items-center gap-2 flex-shrink-0">
       <span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${label}</span>
-      <span class="text-sm font-bold ${clr}">${u}%</span>
+      <span class="text-sm font-bold ${clr}">${displayU}%</span>
     </div>
   </div>`;
 }
@@ -1346,8 +1411,8 @@ function populateProductFamilyDropdowns() {
   fillPlainSelect('runProdFamilyFilt', runFamilies, 'All Families');
   fillPlainSelect('pipeProdFamilyFilt', pipeFamilies, 'All Families');
 
-  fillSelect('runProductTypeFilt', runProductTypes, 'All Product Types');
-  fillSelect('pipeProductTypeFilt', pipeProductTypes, 'All Product Types');
+  fillSelect('runProductTypeFilt', runProductTypes, 'All Product Name');
+  fillSelect('pipeProductTypeFilt', pipeProductTypes, 'All Product Name');
 }
 
 /* ================================================================ MODALS */
