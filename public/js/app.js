@@ -47,6 +47,12 @@ function uc(u) { return u > 100 ? '#DC2626' : u > 85 ? '#D97706' : u > 50 ? '#25
 function ub(u) { return u > 100 ? 'bg-red-100 text-red-700' : u > 85 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'; }
 function us(u) { return u > 100 ? 'Over Capacity' : u > 85 ? 'High Load' : 'Available'; }
 function inits(n) { return n.split(/\s+/).map(x => x[0]).slice(0, 2).join('').toUpperCase(); }
+function shortCustomerName(name) {
+  const s = String(name || '').trim();
+  const m = s.match(/\(([^()]+)\)\s*$/);
+  if (m && m[1] && m[1].trim()) return m[1].trim();
+  return s;
+}
 function fmtUsd(n) { return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD'; }
 
 function expandDateRange(start, end) { const out = [], seen = new Set(); if (!start || !end) return out; const s = new Date(start + 'T00:00:00'), e = new Date(end + 'T00:00:00'); if (isNaN(s) || isNaN(e) || e < s) return out; const cur = new Date(s); while (cur <= e) { const y = cur.getFullYear(), m = cur.getMonth() + 1, d = cur.getDate(), w = d <= 7 ? 1 : d <= 14 ? 2 : d <= 21 ? 3 : 4, k = `${y}-${m}-${w}`; if (!seen.has(k)) { seen.add(k); out.push({ year: y, month: m, week: w }); } cur.setDate(d + 1); } return out; }
@@ -412,7 +418,8 @@ function renderMatrix() {
           const chipTitle = `${a.project_code || chipProj.code || ''} — ${a.project_name || chipProj.name || ''}
 Customer Name: ${chipCustomer}
 Product Name: ${chipProduct}`;
-          r += `<div class="chip" data-action="edit-assign" data-id="${a.id}" style="background:${a.project_color}20;border-left:3px solid ${a.project_color};min-width:0;width:100%;box-sizing:border-box;" title="${esc(chipTitle)}"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:4px;min-width:0;"><span class="chip-code" style="color:${a.project_color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-size:11px;">${esc(a.account_name || a.project_code)}</span><span class="chip-pct" style="color:#6b7280;white-space:nowrap;flex-shrink:0;font-size:11px;">${a.percentage}%</span></div><span class="chip-del" data-action="delete-assign" data-id="${a.id}" style="flex-shrink:0;">×</span></div>`;
+          const chipDisplayName = shortCustomerName(chipCustomer) || a.project_code;
+          r += `<div class="chip" data-action="edit-assign" data-id="${a.id}" style="background:${a.project_color}20;border-left:3px solid ${a.project_color};min-width:0;width:100%;box-sizing:border-box;" title="${esc(chipTitle)}"><div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:4px;min-width:0;"><span class="chip-code" style="color:${a.project_color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-size:11px;">${esc(chipDisplayName)}</span><span class="chip-pct" style="color:#6b7280;white-space:nowrap;flex-shrink:0;font-size:11px;">${a.percentage}%</span></div><span class="chip-del" data-action="delete-assign" data-id="${a.id}" style="flex-shrink:0;">×</span></div>`;
         }
         r += `<span class="cell-add">+</span></td>`;
       }
@@ -1043,7 +1050,20 @@ function switchChartTab(tab) {
 function runningProjectRowHtml(d) {
   const barColor = '#10B981';
   const amount = fmtUsd(d.product_amount || 0);
+
+  // Delivery / PS work date logic
   const closingDate = d.closing_date || d.project_closing_date || d.end_date;
+
+  // Show real Project Close Date if available, otherwise show —
+  const projectCloseDateHtml = `
+    <div class="text-xs text-gray-500 text-right mt-0.5">
+      Project Close Date:
+      <span class="font-medium text-gray-700">
+        ${d.project_closing_date ? esc(d.project_closing_date) : '—'}
+      </span>
+    </div>
+  `;
+
   const today = new Date();
   const daysVal = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
   const isPast = daysVal !== null && daysVal < 0;
@@ -1061,25 +1081,46 @@ function runningProjectRowHtml(d) {
         <span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(d.code)}</span>
         <span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span>
       </div>
+
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(d.name)}</div>
-      ${(d.account_name || d.client) ? `<div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(d.account_name || d.client || '—')}</span>${d.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(d.product_name)}</span>` : ''}</div>` : ''}
-      ${(d.product_family || d.product_name) ? `<div class="mb-1 flex items-center gap-1.5 flex-wrap">${d.product_family ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(d.product_family)}</span>` : ''}${d.product_name ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100">${esc(d.product_name)}</span>` : ''}</div>` : ''}
-      <div class="flex items-center justify-between mb-1">
+
+      ${(d.account_name || d.client) ? `<div class="text-xs text-gray-600 mb-1">
+        <span class="font-medium">${esc(d.account_name || d.client || '—')}</span>
+        ${d.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(d.product_name)}</span>` : ''}
+      </div>` : ''}
+
+      ${(d.product_family || d.product_name) ? `<div class="mb-1 flex items-center gap-1.5 flex-wrap">
+        ${d.product_family ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(d.product_family)}</span>` : ''}
+        ${d.product_name ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100">${esc(d.product_name)}</span>` : ''}
+      </div>` : ''}
+
+      <div class="flex items-start justify-between mb-1">
         <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
           <span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 bg-green-100 text-green-700">Closed Won</span>
           ${dealStatusBadge(d.deal_status)}
           ${d.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(d.opportunity_owner)}</span>` : ''}
         </div>
-        ${d.end_date ? `<span class="text-xs text-gray-500 flex-shrink-0">Close: <span class="font-medium text-gray-700">${esc(d.end_date)}</span></span>` : ''}
+
+        <div class="text-right flex-shrink-0 ml-3">
+          ${d.end_date ? `<div class="text-xs text-gray-500">Close: <span class="font-medium text-gray-700">${esc(d.end_date)}</span></div>` : ''}
+          ${projectCloseDateHtml}
+        </div>
       </div>
+
       ${closingDate ? `<div class="flex items-center gap-1.5 text-xs mb-2">
-        <svg class="w-3 h-3 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
+        <svg class="w-3 h-3 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="4" width="18" height="18" rx="2"/>
+          <path d="M16 2v4M8 2v4M3 10h18"/>
+        </svg>
         <span class="text-gray-500">${esc(closingDate)}</span>
         <span class="font-semibold ${daysColor}">${daysLabel}</span>
         <span class="ml-auto font-semibold ${statC}">${status}</span>
       </div>` : '<div class="mb-2"></div>'}
+
       <div class="flex items-center gap-2">
-        <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${d.progress || 0}%;background:${barColor}"></div></div>
+        <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div class="h-full rounded-full" style="width:${d.progress || 0}%;background:${barColor}"></div>
+        </div>
         <span class="text-xs font-medium text-gray-600 w-8 text-right">${d.progress || 0}%</span>
       </div>
     </div>
@@ -1097,27 +1138,47 @@ function renderRunningProjects(data) { S.lastRunningData = data; applyAndRenderR
 
 /* ================================================================ SERVICE PIPELINE */
 function servicePipelineRowHtml(p) {
-  const barColor = STAGE_COLOR[p.stage] || '#6B7280', pillCls = STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700';
+  const barColor = STAGE_COLOR[p.stage] || '#6B7280';
+  const pillCls = STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700';
   const amount = fmtUsd(p.product_amount ?? 0);
-  let projCloseDateHtml = '<div class="text-xs text-gray-400 mt-0.5">Project Close Date: —</div>';
-  if (p.project_closing_date) {
-    const today = new Date(), dv = Math.round((new Date(p.project_closing_date) - today) / 864e5);
-    const isPast = dv < 0, lbl = dv === 0 ? 'Today' : isPast ? `${Math.abs(dv)} days ago` : `${dv} days left`;
-    const lc = isPast ? 'text-green-600' : 'text-red-500';
-    projCloseDateHtml = `<div class="text-xs text-gray-500 mt-0.5">Project Close Date: <span class="font-medium text-gray-700">${esc(p.project_closing_date)}</span> <span class="font-semibold ${lc}">${lbl}</span></div>`;
-  }
+
   return `<div class="px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer relative" data-action="edit-project" data-project="${p.id}">
     <div class="absolute left-0 top-0 bottom-0 w-1 rounded-r" style="background:${barColor}"></div>
     <div class="ml-2">
-      <div class="flex items-center justify-between gap-2 mb-1"><span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(p.code)}</span><span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span></div>
-      <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(p.name)}</div>
-      <div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(p.account_name || p.client || '—')}</span>${p.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(p.product_name)}</span>` : ''}</div>
-      ${p.product_family ? `<div class="mb-1"><span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span></div>` : ''}
-      <div class="flex items-start justify-between mb-2">
-        <div class="flex items-center gap-1.5 min-w-0 pt-0.5 flex-wrap"><span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>${dealStatusBadge(p.deal_status)}${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}</div>
-        <div class="text-right flex-shrink-0 ml-3">${p.end_date ? `<div class="text-xs text-gray-500">Close Date: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></div>` : ''}${projCloseDateHtml}</div>
+      <div class="flex items-center justify-between gap-2 mb-1">
+        <span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(p.code)}</span>
+        <span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span>
       </div>
-      <div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${p.progress || 0}%;background:${barColor}"></div></div><span class="text-xs font-medium text-gray-600 w-8 text-right">${p.progress || 0}%</span></div>
+
+      <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(p.name)}</div>
+
+      <div class="text-xs text-gray-600 mb-1">
+        <span class="font-medium">${esc(p.account_name || p.client || '—')}</span>
+        ${p.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(p.product_name)}</span>` : ''}
+      </div>
+
+      ${p.product_family ? `<div class="mb-1">
+        <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span>
+      </div>` : ''}
+
+      <div class="flex items-start justify-between mb-2">
+        <div class="flex items-center gap-1.5 min-w-0 pt-0.5 flex-wrap">
+          <span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>
+          ${dealStatusBadge(p.deal_status)}
+          ${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}
+        </div>
+
+        <div class="text-right flex-shrink-0 ml-3">
+          ${p.end_date ? `<div class="text-xs text-gray-500">Close Date: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></div>` : ''}
+        </div>
+      </div>
+
+      <div class="flex items-center gap-2">
+        <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
+          <div class="h-full rounded-full" style="width:${p.progress || 0}%;background:${barColor}"></div>
+        </div>
+        <span class="text-xs font-medium text-gray-600 w-8 text-right">${p.progress || 0}%</span>
+      </div>
     </div>
   </div>`;
 }
@@ -1193,10 +1254,34 @@ function openAssignmentModal(opts = {}) {
     defStart = dr.start;
     defEnd = dr.end;
   }
+  const findProjectById = (id) => {
+    if (id === null || id === undefined || id === '') return null;
+    return S.projects.find(p => String(p.id) === String(id)) || null;
+  };
+
+  const getCustomerName = (proj, fallback = {}) => {
+    return (
+      proj?.account_name ||
+      proj?.client ||
+      proj?.customer_name ||
+      fallback?.account_name ||
+      fallback?.client ||
+      fallback?.customer_name ||
+      '—'
+    );
+  };
+
+  const getProductName = (proj, fallback = {}) => {
+    return (
+      proj?.product_name ||
+      fallback?.product_name ||
+      '—'
+    );
+  };
 
   /* Searchable project combobox markup — shared by add & edit */
   const projCombo = (selectedId) => {
-    const selProj = S.projects.find(p => p.id === selectedId);
+    const selProj = findProjectById(selectedId);
     const displayVal = selProj ? `${selProj.code} — ${selProj.name}` : '';
     return `
       <div class="proj-combo-wrap" style="position:relative">
@@ -1215,10 +1300,11 @@ function openAssignmentModal(opts = {}) {
   };
 
   /* Customer Name / Product Name info block — shared by add & edit, auto-filled from the selected project */
-  const projInfoBlock = (selectedId) => {
-    const proj = S.projects.find(p => p.id === selectedId);
-    const custVal = proj ? (proj.account_name || proj.client || '—') : '—';
-    const prodVal = proj ? (proj.product_name || '—') : '—';
+  const projInfoBlock = (selectedId, fallback = {}) => {
+    const proj = findProjectById(selectedId);
+    const custVal = getCustomerName(proj, fallback);
+    const prodVal = getProductName(proj, fallback);
+
     return `
       <div class="grid grid-cols-2 gap-4 -mt-2">
         <div>
@@ -1250,7 +1336,7 @@ function openAssignmentModal(opts = {}) {
           <select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
         </div>
         <div><label class="field-label">Project</label>${projCombo(cur?.project_id)}</div>
-        ${projInfoBlock(cur?.project_id)}
+        ${projInfoBlock(cur?.project_id, cur)}
         <div class="grid grid-cols-2 gap-4">
           <div><label class="field-label">Start Date</label>
             <input id="fa_start" type="date" class="field-input" value="${defStart}"></div>
@@ -1279,7 +1365,7 @@ function openAssignmentModal(opts = {}) {
           <select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
         </div>
         <div><label class="field-label">Project</label>${projCombo(opts.project_id || null)}</div>
-        ${projInfoBlock(opts.project_id || null)}
+        ${projInfoBlock(opts.project_id || null, {})}
         <div class="grid grid-cols-2 gap-4">
           <div><label class="field-label">Start Date</label>
             <input id="fa_start" type="date" class="field-input" value="${defStart}" oninput="updateSlotPreview()"></div>
@@ -1346,13 +1432,22 @@ function openAssignmentModal(opts = {}) {
 
   /* Update Customer Name / Product Name info block to reflect the currently selected project */
   function syncProjInfo(projId) {
-    const proj = S.projects.find(p => p.id === +projId);
-    const custVal = proj ? (proj.account_name || proj.client || '—') : '—';
-    const prodVal = proj ? (proj.product_name || '—') : '—';
+    const proj = findProjectById(projId);
+    const custVal = getCustomerName(proj, {});
+    const prodVal = getProductName(proj, {});
+
     const custEl = document.getElementById('fa_customer_name');
     const prodEl = document.getElementById('fa_product_name');
-    if (custEl) { custEl.value = custVal; custEl.title = custVal; }
-    if (prodEl) { prodEl.value = prodVal; prodEl.title = prodVal; }
+
+    if (custEl) {
+      custEl.value = custVal;
+      custEl.title = custVal;
+    }
+
+    if (prodEl) {
+      prodEl.value = prodVal;
+      prodEl.title = prodVal;
+    }
   }
 
   function renderDropdown(q) {
