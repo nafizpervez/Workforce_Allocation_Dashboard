@@ -1710,31 +1710,53 @@ function updateSlotPreview() { const s = document.getElementById('fa_start'), e 
 
 async function saveAssignment(id) {
   const projId = document.getElementById('fa_proj')?.value;
-  if (!projId) { toast('Please select a project', 'error'); return; }
-  if (id) {
-    const slots = expandDateRange(document.getElementById('fa_start').value, document.getElementById('fa_end').value);
-    if (!slots.length) { toast('Invalid date range', 'error'); return; }
-    if (slots.length !== 1) { toast('For editing one assignment, select a date range within one weekly slot', 'error'); return; }
-    try {
-      const payload = {
-        employee_id: +document.getElementById('fa_emp').value,
-        project_id: +projId,
-        percentage: +document.getElementById('fa_pct').value,
-        year: slots[0].year,
-        month: slots[0].month,
-        week: slots[0].week,
-      };
-      await api('PUT', `/api/assignments/${id}`, payload);
-      closeModal(); toast('Assignment updated'); await loadAll();
-    } catch (e) { toast(e.message, 'error'); }
+
+  if (!projId) {
+    toast('Please select a project', 'error');
     return;
   }
-  const slots = expandDateRange(document.getElementById('fa_start').value, document.getElementById('fa_end').value);
-  if (!slots.length) { toast('Invalid date range', 'error'); return; }
+
+  const slots = expandDateRange(
+    document.getElementById('fa_start').value,
+    document.getElementById('fa_end').value
+  );
+
+  if (!slots.length) {
+    toast('Invalid date range', 'error');
+    return;
+  }
+
+  const payload = {
+    employee_id: +document.getElementById('fa_emp').value,
+    project_id: +projId,
+    percentage: +document.getElementById('fa_pct').value,
+    slots,
+  };
+
   try {
-    const r = await api('POST', '/api/assignments/bulk', { employee_id: +document.getElementById('fa_emp').value, project_id: +projId, percentage: +document.getElementById('fa_pct').value, slots });
-    closeModal(); toast(`Created ${r.created} assignment${r.created === 1 ? '' : 's'}`); await loadAll();
-  } catch (e) { toast(e.message, 'error'); }
+    if (id) {
+      const r = await api('POST', `/api/assignments/${id}/reschedule`, payload);
+
+      closeModal();
+
+      toast(
+        `Assignment updated across ${r.created} week slot${r.created === 1 ? '' : 's'}`
+      );
+
+      await loadAll();
+      return;
+    }
+
+    const r = await api('POST', '/api/assignments/bulk', payload);
+
+    closeModal();
+
+    toast(`Created ${r.created} assignment${r.created === 1 ? '' : 's'}`);
+
+    await loadAll();
+  } catch (e) {
+    toast(e.message, 'error');
+  }
 }
 
 async function deleteAssignment(id) { if (!confirm('Delete this assignment?')) return; try { await api('DELETE', `/api/assignments/${id}`); closeModal(); toast('Assignment deleted'); await loadAll(); } catch (e) { toast(e.message, 'error'); } }
