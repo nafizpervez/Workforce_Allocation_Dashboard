@@ -406,6 +406,9 @@ async function loadAll() {
     populateMatrixFilter();
     populatePipelineStageFilter();
     populateProductFamilyDropdowns();
+
+    await loadSavedTimesheetFromDb();
+
     initCardDrag();
   } catch (e) { toast(e.message, 'error'); console.error(e); }
 }
@@ -537,7 +540,7 @@ const TIMESHEET_WORK_TYPE_ORDER = [
   'Skill Development',
   'Service Delivery - Local PS',
   'Service Delivery - Intrasourcing',
-  'Pre Sales',
+  'Pre - Sales',
   'General Admin',
 ];
 
@@ -546,7 +549,7 @@ const TIMESHEET_WORK_TYPE_COLORS = {
   'Skill Development': '#F6C6AD',
   'Service Delivery - Local PS': '#D9F2D0',
   'Service Delivery - Intrasourcing': '#F2CFEE',
-  'Pre Sales': '#96DCF8',
+  'Pre - Sales': '#96DCF8',
   'General Admin': '#D1D1D1',
 };
 
@@ -554,16 +557,16 @@ function normalizeTimesheetWorkType(value) {
   const raw = String(value || '').trim();
   const key = raw
     .toLowerCase()
+    .replace(/_/g, ' ')
     .replace(/\s+/g, ' ')
     .replace(/\s*-\s*/g, '-')
-    .replace(/_/g, ' ')
     .trim();
 
   if (key === 'training delivery') return 'Training Delivery';
   if (key === 'skill development') return 'Skill Development';
-  if (key === 'service delivery-local ps') return 'Service Delivery - Local PS';
-  if (key === 'service delivery-intrasourcing') return 'Service Delivery - Intrasourcing';
-  if (key === 'pre-sales' || key === 'pre sales' || key === 'presales') return 'Pre Sales';
+  if (key === 'service delivery-local ps' || key === 'service delivery local ps') return 'Service Delivery - Local PS';
+  if (key === 'service delivery-intrasourcing' || key === 'service delivery intrasourcing') return 'Service Delivery - Intrasourcing';
+  if (key === 'pre-sales' || key === 'pre sales' || key === 'presales' || key === 'pre - sales') return 'Pre - Sales';
   if (key === 'general admin') return 'General Admin';
 
   // Only the six approved work types are shown in Team Summary / Individual Summary.
@@ -571,7 +574,25 @@ function normalizeTimesheetWorkType(value) {
 }
 
 function workTypeColor(type) {
-  return TIMESHEET_WORK_TYPE_COLORS[type] || '#9CA3AF';
+  const normalized = normalizeTimesheetWorkType(type) || type;
+  return TIMESHEET_WORK_TYPE_COLORS[normalized] || '#9CA3AF';
+}
+
+function timesheetLegendLabels() {
+  return {
+    boxWidth: 10,
+    boxHeight: 10,
+    font: { size: 11 },
+    padding: 10,
+    generateLabels: chart => chart.data.datasets.map((ds, i) => ({
+      text: ds.label,
+      fillStyle: ds.timesheetColor || ds.backgroundColor,
+      strokeStyle: ds.timesheetColor || ds.borderColor || ds.backgroundColor,
+      lineWidth: 0,
+      hidden: !chart.isDatasetVisible(i),
+      datasetIndex: i,
+    })),
+  };
 }
 
 function orderedPresentWorkTypes(rows) {
@@ -610,6 +631,39 @@ function normalizeTimesheetRows(rows) {
   }).filter(r => r.month && r.worker && r.workType && r.qty > 0);
 }
 
+function aggregateTimesheetRows(rows) {
+  const map = new Map();
+
+  for (const r of rows || []) {
+    const month = String(r.month || '').trim();
+    const worker = String(r.worker || '').trim();
+    const workType = String(r.workType || '').trim();
+    const projectName = String(r.projectName || '(No project name)').trim();
+    const qty = Number(r.qty) || 0;
+
+    if (!month || !worker || !workType || qty <= 0) continue;
+
+    const key = [month, worker, workType, projectName].join('\u001F');
+
+    if (!map.has(key)) {
+      map.set(key, {
+        month,
+        worker,
+        workType,
+        projectName,
+        qty: 0,
+      });
+    }
+
+    map.get(key).qty += qty;
+  }
+
+  return [...map.values()].map(r => ({
+    ...r,
+    qty: +r.qty.toFixed(4),
+  }));
+}
+
 function getTimesheetMonthOptions() {
   return [...new Set((S.timesheetRows || []).map(r => r.month).filter(Boolean))]
     .sort((a, b) => monthSortKey(a) - monthSortKey(b));
@@ -631,6 +685,44 @@ function populateIndividualMonthFilter() {
   } else {
     S.individualSummaryMonthFilter = '';
     sel.value = '';
+  }
+}
+
+async function loadSavedTimesheetFromDb() {
+  try {
+    const data = await api('GET', '/api/timesheet-summary');
+    const rows = data.rows || [];
+
+    S.timesheetRows = rows;
+    S.timesheetFileName = data.last_source_file || '';
+    S.timesheetSheetName = data.last_sheet_name || '';
+    S.individualSummaryMonthFilter = '';
+
+    populateIndividualMonthFilter();
+
+    const status = document.getElementById('timesheetStatus');
+
+    if (status) {
+      if (rows.length) {
+        status.innerHTML =
+          `<span class="font-semibold text-emerald-700">Loaded from DB:</span> ` +
+          `${esc(data.last_source_file || 'Saved Time Sheet Data')}` +
+          ` · Sheet: ${esc(data.last_sheet_name || 'Database')}` +
+          ` · ${rows.length} saved rows` +
+          ` · ${(Number(data.total_hours) || 0).toFixed(1)} hrs`;
+      } else {
+        status.innerHTML =
+          `Upload an Excel file with sheet name ` +
+          `<span class="font-semibold">Time Sheet</span> ` +
+          `or matching columns: Month, Work Type, Worker, Qty (Hrs).`;
+      }
+    }
+
+    renderTeamSummaryChart();
+    renderIndividualSummaryChart();
+  } catch (e) {
+    console.error(e);
+    toast('Failed to load saved Time Sheet data from DB', 'error');
   }
 }
 
@@ -670,22 +762,31 @@ const stackedPercentLabelPlugin = { id: 'stackedPercentLabel', afterDatasetsDraw
 }};
 function buildStackedPercentDatasets(pivot, mode = 'team') {
   const isIndividual = mode === 'individual';
-  return pivot.typeOrder.map(type => ({
-    label: type,
-    workType: type,
-    backgroundColor: workTypeColor(type),
-    borderColor: workTypeColor(type),
-    borderWidth: 0,
-    borderRadius: 0,
-    barPercentage: isIndividual ? 0.34 : 0.38,
-    categoryPercentage: isIndividual ? 0.48 : 0.52,
-    data: pivot.rowOrder.map(rowLabel => {
-      const total = pivot.totals[rowLabel] || 0;
-      const val = pivot.table[rowLabel]?.[type] || 0;
-      return total ? +((val / total) * 100).toFixed(2) : 0;
-    }),
-    hoursData: pivot.rowOrder.map(rowLabel => +(pivot.table[rowLabel]?.[type] || 0).toFixed(2)),
-  }));
+
+  return pivot.typeOrder.map(type => {
+    const color = workTypeColor(type);
+
+    return {
+      label: type,
+      workType: type,
+      timesheetColor: color,
+      backgroundColor: color,
+      hoverBackgroundColor: color,
+      borderColor: color,
+      borderWidth: 0,
+      borderRadius: 0,
+      borderSkipped: false,
+      barPercentage: 0.55,
+      categoryPercentage: 0.72,
+      maxBarThickness: 72,
+      data: pivot.rowOrder.map(rowLabel => {
+        const total = pivot.totals[rowLabel] || 0;
+        const val = pivot.table[rowLabel]?.[type] || 0;
+        return total ? +((val / total) * 100).toFixed(2) : 0;
+      }),
+      hoursData: pivot.rowOrder.map(rowLabel => +(pivot.table[rowLabel]?.[type] || 0).toFixed(2)),
+    };
+  });
 }
 function setTimesheetEmptyState(kind, hasData) {
   const empty = document.getElementById(`${kind}SummaryEmpty`); const wrap = document.getElementById(`${kind}SummaryChartWrap`);
@@ -699,7 +800,7 @@ function renderTeamSummaryChart() {
   setTimesheetEmptyState('team', true);
   const pivot = buildWorkTypePivot(rows, 'month'), datasets = buildStackedPercentDatasets(pivot, 'team'), totalHours = rows.reduce((s, r) => s + r.qty, 0);
   if (info) info.textContent = `${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs`;
-  S.charts.teamSummary = new Chart(canvas.getContext('2d'), { type: 'bar', plugins: [stackedPercentLabelPlugin], data: { labels: pivot.rowOrder, datasets }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, onClick: (event, elements) => { if (elements.length) openTimesheetSummaryModal('team', pivot.rowOrder[elements[0].index]); }, onHover: (event, elements) => { const target = event.native?.target; if (target) target.style.cursor = elements.length ? 'pointer' : 'default'; }, plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { callbacks: { title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`, label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)` } } }, scales: { x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#374151' } }, y: { stacked: true, beginAtZero: true, max: 100, ticks: { callback: v => `${v}%`, font: { size: 11 }, color: '#6B7280' }, grid: { color: '#F3F4F6' } } } } });
+  S.charts.teamSummary = new Chart(canvas.getContext('2d'), { type: 'bar', plugins: [stackedPercentLabelPlugin], data: { labels: pivot.rowOrder, datasets }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, onClick: (event, elements) => { if (elements.length) openTimesheetSummaryModal('team', pivot.rowOrder[elements[0].index]); }, onHover: (event, elements) => { const target = event.native?.target; if (target) target.style.cursor = elements.length ? 'pointer' : 'default'; }, plugins: { legend: { display: true, position: 'right', labels: timesheetLegendLabels() }, tooltip: { callbacks: { title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`, label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)` } } }, scales: { x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#374151' } }, y: { stacked: true, beginAtZero: true, max: 100, ticks: { callback: v => `${v}%`, font: { size: 11 }, color: '#6B7280' }, grid: { color: '#F3F4F6' } } } } });
 }
 function renderIndividualSummaryChart() {
   const canvas = document.getElementById('individualSummaryChart');
@@ -765,14 +866,7 @@ function renderIndividualSummaryChart() {
         legend: {
           display: true,
           position: 'right',
-          labels: {
-            boxWidth: 10,
-            boxHeight: 10,
-            font: {
-              size: 11,
-            },
-            padding: 10,
-          },
+          labels: timesheetLegendLabels(),
         },
         tooltip: {
           callbacks: {
@@ -824,7 +918,7 @@ function openTimesheetSummaryModal(kind, label) {
   });
   const total = rows.reduce((s, r) => s + r.qty, 0), typeMap = {}, projectMap = {};
   for (const r of rows) { typeMap[r.workType] = (typeMap[r.workType] || 0) + r.qty; const proj = r.projectName || '(No project name)'; projectMap[proj] ||= {}; projectMap[proj][r.workType] = (projectMap[proj][r.workType] || 0) + r.qty; }
-  const typeRows = Object.entries(typeMap).sort((a, b) => b[1] - a[1]).map(([type, hrs], i) => { const pct = total ? hrs / total * 100 : 0; return `<div class="timesheet-modal-row"><div class="flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><span class="w-3 h-3 rounded-sm flex-shrink-0" style="background:${workTypeColor(type, i)}"></span><span class="text-sm font-semibold text-gray-900 truncate">${esc(type)}</span></div><div class="text-right flex-shrink-0"><div class="text-sm font-bold text-gray-900">${pct.toFixed(1)}%</div><div class="text-xs text-gray-500">${hrs.toFixed(1)} hrs</div></div></div><div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(pct, 100)}%;background:${workTypeColor(type, i)}"></div></div></div>`; }).join('');
+  const typeRows = TIMESHEET_WORK_TYPE_ORDER.filter(type => typeMap[type]).map((type, i) => { const hrs = typeMap[type]; const pct = total ? hrs / total * 100 : 0; return `<div class="timesheet-modal-row"><div class="flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><span class="w-3 h-3 rounded-sm flex-shrink-0" style="background:${workTypeColor(type, i)}"></span><span class="text-sm font-semibold text-gray-900 truncate">${esc(type)}</span></div><div class="text-right flex-shrink-0"><div class="text-sm font-bold text-gray-900">${pct.toFixed(1)}%</div><div class="text-xs text-gray-500">${hrs.toFixed(1)} hrs</div></div></div><div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(pct, 100)}%;background:${workTypeColor(type, i)}"></div></div></div>`; }).join('');
   const projectRows = Object.entries(projectMap).sort((a, b) => Object.values(b[1]).reduce((s, v) => s + v, 0) - Object.values(a[1]).reduce((s, v) => s + v, 0)).slice(0, 20).map(([project, typeObj]) => { const hrs = Object.values(typeObj).reduce((s, v) => s + v, 0); return `<div class="py-2 border-b border-gray-100 last:border-0"><div class="text-sm font-semibold text-gray-800">${esc(project)}</div><div class="text-xs text-gray-500 mt-0.5">${hrs.toFixed(1)} hrs · ${Object.keys(typeObj).map(esc).join(', ')}</div></div>`; }).join('');
   const monthLabel = kind === 'individual' && S.individualSummaryMonthFilter ? ` · Month: ${S.individualSummaryMonthFilter}` : '';
   openModal(mHdr(`${label} — ${kind === 'team' ? 'Team Summary' : 'Individual Summary'}`, `${S.timesheetFileName || 'Uploaded Time Sheet'}${monthLabel} · ${rows.length} entry${rows.length === 1 ? '' : 'ies'} · ${total.toFixed(1)} hrs`) + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh"><div class="grid grid-cols-2 gap-4"><div><div class="text-sm font-semibold text-gray-700 mb-2">Work Type Breakdown</div>${typeRows || '<p class="text-sm text-gray-400">No work-type data.</p>'}</div><div><div class="text-sm font-semibold text-gray-700 mb-2">Top Project Details</div><div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-2">${projectRows || '<p class="text-sm text-gray-400 py-3">No project details.</p>'}</div></div></div></div><div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl"><button onclick="closeModal()" class="btn-gray">Close</button></div>`, 'max-w-4xl');
@@ -832,17 +926,63 @@ function openTimesheetSummaryModal(kind, label) {
 function switchWorkSummaryTab(tab) { S.workSummaryTab = tab; document.querySelectorAll('.work-summary-tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.workSummaryTab === tab)); document.querySelectorAll('.work-summary-tab-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.endsWith('-' + tab))); if (tab === 'project') renderYearlyWorkByProjectChart(); if (tab === 'team') renderTeamSummaryChart(); if (tab === 'individual') renderIndividualSummaryChart(); }
 async function handleTimesheetUpload(file) {
   if (!file) return;
-  if (typeof XLSX === 'undefined') { toast('Excel parser is not loaded. Check internet/CDN access for SheetJS.', 'error'); return; }
+
+  if (typeof XLSX === 'undefined') {
+    toast('Excel parser is not loaded. Check internet/CDN access for SheetJS.', 'error');
+    return;
+  }
+
   try {
-    const buf = await file.arrayBuffer(); const workbook = XLSX.read(buf, { type: 'array', cellDates: false });
-    const sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'time sheet') || workbook.SheetNames[0];
-    const rows = normalizeTimesheetRows(XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '', raw: false }));
-    if (!rows.length) { toast('No valid Time Sheet rows found. Required columns: Month, Work Type, Worker, Qty (Hrs).', 'error'); return; }
-    S.timesheetRows = rows; S.timesheetFileName = file.name; S.timesheetSheetName = sheetName; S.individualSummaryMonthFilter = '';
-    populateIndividualMonthFilter();
-    const status = document.getElementById('timesheetStatus'); if (status) { const totalHours = rows.reduce((sum, r) => sum + r.qty, 0); status.innerHTML = `<span class="font-semibold text-emerald-700">Loaded:</span> ${esc(file.name)} · Sheet: ${esc(sheetName)} · ${rows.length} rows · ${totalHours.toFixed(1)} hrs`; }
-    renderTeamSummaryChart(); renderIndividualSummaryChart(); if (S.workSummaryTab === 'project') switchWorkSummaryTab('team'); toast('Time Sheet summary generated');
-  } catch (e) { console.error(e); toast('Failed to read the Excel file', 'error'); }
+    const buf = await file.arrayBuffer();
+
+    const workbook = XLSX.read(buf, {
+      type: 'array',
+      cellDates: false,
+    });
+
+    const sheetName =
+      workbook.SheetNames.find(n => n.trim().toLowerCase() === 'time sheet') ||
+      workbook.SheetNames[0];
+
+    const parsedRows = normalizeTimesheetRows(
+      XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+        defval: '',
+        raw: false,
+      })
+    );
+
+    const rows = aggregateTimesheetRows(parsedRows);
+
+    if (!rows.length) {
+      toast(
+        'No valid Time Sheet rows found. Required columns: Month, Work Type, Worker, Qty (Hrs).',
+        'error'
+      );
+      return;
+    }
+
+    const saved = await api('POST', '/api/timesheet-summary/bulk', {
+      fileName: file.name,
+      sheetName,
+      replaceMonths: true,
+      rows,
+    });
+
+    await loadSavedTimesheetFromDb();
+
+    if (S.workSummaryTab === 'project') {
+      switchWorkSummaryTab('team');
+    } else {
+      switchWorkSummaryTab(S.workSummaryTab);
+    }
+
+    toast(
+      `Saved ${saved.saved_rows} Time Sheet rows for ${saved.month_count} month${saved.month_count === 1 ? '' : 's'}`
+    );
+  } catch (e) {
+    console.error(e);
+    toast('Failed to read or save the Excel file', 'error');
+  }
 }
 function openYearlyWorkProjectModal(empId) {
   const emp = S.employees.find(e => e.id === empId); if (!emp) return;

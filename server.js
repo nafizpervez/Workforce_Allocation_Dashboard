@@ -19,8 +19,44 @@ try {
   db.prepare("ALTER TABLE employees ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run();
 } catch (_) { /* column already exists — safe to ignore */ }
 
+/* ─── Time Sheet summary table ───────────────────────────────── */
+try {
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS timesheet_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      month TEXT NOT NULL,
+      worker TEXT NOT NULL,
+      work_type TEXT NOT NULL,
+      project_name TEXT NOT NULL DEFAULT '',
+      qty REAL NOT NULL DEFAULT 0,
+      source_file TEXT,
+      sheet_name TEXT,
+      uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      UNIQUE(month, worker, work_type, project_name)
+    )
+  `).run();
+
+  db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_timesheet_entries_month
+    ON timesheet_entries(month)
+  `).run();
+
+  db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_timesheet_entries_worker
+    ON timesheet_entries(worker)
+  `).run();
+
+  db.prepare(`
+    CREATE INDEX IF NOT EXISTS idx_timesheet_entries_work_type
+    ON timesheet_entries(work_type)
+  `).run();
+} catch (e) {
+  console.error('Time Sheet table migration failed:', e);
+}
+
 app.use(cors());
-app.use(express.json());
+app.use(express.json({ limit: '25mb' }));
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ─── helpers ─────────────────────────────────────────────────── */
@@ -173,6 +209,44 @@ function calcDealStatuses(allProjects) {
 
 
 const safeNum = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };
+
+function cleanText(v) {
+  return String(v ?? '').trim();
+}
+
+function normalizeTimesheetPayloadRows(rows) {
+  const map = new Map();
+
+  for (const r of rows || []) {
+    const month = cleanText(r.month);
+    const worker = cleanText(r.worker);
+    const workType = cleanText(r.workType || r.work_type);
+    const projectName = cleanText(r.projectName || r.project_name || '(No project name)');
+    const qty = safeNum(r.qty, 0);
+
+    if (!month || !worker || !workType || qty <= 0) continue;
+
+    const key = [month, worker, workType, projectName].join('\u001F');
+
+    if (!map.has(key)) {
+      map.set(key, {
+        month,
+        worker,
+        workType,
+        projectName,
+        qty: 0,
+      });
+    }
+
+    map.get(key).qty += qty;
+  }
+
+  return [...map.values()].map(r => ({
+    ...r,
+    qty: +r.qty.toFixed(4),
+  }));
+}
+
 
 /* ─── Revenue chart — per-category revenue data ──────────────── */
 app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
@@ -417,6 +491,135 @@ app.delete('/api/assignments/:id', (req, res) => {
   const info = db.prepare('DELETE FROM assignments WHERE id=?').run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ error: 'not found' });
   res.json({ ok: true });
+});
+
+
+/* ─── Time Sheet saved summary ────────────────────────────────── */
+app.get('/api/timesheet-summary', (_, res) => {
+  const rows = db.prepare(`
+    SELECT
+      month,
+      worker,
+      work_type AS workType,
+      project_name AS projectName,
+      qty,
+      source_file,
+      sheet_name,
+      updated_at
+    FROM timesheet_entries
+    ORDER BY month, worker, work_type, project_name
+  `).all();
+
+  const meta = db.prepare(`
+    SELECT source_file, sheet_name, updated_at
+    FROM timesheet_entries
+    ORDER BY datetime(updated_at) DESC
+    LIMIT 1
+  `).get();
+
+  const months = db.prepare(`
+    SELECT DISTINCT month
+    FROM timesheet_entries
+    ORDER BY month
+  `).all().map(r => r.month);
+
+  const totalHours = rows.reduce((sum, r) => sum + safeNum(r.qty, 0), 0);
+
+  res.json({
+    rows,
+    months,
+    total_hours: +totalHours.toFixed(2),
+    last_source_file: meta?.source_file || '',
+    last_sheet_name: meta?.sheet_name || '',
+    last_updated_at: meta?.updated_at || '',
+  });
+});
+
+app.post('/api/timesheet-summary/bulk', (req, res) => {
+  const body = req.body || {};
+  const fileName = cleanText(body.fileName || body.file_name || '');
+  const sheetName = cleanText(body.sheetName || body.sheet_name || '');
+  const replaceMonths = body.replaceMonths !== false;
+  const rows = normalizeTimesheetPayloadRows(body.rows || []);
+
+  if (!rows.length) {
+    return res.status(400).json({
+      error: 'No valid Time Sheet rows received.',
+    });
+  }
+
+  const uploadedMonths = [...new Set(rows.map(r => r.month).filter(Boolean))];
+
+  const delByMonth = db.prepare(`
+    DELETE FROM timesheet_entries
+    WHERE month = ?
+  `);
+
+  const insertRow = db.prepare(`
+    INSERT INTO timesheet_entries (
+      month,
+      worker,
+      work_type,
+      project_name,
+      qty,
+      source_file,
+      sheet_name,
+      uploaded_at,
+      updated_at
+    )
+    VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+    ON CONFLICT(month, worker, work_type, project_name)
+    DO UPDATE SET
+      qty = excluded.qty,
+      source_file = excluded.source_file,
+      sheet_name = excluded.sheet_name,
+      updated_at = CURRENT_TIMESTAMP
+  `);
+
+  const txn = db.transaction(() => {
+    if (replaceMonths) {
+      for (const month of uploadedMonths) {
+        delByMonth.run(month);
+      }
+    }
+
+    let savedRows = 0;
+
+    for (const r of rows) {
+      insertRow.run(
+        r.month,
+        r.worker,
+        r.workType,
+        r.projectName,
+        r.qty,
+        fileName,
+        sheetName
+      );
+      savedRows++;
+    }
+
+    return savedRows;
+  });
+
+  const savedRows = txn();
+  const totalHours = rows.reduce((sum, r) => sum + safeNum(r.qty, 0), 0);
+
+  res.status(201).json({
+    ok: true,
+    saved_rows: savedRows,
+    replaced_months: replaceMonths ? uploadedMonths : [],
+    month_count: uploadedMonths.length,
+    total_hours: +totalHours.toFixed(2),
+  });
+});
+
+app.delete('/api/timesheet-summary', (_, res) => {
+  const info = db.prepare('DELETE FROM timesheet_entries').run();
+
+  res.json({
+    ok: true,
+    deleted_rows: info.changes,
+  });
 });
 
 /* ─── dashboard stats ─────────────────────────────────────────── */
