@@ -459,7 +459,11 @@ async function loadAll() {
     S.employeeUtil = new Map(util.all.map(u => [u.id, u.utilization]));
     renderStats(stats);
     renderMatrix();
-    renderTrends(trends); renderWorkload(wl); renderAllocation(wl); renderNewLogoChart(nlChart);
+    renderTrends(trends);
+    renderWorkload(wl);
+    renderAllocation(wl);
+    renderYearlyWorkByProjectChart();
+    renderNewLogoChart(nlChart);
     // Sync initial category button states
     document.querySelectorAll('.nl-prod-btn').forEach(b => {
       const isActive = S.nlProductFilter.has(b.dataset.prod);
@@ -600,6 +604,334 @@ function renderTrends(data) { if (S.charts.trends) S.charts.trends.destroy(); co
 function renderWorkload(data) { if (S.charts.workload) S.charts.workload.destroy(); const ctx = document.getElementById('workloadChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.workload = new Chart(ctx, { type: 'bar', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderRadius: 4, borderSkipped: false }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } } }, scales: { x: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } }, y: { ticks: { font: { size: 12 }, color: '#374151' }, grid: { display: false } } } } }); }
 
 function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }); }
+
+function openYearlyWorkProjectModal(empId) {
+  const emp = S.employees.find(e => e.id === empId);
+  if (!emp) return;
+
+  const TOTAL_FY_WEEKS = 48;
+  const empAssignments = S.assignments.filter(a => a.employee_id === empId);
+  const projectMap = {};
+
+  for (const a of empAssignments) {
+    const project = S.projects.find(p => p.id === a.project_id);
+    if (!project) continue;
+
+    if (!projectMap[a.project_id]) {
+      projectMap[a.project_id] = {
+        project_id: a.project_id,
+        code: project.code || a.project_code || '',
+        name: project.name || a.project_name || '',
+        account_name: project.account_name || project.client || a.account_name || '—',
+        product_name: project.product_name || a.product_name || '—',
+        product_family: project.product_family || '—',
+        stage: project.stage || '—',
+        color: project.color || a.project_color || '#8B5CF6',
+        weightedWeeks: 0,
+        slotCount: 0,
+        totalPct: 0,
+      };
+    }
+
+    projectMap[a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100;
+    projectMap[a.project_id].slotCount += 1;
+    projectMap[a.project_id].totalPct += Number(a.percentage) || 0;
+  }
+
+  const projects = Object.values(projectMap)
+    .map(p => ({
+      ...p,
+      contribution: +((p.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1),
+      avgPct: p.slotCount ? +(p.totalPct / p.slotCount).toFixed(1) : 0,
+    }))
+    .sort((a, b) => b.contribution - a.contribution);
+
+  const totalContribution = projects.reduce((sum, p) => sum + p.contribution, 0);
+
+  const rows = projects.map((p, idx) => `
+    <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-3">
+      <div class="flex items-start justify-between gap-4">
+        <div class="min-w-0 flex-1">
+          <div class="flex items-center gap-2 mb-1">
+            <span class="w-3 h-3 rounded-sm flex-shrink-0" style="background:${p.color}"></span>
+            <span class="text-xs font-bold text-blue-600 mono">${esc(p.code)}</span>
+            <span class="text-xs text-gray-400">#${idx + 1}</span>
+          </div>
+
+          <div class="text-sm font-semibold text-gray-900 leading-snug">
+            ${esc(p.name)}
+          </div>
+
+          <div class="text-xs text-gray-500 mt-1">
+            ${esc(p.account_name)}
+            <span class="text-gray-300 mx-1">·</span>
+            ${esc(p.product_name)}
+          </div>
+
+          <div class="flex flex-wrap gap-1.5 mt-2">
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
+              ${esc(p.product_family)}
+            </span>
+            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
+              ${esc(p.stage)}
+            </span>
+          </div>
+        </div>
+
+        <div class="text-right flex-shrink-0">
+          <div class="text-lg font-bold text-gray-900">${p.contribution}%</div>
+          <div class="text-xs text-gray-400">FY contribution</div>
+          <div class="text-xs text-gray-500 mt-1">${p.slotCount} week slot${p.slotCount === 1 ? '' : 's'}</div>
+          <div class="text-xs text-gray-500">${p.avgPct}% avg workload</div>
+        </div>
+      </div>
+
+      <div class="mt-3 flex items-center gap-2">
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div class="h-full rounded-full" style="width:${Math.min(p.contribution, 100)}%;background:${p.color}"></div>
+        </div>
+        <span class="text-xs font-semibold text-gray-600 w-12 text-right">${p.contribution}%</span>
+      </div>
+    </div>
+  `).join('');
+
+  openModal(
+    mHdr(
+      `${emp.name} — Yearly Project Work`,
+      `FY${S.fiscalYear + 1} · ${projects.length} assigned project${projects.length === 1 ? '' : 's'} · Total ${totalContribution.toFixed(1)}%`
+    )
+    + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
+        ${rows || '<p class="text-sm text-gray-400 text-center py-8">No project assignments found.</p>'}
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+        <button onclick="closeModal()" class="btn-gray">Close</button>
+      </div>`,
+    'max-w-3xl'
+  );
+}
+
+function renderYearlyWorkByProjectChart() {
+  ``
+  const canvas = document.getElementById('yearlyWorkChart');
+  if (!canvas) return;
+
+  if (S.charts.yearlyWork) {
+    S.charts.yearlyWork.destroy();
+  }
+
+  const ctx = canvas.getContext('2d');
+  const TOTAL_FY_WEEKS = 48;
+
+  // Only active employees, same convention used elsewhere in the dashboard
+  const employees = S.employees.filter(e => e.active !== 0);
+
+  // Build employee-project weighted workload map
+  // Formula: sum(percentage / 100) / 48 * 100
+  const empProjectMap = {};
+
+  for (const e of employees) {
+    empProjectMap[e.id] = {};
+  }
+
+  for (const a of S.assignments) {
+    if (!empProjectMap[a.employee_id]) continue;
+
+    const project = S.projects.find(p => p.id === a.project_id);
+    if (!project) continue;
+
+    if (!empProjectMap[a.employee_id][a.project_id]) {
+      empProjectMap[a.employee_id][a.project_id] = {
+        project_id: a.project_id,
+        code: project.code || a.project_code || '',
+        name: project.name || a.project_name || '',
+        color: project.color || a.project_color || '#8B5CF6',
+        weightedWeeks: 0,
+      };
+    }
+
+    empProjectMap[a.employee_id][a.project_id].weightedWeeks +=
+      (Number(a.percentage) || 0) / 100;
+  }
+
+  // Collect projects that are actually assigned in this FY
+  const assignedProjectIds = [
+    ...new Set(
+      S.assignments
+        .filter(a => employees.some(e => e.id === a.employee_id))
+        .map(a => a.project_id)
+    ),
+  ];
+
+  const assignedProjects = assignedProjectIds
+    .map(pid => S.projects.find(p => p.id === pid))
+    .filter(Boolean)
+    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+
+  const labels = employees.map(e => e.name);
+
+  const datasets = assignedProjects.map(project => {
+    return {
+      label: `${project.code || ''} — ${project.name || ''}`,
+      projectCode: project.code || '',
+      projectName: project.name || '',
+      data: employees.map(e => {
+        const item = empProjectMap[e.id]?.[project.id];
+        if (!item) return 0;
+
+        return +((item.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2);
+      }),
+      backgroundColor: project.color || '#8B5CF6',
+      borderWidth: 0,
+      borderRadius: 2,
+      barPercentage: 0.75,
+      categoryPercentage: 0.78,
+    };
+  });
+
+  const totalUtilByEmployee = employees.map(e => {
+    const items = Object.values(empProjectMap[e.id] || {});
+    const weightedWeeks = items.reduce((sum, item) => sum + item.weightedWeeks, 0);
+    return +((weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1);
+  });
+
+  S.charts.yearlyWork = new Chart(ctx, {
+    type: 'bar',
+    data: {
+      labels,
+      datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+
+      // Click any employee bar/segment to open yearly project detail modal
+      onClick: (event, elements) => {
+        if (!elements.length) return;
+
+        const dataIndex = elements[0].index;
+        const emp = employees[dataIndex];
+
+        if (emp) {
+          openYearlyWorkProjectModal(emp.id);
+        }
+      },
+
+      // Show pointer cursor on clickable bar segments
+      onHover: (event, elements) => {
+        const target = event.native?.target;
+        if (target) {
+          target.style.cursor = elements.length ? 'pointer' : 'default';
+        }
+      },
+
+      interaction: {
+        mode: 'nearest',
+        intersect: true,
+      },
+
+      plugins: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            font: {
+              size: 10,
+            },
+            padding: 8,
+            generateLabels: chart => {
+              const shortText = (txt, max = 32) => {
+                const s = String(txt || '').trim();
+                return s.length > max ? s.slice(0, max - 1) + '…' : s;
+              };
+
+              return chart.data.datasets.map((ds, i) => ({
+                text: shortText(ds.projectName || ds.label),
+                fillStyle: ds.backgroundColor,
+                strokeStyle: ds.backgroundColor,
+                lineWidth: 0,
+                hidden: !chart.isDatasetVisible(i),
+                datasetIndex: i,
+              }));
+            },
+          },
+        },
+
+        tooltip: {
+          bodyFont: {
+            size: 11,
+          },
+          titleFont: {
+            size: 12,
+            weight: '600',
+          },
+          padding: 10,
+          callbacks: {
+            title: items => {
+              const idx = items[0].dataIndex;
+              const emp = employees[idx];
+              const total = totalUtilByEmployee[idx];
+
+              return `${emp.name} · Total ${total}%`;
+            },
+            label: ctx => {
+              const ds = ctx.dataset;
+              const val = ctx.parsed.y || 0;
+
+              if (!val) return '';
+
+              return [
+                ` ${ds.projectCode}: ${val}%`,
+                ` ${ds.projectName}`,
+              ];
+            },
+          },
+        },
+      },
+
+      scales: {
+        x: {
+          stacked: true,
+          ticks: {
+            font: {
+              size: 11,
+            },
+            color: '#374151',
+            maxRotation: 45,
+            minRotation: 35,
+          },
+          grid: {
+            display: false,
+          },
+        },
+
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: {
+            font: {
+              size: 11,
+            },
+            color: '#6B7280',
+            callback: v => `${v}%`,
+          },
+          grid: {
+            color: '#F3F4F6',
+          },
+          title: {
+            display: true,
+            text: 'FY workload contribution (%)',
+            font: {
+              size: 11,
+            },
+            color: '#9CA3AF',
+          },
+        },
+      },
+    },
+  });
+}
 
 function insightRow(e) {
   const u = e.utilization;

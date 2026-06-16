@@ -552,6 +552,62 @@
           </div>
         </div>
 
+        <!-- [3.25] YEARLY WORK BY PROJECT -->
+        <div class="ds" data-section="yearlyworkchart">
+          <div class="drag-handle" title="Drag row">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="5" cy="3" r="1.4" />
+              <circle cx="11" cy="3" r="1.4" />
+              <circle cx="5" cy="8" r="1.4" />
+              <circle cx="11" cy="8" r="1.4" />
+              <circle cx="5" cy="13" r="1.4" />
+              <circle cx="11" cy="13" r="1.4" />
+            </svg>
+          </div>
+
+          <div
+            class="bg-white rounded-xl overflow-hidden"
+            style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
+          >
+            <div class="px-6 py-4 border-b border-gray-200 pr-14">
+              <div class="flex items-center gap-3">
+                <div
+                  class="w-9 h-9 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-5 h-5 text-indigo-600"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="18" y1="20" x2="18" y2="10" />
+                    <line x1="12" y1="20" x2="12" y2="4" />
+                    <line x1="6" y1="20" x2="6" y2="14" />
+                  </svg>
+                </div>
+
+                <div>
+                  <h2 class="text-base font-semibold text-gray-900">
+                    Yearly Work by Project
+                  </h2>
+                  <p class="text-sm text-gray-500 mt-0.5">
+                    Fiscal year workload distribution by assigned project
+                  </p>
+                </div>
+              </div>
+            </div>
+
+            <div class="p-6">
+              <div class="yearly-work-chart-wrap nice-scroll">
+                <canvas id="yearlyWorkChart"></canvas>
+              </div>
+            </div>
+          </div>
+        </div>
+
         <!-- [3.5] NEW LOGO ACQUISITIONS BAR CHART -->
         <div class="ds" data-section="newlogochart">
           <div class="drag-handle" title="Drag row">

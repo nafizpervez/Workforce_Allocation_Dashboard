@@ -901,3 +901,18 @@ td.cell:hover .cell-add {
 .pipeline-filter-bar select {
   text-overflow: ellipsis;
 }
+
+/* ============================================================== */
+/*  Yearly Work by Project stacked chart                          */
+/* ============================================================== */
+
+.yearly-work-chart-wrap {
+  height: 420px;
+  min-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.yearly-work-chart-wrap canvas {
+  min-width: 1200px;
+}
