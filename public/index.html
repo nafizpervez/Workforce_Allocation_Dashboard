@@ -552,7 +552,9 @@
           </div>
         </div>
 
-        <!-- [3.25] YEARLY WORK BY PROJECT -->
+
+
+        <!-- [3.25] WORK SUMMARY TABS: PROJECT / TEAM / INDIVIDUAL -->
         <div class="ds" data-section="yearlyworkchart">
           <div class="drag-handle" title="Drag row">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
@@ -570,39 +572,121 @@
             style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
           >
             <div class="px-6 py-4 border-b border-gray-200 pr-14">
-              <div class="flex items-center gap-3">
-                <div
-                  class="w-9 h-9 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0"
-                >
-                  <svg
-                    class="w-5 h-5 text-indigo-600"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    stroke-width="2"
-                    stroke-linecap="round"
-                    stroke-linejoin="round"
+              <div class="flex items-start justify-between gap-4 flex-wrap">
+                <div class="flex items-center gap-3">
+                  <div
+                    class="w-9 h-9 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0"
                   >
-                    <line x1="18" y1="20" x2="18" y2="10" />
-                    <line x1="12" y1="20" x2="12" y2="4" />
-                    <line x1="6" y1="20" x2="6" y2="14" />
-                  </svg>
+                    <svg
+                      class="w-5 h-5 text-indigo-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                  </div>
+
+                  <div>
+                    <h2 class="text-base font-semibold text-gray-900">
+                      Yearly Work Summary
+                    </h2>
+                    <p class="text-sm text-gray-500 mt-0.5">
+                      Project assignments plus uploaded Time Sheet work-type summary
+                    </p>
+                  </div>
                 </div>
 
-                <div>
-                  <h2 class="text-base font-semibold text-gray-900">
+                <div class="flex items-center gap-2 flex-wrap justify-end">
+                  <button
+                    class="work-summary-tab-btn active"
+                    data-work-summary-tab="project"
+                  >
                     Yearly Work by Project
-                  </h2>
-                  <p class="text-sm text-gray-500 mt-0.5">
-                    Fiscal year workload distribution by assigned project
-                  </p>
+                  </button>
+                  <button
+                    class="work-summary-tab-btn"
+                    data-work-summary-tab="team"
+                  >
+                    Team Summary
+                  </button>
+                  <button
+                    class="work-summary-tab-btn"
+                    data-work-summary-tab="individual"
+                  >
+                    Individual Summary
+                  </button>
+
+                  <label class="timesheet-upload-btn">
+                    <input
+                      id="timesheetUpload"
+                      type="file"
+                      accept=".xlsx,.xls"
+                      class="hidden"
+                    />
+                    Upload Time Sheet
+                  </label>
                 </div>
+              </div>
+
+              <div
+                id="timesheetStatus"
+                class="mt-3 text-xs text-gray-400"
+              >
+                Upload an Excel file with sheet name <span class="font-semibold">Time Sheet</span> or matching columns: Month, Work Type, Worker, Qty (Hrs).
               </div>
             </div>
 
-            <div class="p-6">
+            <div id="workSummaryTab-project" class="work-summary-tab-content p-6">
               <div class="yearly-work-chart-wrap nice-scroll">
                 <canvas id="yearlyWorkChart"></canvas>
+              </div>
+            </div>
+
+            <div id="workSummaryTab-team" class="work-summary-tab-content hidden p-6">
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                <div>
+                  <h3 class="text-sm font-semibold text-gray-800">Team Summary</h3>
+                  <p class="text-xs text-gray-500">
+                    Combined monthly work-type distribution for all employees from uploaded Time Sheet.
+                  </p>
+                </div>
+                <div id="teamSummaryInfo" class="text-xs text-gray-400"></div>
+              </div>
+              <div id="teamSummaryEmpty" class="timesheet-empty-state">
+                Upload a Time Sheet Excel file to generate Team Summary.
+              </div>
+              <div class="timesheet-chart-wrap nice-scroll hidden" id="teamSummaryChartWrap">
+                <canvas id="teamSummaryChart"></canvas>
+              </div>
+            </div>
+
+            <div id="workSummaryTab-individual" class="work-summary-tab-content hidden p-6">
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
+                <div>
+                  <h3 class="text-sm font-semibold text-gray-800">Individual Summary</h3>
+                  <p class="text-xs text-gray-500">
+                    Work-type distribution by employee from uploaded Time Sheet.
+                  </p>
+                </div>
+                <div class="flex items-center gap-2 flex-wrap justify-end">
+                  <label for="individualSummaryMonthFilter" class="timesheet-filter-label">Month</label>
+                  <select id="individualSummaryMonthFilter" class="timesheet-filter-select">
+                    <option value="">All Months</option>
+                  </select>
+                  <div id="individualSummaryInfo" class="text-xs text-gray-400"></div>
+                </div>
+              </div>
+              <div id="individualSummaryEmpty" class="timesheet-empty-state">
+                Upload a Time Sheet Excel file to generate Individual Summary.
+              </div>
+              <div class="timesheet-chart-wrap timesheet-chart-wrap-wide nice-scroll hidden" id="individualSummaryChartWrap">
+                <canvas id="individualSummaryChart"></canvas>
               </div>
             </div>
           </div>
@@ -1280,7 +1364,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="card-filter-bar running-filter-bar">
+                <div class="card-filter-bar">
                   <div class="relative flex-shrink-0">
                     <input
                       id="runSearch"
@@ -1313,7 +1397,7 @@
                     <option value="">All Families</option>
                   </select>
                   <select id="runProductTypeFilt" class="flt-select">
-                    <option value="">All Product Types</option>
+                    <option value="">All Product Name</option>
                   </select>
                   <button id="runSortAssignedBtn" class="flt-sort-btn">
                     Most Assigned
@@ -1397,7 +1481,7 @@
                     </div>
                   </div>
                 </div>
-                <div class="card-filter-bar pipeline-filter-bar">
+                <div class="card-filter-bar">
                   <div class="relative flex-shrink-0">
                     <input
                       id="pipeSearch"
@@ -1427,7 +1511,6 @@
                     <option value="">All Close Dates</option>
                     <option value="overdue">Overdue</option>
                     <option value="thismonth">This Month</option>
-                    <option value="next2months">Next 2 Months</option>
                     <option value="next3months">Next 3 Months</option>
                     <option value="thisyear">This Year</option>
                   </select>
@@ -1483,6 +1566,7 @@
     <div id="modalRoot"></div>
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="/js/app.js"></script>
   </body>
 </html>

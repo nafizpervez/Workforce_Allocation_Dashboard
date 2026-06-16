@@ -28,6 +28,12 @@ const S = {
   runProdFamilyFilt: '', runSearch: '', runProductTypeFilt: '',
   /* cached data for re-filter */
   lastRunningData: [],
+  /* uploaded Time Sheet Excel summary */
+  timesheetRows: [],
+  timesheetFileName: '',
+  timesheetSheetName: '',
+  individualSummaryMonthFilter: '',
+  workSummaryTab: 'project',
 };
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -63,7 +69,10 @@ function parseAmountRange(r) { if (!r) return null; if (r.endsWith('+')) return 
 
 function matchDateFilter(dateStr, filter) {
   if (!dateStr || !filter) return true;
-  const d = new Date(dateStr), now = new Date();
+  const d = new Date(dateStr + 'T00:00:00');
+  const now = new Date();
+  now.setHours(0, 0, 0, 0);
+  if (isNaN(d)) return false;
   if (filter === 'overdue') return d < now;
   if (filter === 'thismonth') return d.getFullYear() === now.getFullYear() && d.getMonth() === now.getMonth();
   if (filter === 'next3months') { const t = new Date(now); t.setMonth(t.getMonth() + 3); return d >= now && d <= t; }
@@ -73,46 +82,24 @@ function matchDateFilter(dateStr, filter) {
 
 function matchPipelineCloseDateFilter(dateStr, filter) {
   if (!dateStr || !filter) return true;
-
   const d = new Date(dateStr + 'T00:00:00');
-
   const today = new Date();
   today.setHours(0, 0, 0, 0);
-
   if (isNaN(d)) return false;
-
   const addDays = (base, days) => {
     const t = new Date(base);
     t.setDate(t.getDate() + days);
     t.setHours(23, 59, 59, 999);
     return t;
   };
-
-  if (filter === 'overdue') {
-    return d < today;
-  }
-
-  if (filter === 'thismonth') {
-    // Today to next 30 days
-    return d >= today && d <= addDays(today, 30);
-  }
-
-  if (filter === 'next2months') {
-    // Today to next 60 days
-    return d >= today && d <= addDays(today, 60);
-  }
-
-  if (filter === 'next3months') {
-    // Today to next 90 days
-    return d >= today && d <= addDays(today, 90);
-  }
-
+  if (filter === 'overdue') return d < today;
+  if (filter === 'thismonth') return d >= today && d <= addDays(today, 30);
+  if (filter === 'next2months') return d >= today && d <= addDays(today, 60);
+  if (filter === 'next3months') return d >= today && d <= addDays(today, 90);
   if (filter === 'thisyear') {
-    // Today to 31 Dec of the current year
     const yearEnd = new Date(today.getFullYear(), 11, 31, 23, 59, 59, 999);
     return d >= today && d <= yearEnd;
   }
-
   return true;
 }
 
@@ -121,44 +108,24 @@ function getAmountOk(opp_amount, filt) { if (!filt) return true; const [min, max
 function normalizeProductTypeName(value) {
   const s = String(value || '').trim();
   const u = s.toUpperCase().replace(/\s+/g, ' ');
-
-  // Normalize all PS Project Implementation variants
-  if (
-    u.includes('PS PROJECT IMPLEMENTATION') ||
-    u.includes('PS PROJECT IMPLEMENT') ||
-    u.includes('PS PROJECT IMPLEMETATION')
-  ) {
-    return 'PS Project Implementation';
-  }
-
-  // Normalize all PS System Support variants
-  if (u.includes('PS SYSTEM SUPPORT')) {
-    return 'PS System Support';
-  }
-
+  if (u.includes('PS PROJECT IMPLEMENTATION') || u.includes('PS PROJECT IMPLEMENT') || u.includes('PS PROJECT IMPLEMETATION')) return 'PS Project Implementation';
+  if (u.includes('PS SYSTEM SUPPORT')) return 'PS System Support';
   return s;
 }
 
 function sameProductType(actual, selected) {
   if (!selected) return true;
-
-  return (
-    normalizeProductTypeName(actual).toUpperCase() ===
-    normalizeProductTypeName(selected).toUpperCase()
-  );
+  return normalizeProductTypeName(actual).toUpperCase() === normalizeProductTypeName(selected).toUpperCase();
 }
 
 function uniqueNormalizedProductTypes(list) {
   const m = new Map();
-
   for (const item of list || []) {
     const label = normalizeProductTypeName(item.product_name);
     if (!label) continue;
-
     const key = label.toUpperCase();
     if (!m.has(key)) m.set(key, label);
   }
-
   return [...m.values()].sort((a, b) => a.localeCompare(b));
 }
 
@@ -166,14 +133,7 @@ function getFteCount(projId) { return new Set(S.assignments.filter(a => a.projec
 
 function getAssignedTaskCount(projId) {
   const fy = S.fiscalYear;
-
-  return S.assignments.filter(a =>
-    a.project_id === projId &&
-    (
-      (a.year === fy && a.month >= 4) ||
-      (a.year === fy + 1 && a.month <= 3)
-    )
-  ).length;
+  return S.assignments.filter(a => a.project_id === projId && ((a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3))).length;
 }
 
 function getRunningSortDate(row) {
@@ -186,42 +146,22 @@ function getRunningYearRank(row) {
   const d = getRunningSortDate(row);
   const y = d.getFullYear();
   const currentYear = new Date().getFullYear();
-
-  // 1st: future years, nearest future first
-  // Example in 2026: 2027 before 2028
-  if (y > currentYear) {
-    return y - currentYear - 1;
-  }
-
-  // 2nd: current year
-  if (y === currentYear) {
-    return 1000;
-  }
-
-  // Last: previous years, latest previous year first
-  // Example in 2026: 2025 before 2024
+  if (y > currentYear) return y - currentYear - 1;
+  if (y === currentYear) return 1000;
   return 1000 + (currentYear - y);
 }
 
 function sortRunningProjects(a, b) {
   const rankA = getRunningYearRank(a);
   const rankB = getRunningYearRank(b);
-
   if (rankA !== rankB) return rankA - rankB;
-
-  const dateA = getRunningSortDate(a);
-  const dateB = getRunningSortDate(b);
-
-  return dateA - dateB;
+  return getRunningSortDate(a) - getRunningSortDate(b);
 }
-
-const DISPLAY_CUTOFF = '2025-10-01';
 
 function applyPipelineFilters(list) {
   const q = (S.pipelineSearch || '').toLowerCase().trim();
   return list.filter(p => {
     if (p.stage === 'Closed Lost') return false;
-    if (p.end_date && p.end_date < DISPLAY_CUTOFF) return false;
     if (S.pipelineDealStatusFilt && p.deal_status !== S.pipelineDealStatusFilt) return false;
     if (S.pipelineStageFilt && p.stage !== S.pipelineStageFilt) return false;
     if (!getAmountOk(p.opp_amount, S.pipelineAmountFilt)) return false;
@@ -233,42 +173,28 @@ function applyPipelineFilters(list) {
     return true;
   }).sort((a, b) => {
     if (!S.pipelineSortAssigned) return 0;
-
     const diff = getAssignedTaskCount(b.id) - getAssignedTaskCount(a.id);
     if (diff !== 0) return diff;
-
     return String(a.name || '').localeCompare(String(b.name || ''));
   });
 }
 
 function applyRunningFilters(list) {
   const q = (S.runSearch || '').toLowerCase().trim();
-
   return list.filter(d => {
     if (!getAmountOk(d.opp_amount, S.runAmountFilt)) return false;
-
     const cd = d.closing_date || d.project_closing_date || d.end_date;
-
     if (S.runCloseFilt && !matchDateFilter(cd, S.runCloseFilt)) return false;
     if (S.runProjCloseFilt && !matchDateFilter(d.project_closing_date, S.runProjCloseFilt)) return false;
     if (S.runProdFamilyFilt && d.product_family !== S.runProdFamilyFilt) return false;
     if (S.runProductTypeFilt && !sameProductType(d.product_name, S.runProductTypeFilt)) return false;
-
-    if (
-      q &&
-      !(d.name || '').toLowerCase().includes(q) &&
-      !(d.code || '').toLowerCase().includes(q)
-    ) {
-      return false;
-    }
-
+    if (q && !(d.name || '').toLowerCase().includes(q) && !(d.code || '').toLowerCase().includes(q)) return false;
     return true;
   }).sort((a, b) => {
     if (S.runSortAssigned) {
       const diff = getAssignedTaskCount(b.id) - getAssignedTaskCount(a.id);
       if (diff !== 0) return diff;
     }
-
     return sortRunningProjects(a, b);
   });
 }
@@ -605,230 +531,236 @@ function renderWorkload(data) { if (S.charts.workload) S.charts.workload.destroy
 
 function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }); }
 
-function openYearlyWorkProjectModal(empId) {
-  const emp = S.employees.find(e => e.id === empId);
-  if (!emp) return;
+/* ================================================================ WORK SUMMARY: PROJECT / TEAM / INDIVIDUAL */
+const TIMESHEET_WORK_TYPE_ORDER = [
+  'Training Delivery',
+  'Skill Development',
+  'Service Delivery - Local PS',
+  'Service Delivery - Intrasourcing',
+  'Pre Sales',
+  'General Admin',
+];
 
-  const TOTAL_FY_WEEKS = 48;
-  const empAssignments = S.assignments.filter(a => a.employee_id === empId);
-  const projectMap = {};
+const TIMESHEET_WORK_TYPE_COLORS = {
+  'Training Delivery': '#449328',
+  'Skill Development': '#F6C6AD',
+  'Service Delivery - Local PS': '#D9F2D0',
+  'Service Delivery - Intrasourcing': '#F2CFEE',
+  'Pre Sales': '#96DCF8',
+  'General Admin': '#D1D1D1',
+};
 
-  for (const a of empAssignments) {
-    const project = S.projects.find(p => p.id === a.project_id);
-    if (!project) continue;
+function normalizeTimesheetWorkType(value) {
+  const raw = String(value || '').trim();
+  const key = raw
+    .toLowerCase()
+    .replace(/\s+/g, ' ')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/_/g, ' ')
+    .trim();
 
-    if (!projectMap[a.project_id]) {
-      projectMap[a.project_id] = {
-        project_id: a.project_id,
-        code: project.code || a.project_code || '',
-        name: project.name || a.project_name || '',
-        account_name: project.account_name || project.client || a.account_name || '—',
-        product_name: project.product_name || a.product_name || '—',
-        product_family: project.product_family || '—',
-        stage: project.stage || '—',
-        color: project.color || a.project_color || '#8B5CF6',
-        weightedWeeks: 0,
-        slotCount: 0,
-        totalPct: 0,
-      };
-    }
+  if (key === 'training delivery') return 'Training Delivery';
+  if (key === 'skill development') return 'Skill Development';
+  if (key === 'service delivery-local ps') return 'Service Delivery - Local PS';
+  if (key === 'service delivery-intrasourcing') return 'Service Delivery - Intrasourcing';
+  if (key === 'pre-sales' || key === 'pre sales' || key === 'presales') return 'Pre Sales';
+  if (key === 'general admin') return 'General Admin';
 
-    projectMap[a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100;
-    projectMap[a.project_id].slotCount += 1;
-    projectMap[a.project_id].totalPct += Number(a.percentage) || 0;
-  }
-
-  const projects = Object.values(projectMap)
-    .map(p => ({
-      ...p,
-      contribution: +((p.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1),
-      avgPct: p.slotCount ? +(p.totalPct / p.slotCount).toFixed(1) : 0,
-    }))
-    .sort((a, b) => b.contribution - a.contribution);
-
-  const totalContribution = projects.reduce((sum, p) => sum + p.contribution, 0);
-
-  const rows = projects.map((p, idx) => `
-    <div class="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-3">
-      <div class="flex items-start justify-between gap-4">
-        <div class="min-w-0 flex-1">
-          <div class="flex items-center gap-2 mb-1">
-            <span class="w-3 h-3 rounded-sm flex-shrink-0" style="background:${p.color}"></span>
-            <span class="text-xs font-bold text-blue-600 mono">${esc(p.code)}</span>
-            <span class="text-xs text-gray-400">#${idx + 1}</span>
-          </div>
-
-          <div class="text-sm font-semibold text-gray-900 leading-snug">
-            ${esc(p.name)}
-          </div>
-
-          <div class="text-xs text-gray-500 mt-1">
-            ${esc(p.account_name)}
-            <span class="text-gray-300 mx-1">·</span>
-            ${esc(p.product_name)}
-          </div>
-
-          <div class="flex flex-wrap gap-1.5 mt-2">
-            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">
-              ${esc(p.product_family)}
-            </span>
-            <span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">
-              ${esc(p.stage)}
-            </span>
-          </div>
-        </div>
-
-        <div class="text-right flex-shrink-0">
-          <div class="text-lg font-bold text-gray-900">${p.contribution}%</div>
-          <div class="text-xs text-gray-400">FY contribution</div>
-          <div class="text-xs text-gray-500 mt-1">${p.slotCount} week slot${p.slotCount === 1 ? '' : 's'}</div>
-          <div class="text-xs text-gray-500">${p.avgPct}% avg workload</div>
-        </div>
-      </div>
-
-      <div class="mt-3 flex items-center gap-2">
-        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
-          <div class="h-full rounded-full" style="width:${Math.min(p.contribution, 100)}%;background:${p.color}"></div>
-        </div>
-        <span class="text-xs font-semibold text-gray-600 w-12 text-right">${p.contribution}%</span>
-      </div>
-    </div>
-  `).join('');
-
-  openModal(
-    mHdr(
-      `${emp.name} — Yearly Project Work`,
-      `FY${S.fiscalYear + 1} · ${projects.length} assigned project${projects.length === 1 ? '' : 's'} · Total ${totalContribution.toFixed(1)}%`
-    )
-    + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
-        ${rows || '<p class="text-sm text-gray-400 text-center py-8">No project assignments found.</p>'}
-      </div>
-      <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
-        <button onclick="closeModal()" class="btn-gray">Close</button>
-      </div>`,
-    'max-w-3xl'
-  );
+  // Only the six approved work types are shown in Team Summary / Individual Summary.
+  return null;
 }
 
-function renderYearlyWorkByProjectChart() {
-  ``
-  const canvas = document.getElementById('yearlyWorkChart');
+function workTypeColor(type) {
+  return TIMESHEET_WORK_TYPE_COLORS[type] || '#9CA3AF';
+}
+
+function orderedPresentWorkTypes(rows) {
+  const present = new Set((rows || []).map(r => r.workType).filter(Boolean));
+  return TIMESHEET_WORK_TYPE_ORDER.filter(type => present.has(type));
+}
+function monthSortKey(label, fallbackIndex = 0) {
+  const s = String(label || '').trim();
+  const m = s.match(/^([A-Za-z]{3,})\s*[- ]?\s*(\d{2,4})?/);
+  if (!m) return 999999 + fallbackIndex;
+  const monthIdx = MN.findIndex(x => x.toLowerCase() === m[1].slice(0, 3).toLowerCase());
+  if (monthIdx < 0) return 999999 + fallbackIndex;
+  let year = m[2] ? Number(m[2]) : new Date().getFullYear();
+  if (year < 100) year += 2000;
+  return year * 12 + monthIdx;
+}
+function getRowValue(row, names) {
+  for (const name of names) if (Object.prototype.hasOwnProperty.call(row, name)) return row[name];
+  const target = names.map(n => n.toLowerCase().replace(/[^a-z0-9]/g, ''));
+  for (const [key, value] of Object.entries(row)) {
+    const norm = key.toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (target.includes(norm)) return value;
+  }
+  return '';
+}
+function normalizeTimesheetRows(rows) {
+  return (rows || []).map(row => {
+    const month = String(getRowValue(row, ['Month', 'Months (Date)', 'Month (Date)']) || '').trim();
+    const rawWorkType = String(getRowValue(row, ['Work Type', 'WorkType']) || '').trim();
+    const workType = normalizeTimesheetWorkType(rawWorkType);
+    const worker = String(getRowValue(row, ['Worker', 'Employee', 'Resource']) || '').trim();
+    const projectName = String(getRowValue(row, ['Project Name', 'Project']) || '').trim();
+    const qtyRaw = getRowValue(row, ['Qty (Hrs)', 'Qty Hrs', 'Quantity', 'Hours', 'Hrs']);
+    const qty = Number(String(qtyRaw).replace(/,/g, '')) || 0;
+    return { month, workType, worker, projectName, qty, raw: row };
+  }).filter(r => r.month && r.worker && r.workType && r.qty > 0);
+}
+
+function getTimesheetMonthOptions() {
+  return [...new Set((S.timesheetRows || []).map(r => r.month).filter(Boolean))]
+    .sort((a, b) => monthSortKey(a) - monthSortKey(b));
+}
+
+function populateIndividualMonthFilter() {
+  const sel = document.getElementById('individualSummaryMonthFilter');
+  if (!sel) return;
+
+  const months = getTimesheetMonthOptions();
+  const current = S.individualSummaryMonthFilter;
+
+  sel.innerHTML =
+    '<option value="">All Months</option>' +
+    months.map(m => `<option value="${esc(m)}">${esc(m)}</option>`).join('');
+
+  if (current && months.includes(current)) {
+    sel.value = current;
+  } else {
+    S.individualSummaryMonthFilter = '';
+    sel.value = '';
+  }
+}
+
+function getIndividualSummaryRows() {
+  const rows = S.timesheetRows || [];
+  const month = S.individualSummaryMonthFilter;
+  return month ? rows.filter(r => r.month === month) : rows;
+}
+function buildWorkTypePivot(rows, rowField) {
+  const rowOrder = [], table = {}, totals = {};
+  for (const r of rows) {
+    const rowLabel = rowField === 'month' ? r.month : r.worker;
+    const type = r.workType;
+    if (!rowLabel || !type) continue;
+    if (!rowOrder.includes(rowLabel)) rowOrder.push(rowLabel);
+    table[rowLabel] ||= {};
+    table[rowLabel][type] = (table[rowLabel][type] || 0) + r.qty;
+    totals[rowLabel] = (totals[rowLabel] || 0) + r.qty;
+  }
+  if (rowField === 'month') rowOrder.sort((a, b) => monthSortKey(a, rowOrder.indexOf(a)) - monthSortKey(b, rowOrder.indexOf(b)));
+  else rowOrder.sort((a, b) => a.localeCompare(b));
+
+  const typeOrder = orderedPresentWorkTypes(rows);
+  return { rowOrder, typeOrder, table, totals };
+}
+const stackedPercentLabelPlugin = { id: 'stackedPercentLabel', afterDatasetsDraw(chart) {
+  const { ctx } = chart;
+  chart.data.datasets.forEach((ds, datasetIndex) => {
+    const meta = chart.getDatasetMeta(datasetIndex);
+    meta.data.forEach((bar, index) => {
+      const val = Number(ds.data[index]) || 0;
+      if (val < 3) return;
+      const props = bar.getProps(['x', 'y', 'base'], true);
+      ctx.save(); ctx.fillStyle = val >= 15 ? '#111827' : '#374151'; ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val.toFixed(val >= 10 ? 0 : 1)}%`, props.x, (props.y + props.base) / 2); ctx.restore();
+    });
+  });
+}};
+function buildStackedPercentDatasets(pivot, mode = 'team') {
+  const isIndividual = mode === 'individual';
+  return pivot.typeOrder.map(type => ({
+    label: type,
+    workType: type,
+    backgroundColor: workTypeColor(type),
+    borderColor: workTypeColor(type),
+    borderWidth: 0,
+    borderRadius: 0,
+    barPercentage: isIndividual ? 0.34 : 0.38,
+    categoryPercentage: isIndividual ? 0.48 : 0.52,
+    data: pivot.rowOrder.map(rowLabel => {
+      const total = pivot.totals[rowLabel] || 0;
+      const val = pivot.table[rowLabel]?.[type] || 0;
+      return total ? +((val / total) * 100).toFixed(2) : 0;
+    }),
+    hoursData: pivot.rowOrder.map(rowLabel => +(pivot.table[rowLabel]?.[type] || 0).toFixed(2)),
+  }));
+}
+function setTimesheetEmptyState(kind, hasData) {
+  const empty = document.getElementById(`${kind}SummaryEmpty`); const wrap = document.getElementById(`${kind}SummaryChartWrap`);
+  if (empty) empty.classList.toggle('hidden', hasData); if (wrap) wrap.classList.toggle('hidden', !hasData);
+}
+function renderTeamSummaryChart() {
+  const canvas = document.getElementById('teamSummaryChart'); if (!canvas) return;
+  if (S.charts.teamSummary) S.charts.teamSummary.destroy();
+  const rows = S.timesheetRows || []; const info = document.getElementById('teamSummaryInfo');
+  if (!rows.length) { setTimesheetEmptyState('team', false); if (info) info.textContent = ''; return; }
+  setTimesheetEmptyState('team', true);
+  const pivot = buildWorkTypePivot(rows, 'month'), datasets = buildStackedPercentDatasets(pivot, 'team'), totalHours = rows.reduce((s, r) => s + r.qty, 0);
+  if (info) info.textContent = `${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs`;
+  S.charts.teamSummary = new Chart(canvas.getContext('2d'), { type: 'bar', plugins: [stackedPercentLabelPlugin], data: { labels: pivot.rowOrder, datasets }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, onClick: (event, elements) => { if (elements.length) openTimesheetSummaryModal('team', pivot.rowOrder[elements[0].index]); }, onHover: (event, elements) => { const target = event.native?.target; if (target) target.style.cursor = elements.length ? 'pointer' : 'default'; }, plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { callbacks: { title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`, label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)` } } }, scales: { x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#374151' } }, y: { stacked: true, beginAtZero: true, max: 100, ticks: { callback: v => `${v}%`, font: { size: 11 }, color: '#6B7280' }, grid: { color: '#F3F4F6' } } } } });
+}
+function renderIndividualSummaryChart() {
+  const canvas = document.getElementById('individualSummaryChart');
   if (!canvas) return;
 
-  if (S.charts.yearlyWork) {
-    S.charts.yearlyWork.destroy();
+  if (S.charts.individualSummary) {
+    S.charts.individualSummary.destroy();
   }
 
-  const ctx = canvas.getContext('2d');
-  const TOTAL_FY_WEEKS = 48;
+  populateIndividualMonthFilter();
 
-  // Only active employees, same convention used elsewhere in the dashboard
-  const employees = S.employees.filter(e => e.active !== 0);
+  const allRows = S.timesheetRows || [];
+  const rows = getIndividualSummaryRows();
+  const info = document.getElementById('individualSummaryInfo');
 
-  // Build employee-project weighted workload map
-  // Formula: sum(percentage / 100) / 48 * 100
-  const empProjectMap = {};
-
-  for (const e of employees) {
-    empProjectMap[e.id] = {};
+  if (!allRows.length) {
+    setTimesheetEmptyState('individual', false);
+    if (info) info.textContent = '';
+    return;
   }
 
-  for (const a of S.assignments) {
-    if (!empProjectMap[a.employee_id]) continue;
-
-    const project = S.projects.find(p => p.id === a.project_id);
-    if (!project) continue;
-
-    if (!empProjectMap[a.employee_id][a.project_id]) {
-      empProjectMap[a.employee_id][a.project_id] = {
-        project_id: a.project_id,
-        code: project.code || a.project_code || '',
-        name: project.name || a.project_name || '',
-        color: project.color || a.project_color || '#8B5CF6',
-        weightedWeeks: 0,
-      };
-    }
-
-    empProjectMap[a.employee_id][a.project_id].weightedWeeks +=
-      (Number(a.percentage) || 0) / 100;
+  if (!rows.length) {
+    setTimesheetEmptyState('individual', false);
+    if (info) info.textContent = 'No rows found for selected month.';
+    return;
   }
 
-  // Collect projects that are actually assigned in this FY
-  const assignedProjectIds = [
-    ...new Set(
-      S.assignments
-        .filter(a => employees.some(e => e.id === a.employee_id))
-        .map(a => a.project_id)
-    ),
-  ];
+  setTimesheetEmptyState('individual', true);
 
-  const assignedProjects = assignedProjectIds
-    .map(pid => S.projects.find(p => p.id === pid))
-    .filter(Boolean)
-    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || '')));
+  const pivot = buildWorkTypePivot(rows, 'worker');
+  const datasets = buildStackedPercentDatasets(pivot, 'individual');
+  const totalHours = rows.reduce((s, r) => s + r.qty, 0);
+  const monthText = S.individualSummaryMonthFilter ? ` · Month: ${S.individualSummaryMonthFilter}` : ' · All months';
 
-  const labels = employees.map(e => e.name);
+  if (info) {
+    info.textContent = `${pivot.rowOrder.length} employee${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs${monthText}`;
+  }
 
-  const datasets = assignedProjects.map(project => {
-    return {
-      label: `${project.code || ''} — ${project.name || ''}`,
-      projectCode: project.code || '',
-      projectName: project.name || '',
-      data: employees.map(e => {
-        const item = empProjectMap[e.id]?.[project.id];
-        if (!item) return 0;
-
-        return +((item.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2);
-      }),
-      backgroundColor: project.color || '#8B5CF6',
-      borderWidth: 0,
-      borderRadius: 2,
-      barPercentage: 0.75,
-      categoryPercentage: 0.78,
-    };
-  });
-
-  const totalUtilByEmployee = employees.map(e => {
-    const items = Object.values(empProjectMap[e.id] || {});
-    const weightedWeeks = items.reduce((sum, item) => sum + item.weightedWeeks, 0);
-    return +((weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1);
-  });
-
-  S.charts.yearlyWork = new Chart(ctx, {
+  S.charts.individualSummary = new Chart(canvas.getContext('2d'), {
     type: 'bar',
+    plugins: [stackedPercentLabelPlugin],
     data: {
-      labels,
+      labels: pivot.rowOrder,
       datasets,
     },
     options: {
       responsive: true,
       maintainAspectRatio: false,
-
-      // Click any employee bar/segment to open yearly project detail modal
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
       onClick: (event, elements) => {
-        if (!elements.length) return;
-
-        const dataIndex = elements[0].index;
-        const emp = employees[dataIndex];
-
-        if (emp) {
-          openYearlyWorkProjectModal(emp.id);
+        if (elements.length) {
+          openTimesheetSummaryModal('individual', pivot.rowOrder[elements[0].index]);
         }
       },
-
-      // Show pointer cursor on clickable bar segments
       onHover: (event, elements) => {
         const target = event.native?.target;
-        if (target) {
-          target.style.cursor = elements.length ? 'pointer' : 'default';
-        }
+        if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
       },
-
-      interaction: {
-        mode: 'nearest',
-        intersect: true,
-      },
-
       plugins: {
         legend: {
           display: true,
@@ -837,95 +769,46 @@ function renderYearlyWorkByProjectChart() {
             boxWidth: 10,
             boxHeight: 10,
             font: {
-              size: 10,
+              size: 11,
             },
-            padding: 8,
-            generateLabels: chart => {
-              const shortText = (txt, max = 32) => {
-                const s = String(txt || '').trim();
-                return s.length > max ? s.slice(0, max - 1) + '…' : s;
-              };
-
-              return chart.data.datasets.map((ds, i) => ({
-                text: shortText(ds.projectName || ds.label),
-                fillStyle: ds.backgroundColor,
-                strokeStyle: ds.backgroundColor,
-                lineWidth: 0,
-                hidden: !chart.isDatasetVisible(i),
-                datasetIndex: i,
-              }));
-            },
+            padding: 10,
           },
         },
-
         tooltip: {
-          bodyFont: {
-            size: 11,
-          },
-          titleFont: {
-            size: 12,
-            weight: '600',
-          },
-          padding: 10,
           callbacks: {
-            title: items => {
-              const idx = items[0].dataIndex;
-              const emp = employees[idx];
-              const total = totalUtilByEmployee[idx];
-
-              return `${emp.name} · Total ${total}%`;
-            },
-            label: ctx => {
-              const ds = ctx.dataset;
-              const val = ctx.parsed.y || 0;
-
-              if (!val) return '';
-
-              return [
-                ` ${ds.projectCode}: ${val}%`,
-                ` ${ds.projectName}`,
-              ];
-            },
+            title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`,
+            label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)`,
           },
         },
       },
-
       scales: {
         x: {
           stacked: true,
+          grid: {
+            display: false,
+          },
           ticks: {
             font: {
-              size: 11,
+              size: 10,
             },
             color: '#374151',
             maxRotation: 45,
             minRotation: 35,
           },
-          grid: {
-            display: false,
-          },
         },
-
         y: {
           stacked: true,
           beginAtZero: true,
+          max: 100,
           ticks: {
+            callback: v => `${v}%`,
             font: {
               size: 11,
             },
             color: '#6B7280',
-            callback: v => `${v}%`,
           },
           grid: {
             color: '#F3F4F6',
-          },
-          title: {
-            display: true,
-            text: 'FY workload contribution (%)',
-            font: {
-              size: 11,
-            },
-            color: '#9CA3AF',
           },
         },
       },
@@ -933,29 +816,65 @@ function renderYearlyWorkByProjectChart() {
   });
 }
 
+function openTimesheetSummaryModal(kind, label) {
+  const rows = (S.timesheetRows || []).filter(r => {
+    if (kind === 'team') return r.month === label;
+    if (S.individualSummaryMonthFilter && r.month !== S.individualSummaryMonthFilter) return false;
+    return r.worker === label;
+  });
+  const total = rows.reduce((s, r) => s + r.qty, 0), typeMap = {}, projectMap = {};
+  for (const r of rows) { typeMap[r.workType] = (typeMap[r.workType] || 0) + r.qty; const proj = r.projectName || '(No project name)'; projectMap[proj] ||= {}; projectMap[proj][r.workType] = (projectMap[proj][r.workType] || 0) + r.qty; }
+  const typeRows = Object.entries(typeMap).sort((a, b) => b[1] - a[1]).map(([type, hrs], i) => { const pct = total ? hrs / total * 100 : 0; return `<div class="timesheet-modal-row"><div class="flex items-center justify-between gap-3"><div class="flex items-center gap-2 min-w-0"><span class="w-3 h-3 rounded-sm flex-shrink-0" style="background:${workTypeColor(type, i)}"></span><span class="text-sm font-semibold text-gray-900 truncate">${esc(type)}</span></div><div class="text-right flex-shrink-0"><div class="text-sm font-bold text-gray-900">${pct.toFixed(1)}%</div><div class="text-xs text-gray-500">${hrs.toFixed(1)} hrs</div></div></div><div class="mt-2 h-2 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(pct, 100)}%;background:${workTypeColor(type, i)}"></div></div></div>`; }).join('');
+  const projectRows = Object.entries(projectMap).sort((a, b) => Object.values(b[1]).reduce((s, v) => s + v, 0) - Object.values(a[1]).reduce((s, v) => s + v, 0)).slice(0, 20).map(([project, typeObj]) => { const hrs = Object.values(typeObj).reduce((s, v) => s + v, 0); return `<div class="py-2 border-b border-gray-100 last:border-0"><div class="text-sm font-semibold text-gray-800">${esc(project)}</div><div class="text-xs text-gray-500 mt-0.5">${hrs.toFixed(1)} hrs · ${Object.keys(typeObj).map(esc).join(', ')}</div></div>`; }).join('');
+  const monthLabel = kind === 'individual' && S.individualSummaryMonthFilter ? ` · Month: ${S.individualSummaryMonthFilter}` : '';
+  openModal(mHdr(`${label} — ${kind === 'team' ? 'Team Summary' : 'Individual Summary'}`, `${S.timesheetFileName || 'Uploaded Time Sheet'}${monthLabel} · ${rows.length} entry${rows.length === 1 ? '' : 'ies'} · ${total.toFixed(1)} hrs`) + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh"><div class="grid grid-cols-2 gap-4"><div><div class="text-sm font-semibold text-gray-700 mb-2">Work Type Breakdown</div>${typeRows || '<p class="text-sm text-gray-400">No work-type data.</p>'}</div><div><div class="text-sm font-semibold text-gray-700 mb-2">Top Project Details</div><div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-2">${projectRows || '<p class="text-sm text-gray-400 py-3">No project details.</p>'}</div></div></div></div><div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl"><button onclick="closeModal()" class="btn-gray">Close</button></div>`, 'max-w-4xl');
+}
+function switchWorkSummaryTab(tab) { S.workSummaryTab = tab; document.querySelectorAll('.work-summary-tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.workSummaryTab === tab)); document.querySelectorAll('.work-summary-tab-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.endsWith('-' + tab))); if (tab === 'project') renderYearlyWorkByProjectChart(); if (tab === 'team') renderTeamSummaryChart(); if (tab === 'individual') renderIndividualSummaryChart(); }
+async function handleTimesheetUpload(file) {
+  if (!file) return;
+  if (typeof XLSX === 'undefined') { toast('Excel parser is not loaded. Check internet/CDN access for SheetJS.', 'error'); return; }
+  try {
+    const buf = await file.arrayBuffer(); const workbook = XLSX.read(buf, { type: 'array', cellDates: false });
+    const sheetName = workbook.SheetNames.find(n => n.trim().toLowerCase() === 'time sheet') || workbook.SheetNames[0];
+    const rows = normalizeTimesheetRows(XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], { defval: '', raw: false }));
+    if (!rows.length) { toast('No valid Time Sheet rows found. Required columns: Month, Work Type, Worker, Qty (Hrs).', 'error'); return; }
+    S.timesheetRows = rows; S.timesheetFileName = file.name; S.timesheetSheetName = sheetName; S.individualSummaryMonthFilter = '';
+    populateIndividualMonthFilter();
+    const status = document.getElementById('timesheetStatus'); if (status) { const totalHours = rows.reduce((sum, r) => sum + r.qty, 0); status.innerHTML = `<span class="font-semibold text-emerald-700">Loaded:</span> ${esc(file.name)} · Sheet: ${esc(sheetName)} · ${rows.length} rows · ${totalHours.toFixed(1)} hrs`; }
+    renderTeamSummaryChart(); renderIndividualSummaryChart(); if (S.workSummaryTab === 'project') switchWorkSummaryTab('team'); toast('Time Sheet summary generated');
+  } catch (e) { console.error(e); toast('Failed to read the Excel file', 'error'); }
+}
+function openYearlyWorkProjectModal(empId) {
+  const emp = S.employees.find(e => e.id === empId); if (!emp) return;
+  const TOTAL_FY_WEEKS = 48, empAssignments = S.assignments.filter(a => a.employee_id === empId), projectMap = {};
+  for (const a of empAssignments) { const project = S.projects.find(p => p.id === a.project_id); if (!project) continue; if (!projectMap[a.project_id]) projectMap[a.project_id] = { project_id: a.project_id, code: project.code || a.project_code || '', name: project.name || a.project_name || '', account_name: project.account_name || project.client || a.account_name || '—', product_name: project.product_name || a.product_name || '—', product_family: project.product_family || '—', stage: project.stage || '—', color: project.color || a.project_color || '#8B5CF6', weightedWeeks: 0, slotCount: 0, totalPct: 0 }; projectMap[a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100; projectMap[a.project_id].slotCount += 1; projectMap[a.project_id].totalPct += Number(a.percentage) || 0; }
+  const projects = Object.values(projectMap).map(p => ({ ...p, contribution: +((p.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1), avgPct: p.slotCount ? +(p.totalPct / p.slotCount).toFixed(1) : 0 })).sort((a, b) => b.contribution - a.contribution);
+  const totalContribution = projects.reduce((sum, p) => sum + p.contribution, 0);
+  const rows = projects.map((p, idx) => `<div class="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-3"><div class="flex items-start justify-between gap-4"><div class="min-w-0 flex-1"><div class="flex items-center gap-2 mb-1"><span class="w-3 h-3 rounded-sm flex-shrink-0" style="background:${p.color}"></span><span class="text-xs font-bold text-blue-600 mono">${esc(p.code)}</span><span class="text-xs text-gray-400">#${idx + 1}</span></div><div class="text-sm font-semibold text-gray-900 leading-snug">${esc(p.name)}</div><div class="text-xs text-gray-500 mt-1">${esc(p.account_name)}<span class="text-gray-300 mx-1">·</span>${esc(p.product_name)}</div><div class="flex flex-wrap gap-1.5 mt-2"><span class="px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span><span class="px-2 py-0.5 rounded text-xs font-semibold bg-gray-100 text-gray-700">${esc(p.stage)}</span></div></div><div class="text-right flex-shrink-0"><div class="text-lg font-bold text-gray-900">${p.contribution}%</div><div class="text-xs text-gray-400">FY contribution</div><div class="text-xs text-gray-500 mt-1">${p.slotCount} week slot${p.slotCount === 1 ? '' : 's'}</div><div class="text-xs text-gray-500">${p.avgPct}% avg workload</div></div></div><div class="mt-3 flex items-center gap-2"><div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${Math.min(p.contribution, 100)}%;background:${p.color}"></div></div><span class="text-xs font-semibold text-gray-600 w-12 text-right">${p.contribution}%</span></div></div>`).join('');
+  openModal(mHdr(`${emp.name} — Yearly Project Work`, `FY${S.fiscalYear + 1} · ${projects.length} assigned project${projects.length === 1 ? '' : 's'} · Total ${totalContribution.toFixed(1)}%`) + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">${rows || '<p class="text-sm text-gray-400 text-center py-8">No project assignments found.</p>'}</div><div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl"><button onclick="closeModal()" class="btn-gray">Close</button></div>`, 'max-w-3xl');
+}
+function renderYearlyWorkByProjectChart() {
+  const canvas = document.getElementById('yearlyWorkChart'); if (!canvas) return; if (S.charts.yearlyWork) S.charts.yearlyWork.destroy();
+  const ctx = canvas.getContext('2d'), TOTAL_FY_WEEKS = 48, employees = S.employees.filter(e => e.active !== 0), empProjectMap = {};
+  for (const e of employees) empProjectMap[e.id] = {};
+  for (const a of S.assignments) { if (!empProjectMap[a.employee_id]) continue; const project = S.projects.find(p => p.id === a.project_id); if (!project) continue; empProjectMap[a.employee_id][a.project_id] ||= { weightedWeeks: 0 }; empProjectMap[a.employee_id][a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100; }
+  const assignedProjectIds = [...new Set(S.assignments.filter(a => employees.some(e => e.id === a.employee_id)).map(a => a.project_id))];
+  const assignedProjects = assignedProjectIds.map(pid => S.projects.find(p => p.id === pid)).filter(Boolean).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+  const labels = employees.map(e => e.name);
+  const datasets = assignedProjects.map(project => ({ label: `${project.code || ''} — ${project.name || ''}`, projectCode: project.code || '', projectName: project.name || '', data: employees.map(e => { const item = empProjectMap[e.id]?.[project.id]; return item ? +((item.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2) : 0; }), backgroundColor: project.color || '#8B5CF6', borderWidth: 0, borderRadius: 2, barPercentage: 0.75, categoryPercentage: 0.78 }));
+  const totalUtilByEmployee = employees.map(e => { const weightedWeeks = Object.values(empProjectMap[e.id] || {}).reduce((sum, item) => sum + item.weightedWeeks, 0); return +((weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1); });
+  S.charts.yearlyWork = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, onClick: (event, elements) => { if (!elements.length) return; const emp = employees[elements[0].index]; if (emp) openYearlyWorkProjectModal(emp.id); }, onHover: (event, elements) => { const target = event.native?.target; if (target) target.style.cursor = elements.length ? 'pointer' : 'default'; }, interaction: { mode: 'nearest', intersect: true }, plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, boxHeight: 10, font: { size: 10 }, padding: 8, generateLabels: chart => { const shortText = (txt, max = 32) => { const t = String(txt || '').trim(); return t.length > max ? t.slice(0, max - 1) + '…' : t; }; return chart.data.datasets.map((ds, i) => ({ text: shortText(ds.projectName || ds.label), fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, lineWidth: 0, hidden: !chart.isDatasetVisible(i), datasetIndex: i })); } } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 12, weight: '600' }, padding: 10, callbacks: { title: items => `${employees[items[0].dataIndex].name} · Total ${totalUtilByEmployee[items[0].dataIndex]}%`, label: c => { const val = c.parsed.y || 0; if (!val) return ''; return [` ${c.dataset.projectCode}: ${val}%`, ` ${c.dataset.projectName}`]; } } } }, scales: { x: { stacked: true, ticks: { font: { size: 11 }, color: '#374151', maxRotation: 45, minRotation: 35 }, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { font: { size: 11 }, color: '#6B7280', callback: v => `${v}%` }, grid: { color: '#F3F4F6' }, title: { display: true, text: 'FY workload contribution (%)', font: { size: 11 }, color: '#9CA3AF' } } } } });
+}
+
+
 function insightRow(e) {
   const u = e.utilization;
   const displayU = Math.round(Number(u) || 0);
-
-  const clr = uc(u);
-  const badge = ub(u);
-  const label = us(u);
-
+  const clr = uc(u), badge = ub(u), label = us(u);
   return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" onclick="openEmployeeDetailModal(${e.id})">
-    <div class="relative flex-shrink-0">
-      <div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div>
-      <div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${u === 0 ? 'bg-emerald-400' : u >= 80 ? 'bg-red-400' : 'bg-amber-400'}"></div>
-    </div>
-
-    <div class="flex-1 min-w-0">
-      <div class="text-sm font-semibold text-gray-900 truncate">${esc(e.name)}</div>
-      <div class="text-xs text-gray-500">${esc(e.dept || '—')}</div>
-    </div>
-
-    <div class="flex items-center gap-2 flex-shrink-0">
-      <span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${label}</span>
-      <span class="text-sm font-bold ${clr}">${displayU}%</span>
-    </div>
+    <div class="relative flex-shrink-0"><div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${u === 0 ? 'bg-emerald-400' : u >= 80 ? 'bg-red-400' : 'bg-amber-400'}"></div></div>
+    <div class="flex-1 min-w-0"><div class="text-sm font-semibold text-gray-900 truncate">${esc(e.name)}</div><div class="text-xs text-gray-500">${esc(e.dept || '—')}</div></div>
+    <div class="flex items-center gap-2 flex-shrink-0"><span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${label}</span><span class="text-sm font-bold ${clr}">${displayU}%</span></div>
   </div>`;
 }
 
@@ -1555,20 +1474,7 @@ function switchChartTab(tab) {
 function runningProjectRowHtml(d) {
   const barColor = '#10B981';
   const amount = fmtUsd(d.product_amount || 0);
-
-  // Delivery / PS work date logic
   const closingDate = d.closing_date || d.project_closing_date || d.end_date;
-
-  // Show real Project Close Date if available, otherwise show —
-  const projectCloseDateHtml = `
-    <div class="text-xs text-gray-500 text-right mt-0.5">
-      Project Close Date:
-      <span class="font-medium text-gray-700">
-        ${d.project_closing_date ? esc(d.project_closing_date) : '—'}
-      </span>
-    </div>
-  `;
-
   const today = new Date();
   const daysVal = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
   const isPast = daysVal !== null && daysVal < 0;
@@ -1586,46 +1492,25 @@ function runningProjectRowHtml(d) {
         <span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(d.code)}</span>
         <span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span>
       </div>
-
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(d.name)}</div>
-
-      ${(d.account_name || d.client) ? `<div class="text-xs text-gray-600 mb-1">
-        <span class="font-medium">${esc(d.account_name || d.client || '—')}</span>
-        ${d.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(d.product_name)}</span>` : ''}
-      </div>` : ''}
-
-      ${(d.product_family || d.product_name) ? `<div class="mb-1 flex items-center gap-1.5 flex-wrap">
-        ${d.product_family ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(d.product_family)}</span>` : ''}
-        ${d.product_name ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100">${esc(d.product_name)}</span>` : ''}
-      </div>` : ''}
-
-      <div class="flex items-start justify-between mb-1">
+      ${(d.account_name || d.client) ? `<div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(d.account_name || d.client || '—')}</span>${d.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(d.product_name)}</span>` : ''}</div>` : ''}
+      ${(d.product_family || d.product_name) ? `<div class="mb-1 flex items-center gap-1.5 flex-wrap">${d.product_family ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(d.product_family)}</span>` : ''}${d.product_name ? `<span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-purple-50 text-purple-700 border border-purple-100">${esc(d.product_name)}</span>` : ''}</div>` : ''}
+      <div class="flex items-center justify-between mb-1">
         <div class="flex items-center gap-1.5 min-w-0 flex-wrap">
           <span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 bg-green-100 text-green-700">Closed Won</span>
           ${dealStatusBadge(d.deal_status)}
           ${d.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(d.opportunity_owner)}</span>` : ''}
         </div>
-
-        <div class="text-right flex-shrink-0 ml-3">
-          ${d.end_date ? `<div class="text-xs text-gray-500">Close: <span class="font-medium text-gray-700">${esc(d.end_date)}</span></div>` : ''}
-          ${projectCloseDateHtml}
-        </div>
+        ${d.end_date ? `<span class="text-xs text-gray-500 flex-shrink-0">Close: <span class="font-medium text-gray-700">${esc(d.end_date)}</span></span>` : ''}
       </div>
-
       ${closingDate ? `<div class="flex items-center gap-1.5 text-xs mb-2">
-        <svg class="w-3 h-3 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="4" width="18" height="18" rx="2"/>
-          <path d="M16 2v4M8 2v4M3 10h18"/>
-        </svg>
+        <svg class="w-3 h-3 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
         <span class="text-gray-500">${esc(closingDate)}</span>
         <span class="font-semibold ${daysColor}">${daysLabel}</span>
         <span class="ml-auto font-semibold ${statC}">${status}</span>
       </div>` : '<div class="mb-2"></div>'}
-
       <div class="flex items-center gap-2">
-        <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-          <div class="h-full rounded-full" style="width:${d.progress || 0}%;background:${barColor}"></div>
-        </div>
+        <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${d.progress || 0}%;background:${barColor}"></div></div>
         <span class="text-xs font-medium text-gray-600 w-8 text-right">${d.progress || 0}%</span>
       </div>
     </div>
@@ -1643,47 +1528,27 @@ function renderRunningProjects(data) { S.lastRunningData = data; applyAndRenderR
 
 /* ================================================================ SERVICE PIPELINE */
 function servicePipelineRowHtml(p) {
-  const barColor = STAGE_COLOR[p.stage] || '#6B7280';
-  const pillCls = STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700';
+  const barColor = STAGE_COLOR[p.stage] || '#6B7280', pillCls = STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700';
   const amount = fmtUsd(p.product_amount ?? 0);
-
+  let projCloseDateHtml = '<div class="text-xs text-gray-400 mt-0.5">Project Close Date: —</div>';
+  if (p.project_closing_date) {
+    const today = new Date(), dv = Math.round((new Date(p.project_closing_date) - today) / 864e5);
+    const isPast = dv < 0, lbl = dv === 0 ? 'Today' : isPast ? `${Math.abs(dv)} days ago` : `${dv} days left`;
+    const lc = isPast ? 'text-green-600' : 'text-red-500';
+    projCloseDateHtml = `<div class="text-xs text-gray-500 mt-0.5">Project Close Date: <span class="font-medium text-gray-700">${esc(p.project_closing_date)}</span> <span class="font-semibold ${lc}">${lbl}</span></div>`;
+  }
   return `<div class="px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer relative" data-action="edit-project" data-project="${p.id}">
     <div class="absolute left-0 top-0 bottom-0 w-1 rounded-r" style="background:${barColor}"></div>
     <div class="ml-2">
-      <div class="flex items-center justify-between gap-2 mb-1">
-        <span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(p.code)}</span>
-        <span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span>
-      </div>
-
+      <div class="flex items-center justify-between gap-2 mb-1"><span class="text-xs font-bold text-blue-600 mono tracking-wide">${esc(p.code)}</span><span class="text-sm font-bold text-gray-800 mono flex-shrink-0">${amount}</span></div>
       <div class="text-sm font-semibold text-gray-900 mb-1 leading-snug">${esc(p.name)}</div>
-
-      <div class="text-xs text-gray-600 mb-1">
-        <span class="font-medium">${esc(p.account_name || p.client || '—')}</span>
-        ${p.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(p.product_name)}</span>` : ''}
-      </div>
-
-      ${p.product_family ? `<div class="mb-1">
-        <span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span>
-      </div>` : ''}
-
+      <div class="text-xs text-gray-600 mb-1"><span class="font-medium">${esc(p.account_name || p.client || '—')}</span>${p.product_name ? `<span class="text-gray-400 mx-1">·</span><span class="text-gray-500">${esc(p.product_name)}</span>` : ''}</div>
+      ${p.product_family ? `<div class="mb-1"><span class="inline-block px-2 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span></div>` : ''}
       <div class="flex items-start justify-between mb-2">
-        <div class="flex items-center gap-1.5 min-w-0 pt-0.5 flex-wrap">
-          <span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>
-          ${dealStatusBadge(p.deal_status)}
-          ${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}
-        </div>
-
-        <div class="text-right flex-shrink-0 ml-3">
-          ${p.end_date ? `<div class="text-xs text-gray-500">Close Date: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></div>` : ''}
-        </div>
+        <div class="flex items-center gap-1.5 min-w-0 pt-0.5 flex-wrap"><span class="px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${pillCls}">${esc(p.stage)}</span>${dealStatusBadge(p.deal_status)}${p.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(p.opportunity_owner)}</span>` : ''}</div>
+        <div class="text-right flex-shrink-0 ml-3">${p.end_date ? `<div class="text-xs text-gray-500">Close Date: <span class="font-medium text-gray-700">${esc(p.end_date)}</span></div>` : ''}${projCloseDateHtml}</div>
       </div>
-
-      <div class="flex items-center gap-2">
-        <div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden">
-          <div class="h-full rounded-full" style="width:${p.progress || 0}%;background:${barColor}"></div>
-        </div>
-        <span class="text-xs font-medium text-gray-600 w-8 text-right">${p.progress || 0}%</span>
-      </div>
+      <div class="flex items-center gap-2"><div class="flex-1 h-1.5 bg-gray-200 rounded-full overflow-hidden"><div class="h-full rounded-full" style="width:${p.progress || 0}%;background:${barColor}"></div></div><span class="text-xs font-medium text-gray-600 w-8 text-right">${p.progress || 0}%</span></div>
     </div>
   </div>`;
 }
@@ -1699,52 +1564,14 @@ function renderServicePipeline(projects) { applyAndRenderPipeline(); }
 /* ── Populate Product Family / Product Type dropdowns ───────────────────────── */
 function populateProductFamilyDropdowns() {
   const runFamilies = [...new Set((S.lastRunningData || []).map(d => d.product_family).filter(Boolean))].sort();
-
-  const pipeFamilies = [...new Set(
-    (S.projects || [])
-      .filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost')
-      .map(p => p.product_family)
-      .filter(Boolean)
-  )].sort();
-
-  // Product types normalized so duplicate case variants appear once
+  const pipeFamilies = [...new Set((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost').map(p => p.product_family).filter(Boolean))].sort();
   const runProductTypes = uniqueNormalizedProductTypes(S.lastRunningData || []);
-
-  const pipeProductTypes = uniqueNormalizedProductTypes(
-    (S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost')
-  );
-
-  const fillSelect = (id, opts, allLabel) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-
-    const cur = normalizeProductTypeName(el.value);
-
-    el.innerHTML =
-      `<option value="">${allLabel}</option>` +
-      opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
-
-    el.value = opts.includes(cur) ? cur : '';
-  };
-
-  const fillPlainSelect = (id, opts, allLabel) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-
-    const cur = el.value;
-
-    el.innerHTML =
-      `<option value="">${allLabel}</option>` +
-      opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join('');
-
-    el.value = opts.includes(cur) ? cur : '';
-  };
-
-  fillPlainSelect('runProdFamilyFilt', runFamilies, 'All Families');
-  fillPlainSelect('pipeProdFamilyFilt', pipeFamilies, 'All Families');
-
-  fillSelect('runProductTypeFilt', runProductTypes, 'All Product Name');
-  fillSelect('pipeProductTypeFilt', pipeProductTypes, 'All Product Name');
+  const pipeProductTypes = uniqueNormalizedProductTypes((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost'));
+  const fillSelect = (id, opts, allLabel, normalize = false) => { const el = document.getElementById(id); if (!el) return; const cur = normalize ? normalizeProductTypeName(el.value) : el.value; el.innerHTML = `<option value="">${allLabel}</option>` + opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join(''); el.value = opts.includes(cur) ? cur : ''; };
+  fillSelect('runProdFamilyFilt', runFamilies, 'All Families');
+  fillSelect('pipeProdFamilyFilt', pipeFamilies, 'All Families');
+  fillSelect('runProductTypeFilt', runProductTypes, 'All Product Name', true);
+  fillSelect('pipeProductTypeFilt', pipeProductTypes, 'All Product Name', true);
 }
 
 /* ================================================================ MODALS */
@@ -2042,53 +1869,18 @@ function updateSlotPreview() { const s = document.getElementById('fa_start'), e 
 
 async function saveAssignment(id) {
   const projId = document.getElementById('fa_proj')?.value;
-
-  if (!projId) {
-    toast('Please select a project', 'error');
-    return;
-  }
-
-  const slots = expandDateRange(
-    document.getElementById('fa_start').value,
-    document.getElementById('fa_end').value
-  );
-
-  if (!slots.length) {
-    toast('Invalid date range', 'error');
-    return;
-  }
-
-  const payload = {
-    employee_id: +document.getElementById('fa_emp').value,
-    project_id: +projId,
-    percentage: +document.getElementById('fa_pct').value,
-    slots,
-  };
-
+  if (!projId) { toast('Please select a project', 'error'); return; }
+  const slots = expandDateRange(document.getElementById('fa_start').value, document.getElementById('fa_end').value);
+  if (!slots.length) { toast('Invalid date range', 'error'); return; }
+  const payload = { employee_id: +document.getElementById('fa_emp').value, project_id: +projId, percentage: +document.getElementById('fa_pct').value, slots };
   try {
     if (id) {
       const r = await api('POST', `/api/assignments/${id}/reschedule`, payload);
-
-      closeModal();
-
-      toast(
-        `Assignment updated across ${r.created} week slot${r.created === 1 ? '' : 's'}`
-      );
-
-      await loadAll();
-      return;
+      closeModal(); toast(`Assignment updated across ${r.created} week slot${r.created === 1 ? '' : 's'}`); await loadAll(); return;
     }
-
     const r = await api('POST', '/api/assignments/bulk', payload);
-
-    closeModal();
-
-    toast(`Created ${r.created} assignment${r.created === 1 ? '' : 's'}`);
-
-    await loadAll();
-  } catch (e) {
-    toast(e.message, 'error');
-  }
+    closeModal(); toast(`Created ${r.created} assignment${r.created === 1 ? '' : 's'}`); await loadAll();
+  } catch (e) { toast(e.message, 'error'); }
 }
 
 async function deleteAssignment(id) { if (!confirm('Delete this assignment?')) return; try { await api('DELETE', `/api/assignments/${id}`); closeModal(); toast('Assignment deleted'); await loadAll(); } catch (e) { toast(e.message, 'error'); } }
@@ -2300,6 +2092,23 @@ function initEvents() {
       }
     })
   );
+
+
+
+  /* Work Summary tabs + Time Sheet Excel upload */
+  document.querySelectorAll('.work-summary-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchWorkSummaryTab(btn.dataset.workSummaryTab));
+  });
+  document.getElementById('individualSummaryMonthFilter')?.addEventListener('change', e => {
+    S.individualSummaryMonthFilter = e.target.value || '';
+    renderIndividualSummaryChart();
+  });
+
+  document.getElementById('timesheetUpload')?.addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    handleTimesheetUpload(file);
+    e.target.value = '';
+  });
 
   initColResize(); initSectionDrag();
 }

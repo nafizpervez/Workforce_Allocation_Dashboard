@@ -782,137 +782,122 @@ td.cell:hover .cell-add {
   display: none;
 }
 
-/* ==============================================================
-   Compact filters for Running Projects / Service Pipeline
-   ============================================================== */
 
-/* Shared compact filter control style */
-.running-filter-bar .flt-select,
-.running-filter-bar select,
-.running-filter-bar input,
-.pipeline-filter-bar .flt-select,
-.pipeline-filter-bar select,
-.pipeline-filter-bar input {
-  height: 26px;
-  min-width: 0;
-  box-sizing: border-box;
-  font-size: 10.5px;
-  padding-top: 3px;
-  padding-bottom: 3px;
-}
-
-/* Keep buttons same height as compact filters */
-.running-filter-bar .flt-sort-btn,
-.pipeline-filter-bar .flt-sort-btn {
-  height: 26px;
-  padding: 3px 8px;
-  font-size: 10.5px;
+/* ================================================================
+   Yearly Work / Time Sheet Summary tabs
+   ================================================================ */
+.work-summary-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
   white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
-/* Running Projects: force one filter row */
-.running-filter-bar {
-  flex-wrap: nowrap;
-  gap: 4px;
-  padding: 7px 12px;
-  overflow-x: auto;
-  overflow-y: hidden;
+.work-summary-tab-btn:hover {
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+  background: #eef2ff;
+}
+
+.work-summary-tab-btn.active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.timesheet-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
   white-space: nowrap;
+  transition: all 0.15s ease;
 }
 
-/* Running Projects fixed compact widths */
-.running-filter-bar #runSearch {
-  width: 135px !important;
+.timesheet-upload-btn:hover {
+  background: #d1fae5;
+  border-color: #34d399;
 }
 
-.running-filter-bar #runAmountFilt {
-  width: 102px;
+.work-summary-tab-content.hidden {
+  display: none;
 }
 
-.running-filter-bar #runCloseFilt {
-  width: 96px;
-}
-
-.running-filter-bar #runProjCloseFilt {
-  width: 112px;
-}
-
-.running-filter-bar #runProdFamilyFilt {
-  width: 122px;
-}
-
-.running-filter-bar #runProductTypeFilt {
-  width: 165px;
-}
-
-.running-filter-bar #runSortAssignedBtn {
-  width: 96px;
-  flex-shrink: 0;
-}
-
-/* Service Pipeline: compact, maximum two rows */
-.pipeline-filter-bar {
-  flex-wrap: wrap;
-  gap: 5px;
-  padding: 8px 12px;
-  align-content: flex-start;
-}
-
-/* Service Pipeline compact widths */
-.pipeline-filter-bar #pipeSearch {
-  width: 155px !important;
-}
-
-.pipeline-filter-bar #pipeStageFilt {
-  width: 128px;
-}
-
-.pipeline-filter-bar #pipeDealStatusFilt {
-  width: 112px;
-}
-
-.pipeline-filter-bar #pipeAmountFilt {
-  width: 102px;
-}
-
-.pipeline-filter-bar #pipeCloseFilt {
-  width: 112px;
-}
-
-.pipeline-filter-bar #pipeProjCloseFilt {
-  width: 115px;
-}
-
-.pipeline-filter-bar #pipeProdFamilyFilt {
-  width: 130px;
-}
-
-.pipeline-filter-bar #pipeProductTypeFilt {
-  width: 190px;
-}
-
-.pipeline-filter-bar #pipeSortAssignedBtn {
-  width: 96px;
-  flex-shrink: 0;
-}
-
-/* Prevent long selected values from visually expanding controls */
-.running-filter-bar select,
-.pipeline-filter-bar select {
-  text-overflow: ellipsis;
-}
-
-/* ============================================================== */
-/*  Yearly Work by Project stacked chart                          */
-/* ============================================================== */
-
-.yearly-work-chart-wrap {
-  height: 420px;
+.yearly-work-chart-wrap,
+.timesheet-chart-wrap {
+  height: 430px;
   min-width: 100%;
   overflow-x: auto;
   overflow-y: hidden;
 }
 
-.yearly-work-chart-wrap canvas {
-  min-width: 1200px;
+.yearly-work-chart-wrap canvas,
+.timesheet-chart-wrap canvas {
+  min-width: 1180px;
 }
+
+.timesheet-chart-wrap-wide canvas {
+  min-width: 1400px;
+}
+
+.timesheet-empty-state {
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 44px 18px;
+  text-align: center;
+}
+
+.timesheet-modal-row {
+  border: 1px solid #eef2f7;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.timesheet-filter-label {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.timesheet-filter-select {
+  height: 30px;
+  min-width: 132px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 28px 0 10px;
+}
+
+.timesheet-filter-select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
+}
+

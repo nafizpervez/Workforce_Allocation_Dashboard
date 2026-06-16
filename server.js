@@ -381,63 +381,36 @@ app.put('/api/assignments/:id', (req, res) => {
   res.json(row);
 });
 
+
 app.post('/api/assignments/:id/reschedule', (req, res) => {
   const id = Number(req.params.id);
-
   const old = db.prepare('SELECT id FROM assignments WHERE id=?').get(id);
   if (!old) return res.status(404).json({ error: 'not found' });
 
   const { employee_id, project_id, percentage, slots } = req.body || {};
-
   if (!employee_id || !project_id || !Array.isArray(slots) || !slots.length) {
     return res.status(400).json({ error: 'missing fields' });
   }
 
   const validSlots = slots
-    .map(s => ({
-      year: safeNum(s.year, 0),
-      month: safeNum(s.month, 0),
-      week: safeNum(s.week, 0),
-    }))
-    .filter(s =>
-      s.year &&
-      s.month >= 1 &&
-      s.month <= 12 &&
-      s.week >= 1 &&
-      s.week <= 4
-    );
+    .map(s => ({ year: safeNum(s.year, 0), month: safeNum(s.month, 0), week: safeNum(s.week, 0) }))
+    .filter(s => s.year && s.month >= 1 && s.month <= 12 && s.week >= 1 && s.week <= 4);
 
-  if (!validSlots.length) {
-    return res.status(400).json({ error: 'invalid date range' });
-  }
+  if (!validSlots.length) return res.status(400).json({ error: 'invalid date range' });
 
   const pct = safeNum(percentage, 0);
-
   const txn = db.transaction(() => {
     db.prepare('DELETE FROM assignments WHERE id=?').run(id);
-
-    const ins = db.prepare(`
-      INSERT INTO assignments(employee_id, project_id, year, month, week, percentage)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `);
-
+    const ins = db.prepare('INSERT INTO assignments(employee_id,project_id,year,month,week,percentage) VALUES(?,?,?,?,?,?)');
     let created = 0;
-
     for (const s of validSlots) {
       ins.run(employee_id, project_id, s.year, s.month, s.week, pct);
       created++;
     }
-
     return created;
   });
 
-  const created = txn();
-
-  res.json({
-    ok: true,
-    deleted: id,
-    created,
-  });
+  res.json({ ok: true, deleted: id, created: txn() });
 });
 
 app.delete('/api/assignments/:id', (req, res) => {
@@ -581,29 +554,18 @@ app.get('/api/dashboard/deadlines', (_, res) => {
      END ASC
   `).all(runningProjectCutoff);
 
-  const allProjects = db.prepare(`
-    SELECT id, code, name, account_name, client, end_date, stage, product_name
-    FROM projects
-  `).all();
-
+  const allProjects = db.prepare('SELECT id, code, name, account_name, client, end_date, stage, product_name FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);
 
   const enriched = rows.map(r => {
     const closingDate = r.project_closing_date || r.end_date;
     const days = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
     const status = days === null ? '—' : days < 0 ? 'Overdue' : days < 14 ? 'Due Soon' : 'On Track';
-
-    return {
-      ...r,
-      closing_date: closingDate,
-      days,
-      status,
-      deal_status: statusMap[r.id] || 'NEW LOGO'
-    };
+    return { ...r, closing_date: closingDate, days, status, deal_status: statusMap[r.id] || 'NEW LOGO' };
   });
-
   res.json(enriched);
 });
+
 
 /* ─── New Logo bar chart data ─────────────────────────────────── */
 app.get('/api/dashboard/new-logo-chart', (_, res) => {
