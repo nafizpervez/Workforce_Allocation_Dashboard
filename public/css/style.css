@@ -901,3 +901,39 @@ td.cell:hover .cell-add {
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
 }
 
+
+/* ================================================================
+   Resource Assignment Matrix / Yearly Work by Project tabs
+   ================================================================ */
+.resource-matrix-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.resource-matrix-tab-btn:hover {
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+  background: #eef2ff;
+}
+
+.resource-matrix-tab-btn.active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.resource-matrix-tab-content.hidden {
+  display: none;
+}

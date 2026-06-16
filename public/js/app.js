@@ -33,7 +33,8 @@ const S = {
   timesheetFileName: '',
   timesheetSheetName: '',
   individualSummaryMonthFilter: '',
-  workSummaryTab: 'project',
+  workSummaryTab: 'team',
+  resourceMatrixTab: 'matrix',
 };
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -388,7 +389,6 @@ async function loadAll() {
     renderTrends(trends);
     renderWorkload(wl);
     renderAllocation(wl);
-    renderYearlyWorkByProjectChart();
     renderNewLogoChart(nlChart);
     // Sync initial category button states
     document.querySelectorAll('.nl-prod-btn').forEach(b => {
@@ -923,7 +923,41 @@ function openTimesheetSummaryModal(kind, label) {
   const monthLabel = kind === 'individual' && S.individualSummaryMonthFilter ? ` · Month: ${S.individualSummaryMonthFilter}` : '';
   openModal(mHdr(`${label} — ${kind === 'team' ? 'Team Summary' : 'Individual Summary'}`, `${S.timesheetFileName || 'Uploaded Time Sheet'}${monthLabel} · ${rows.length} entry${rows.length === 1 ? '' : 'ies'} · ${total.toFixed(1)} hrs`) + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh"><div class="grid grid-cols-2 gap-4"><div><div class="text-sm font-semibold text-gray-700 mb-2">Work Type Breakdown</div>${typeRows || '<p class="text-sm text-gray-400">No work-type data.</p>'}</div><div><div class="text-sm font-semibold text-gray-700 mb-2">Top Project Details</div><div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-2">${projectRows || '<p class="text-sm text-gray-400 py-3">No project details.</p>'}</div></div></div></div><div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl"><button onclick="closeModal()" class="btn-gray">Close</button></div>`, 'max-w-4xl');
 }
-function switchWorkSummaryTab(tab) { S.workSummaryTab = tab; document.querySelectorAll('.work-summary-tab-btn').forEach(btn => btn.classList.toggle('active', btn.dataset.workSummaryTab === tab)); document.querySelectorAll('.work-summary-tab-content').forEach(panel => panel.classList.toggle('hidden', !panel.id.endsWith('-' + tab))); if (tab === 'project') renderYearlyWorkByProjectChart(); if (tab === 'team') renderTeamSummaryChart(); if (tab === 'individual') renderIndividualSummaryChart(); }
+function switchResourceMatrixTab(tab) {
+  S.resourceMatrixTab = tab;
+
+  document.querySelectorAll('.resource-matrix-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.resourceMatrixTab === tab);
+  });
+
+  document.querySelectorAll('.resource-matrix-tab-content').forEach(panel => {
+    panel.classList.toggle('hidden', !panel.id.endsWith('-' + tab));
+  });
+
+  if (tab === 'matrix') {
+    renderMatrix();
+  }
+
+  if (tab === 'project') {
+    setTimeout(() => renderYearlyWorkByProjectChart(), 0);
+  }
+}
+
+function switchWorkSummaryTab(tab) {
+  const safeTab = tab === 'individual' ? 'individual' : 'team';
+  S.workSummaryTab = safeTab;
+
+  document.querySelectorAll('.work-summary-tab-btn').forEach(btn => {
+    btn.classList.toggle('active', btn.dataset.workSummaryTab === safeTab);
+  });
+
+  document.querySelectorAll('.work-summary-tab-content').forEach(panel => {
+    panel.classList.toggle('hidden', !panel.id.endsWith('-' + safeTab));
+  });
+
+  if (safeTab === 'team') renderTeamSummaryChart();
+  if (safeTab === 'individual') renderIndividualSummaryChart();
+}
 async function handleTimesheetUpload(file) {
   if (!file) return;
 
@@ -970,11 +1004,7 @@ async function handleTimesheetUpload(file) {
 
     await loadSavedTimesheetFromDb();
 
-    if (S.workSummaryTab === 'project') {
-      switchWorkSummaryTab('team');
-    } else {
-      switchWorkSummaryTab(S.workSummaryTab);
-    }
+    switchWorkSummaryTab(S.workSummaryTab || 'team');
 
     toast(
       `Saved ${saved.saved_rows} Time Sheet rows for ${saved.month_count} month${saved.month_count === 1 ? '' : 's'}`
@@ -2234,6 +2264,11 @@ function initEvents() {
   );
 
 
+
+  /* Resource Assignment Matrix / Yearly Work by Project tabs */
+  document.querySelectorAll('.resource-matrix-tab-btn').forEach(btn => {
+    btn.addEventListener('click', () => switchResourceMatrixTab(btn.dataset.resourceMatrixTab));
+  });
 
   /* Work Summary tabs + Time Sheet Excel upload */
   document.querySelectorAll('.work-summary-tab-btn').forEach(btn => {
