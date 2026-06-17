@@ -2383,6 +2383,121 @@ async function toggleEmployeeActive(empId) {
   } catch (e) { toast('Failed to update status', 'error'); }
 }
 
+
+function projectExportDateStamp() {
+  const d = new Date();
+  const pad = n => String(n).padStart(2, '0');
+  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
+}
+
+function buildProjectExportRows() {
+  const fy = S.fiscalYear;
+
+  return [...(S.projects || [])]
+    .sort((a, b) => {
+      const codeA = String(a.code || '');
+      const codeB = String(b.code || '');
+      return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
+    })
+    .map((p, index) => {
+      const allAssignments = S.assignments.filter(a => a.project_id === p.id);
+      const fyAssignments = allAssignments.filter(a =>
+        (a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3)
+      );
+      const assignedResources = new Set(allAssignments.map(a => a.employee_id));
+      const fyAssignedResources = new Set(fyAssignments.map(a => a.employee_id));
+      const assignedResourceNames = [...fyAssignedResources]
+        .map(empId => S.employees.find(e => e.id === empId)?.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b))
+        .join(', ');
+
+      return {
+        'SL': index + 1,
+        'Database Project ID': p.id ?? '',
+        'Opportunity Number': p.code ?? '',
+        'Project Name': p.name ?? '',
+        'Account Name': p.account_name ?? '',
+        'Client': p.client ?? '',
+        'Product Name': p.product_name ?? '',
+        'Product Family': p.product_family ?? '',
+        'Opportunity Owner': p.opportunity_owner ?? '',
+        'Stage': p.stage ?? '',
+        'Deal Status': p.deal_status ?? '',
+        'Priority': p.priority ?? '',
+        'Probability (%)': Number(p.probability) || 0,
+        'Product Amount': Number(p.product_amount) || 0,
+        'Opportunity Amount': Number(p.opp_amount) || 0,
+        'Budget': Number(p.budget) || 0,
+        'Spent (%)': Number(p.spent_pct) || 0,
+        'Progress (%)': Number(p.progress) || 0,
+        'Created Date': p.created_date ?? '',
+        'Close / Closed Won Date': p.end_date ?? '',
+        'Project Closing Date': p.project_closing_date ?? '',
+        'Color': p.color ?? '',
+        'Total Assignment Slots': allAssignments.length,
+        [`FY${fy + 1} Assignment Slots`]: fyAssignments.length,
+        'Total Assigned Resource Count': assignedResources.size,
+        [`FY${fy + 1} Assigned Resource Count`]: fyAssignedResources.size,
+        [`FY${fy + 1} Assigned Resource Names`]: assignedResourceNames,
+        'Created At': p.created_at ?? '',
+      };
+    });
+}
+
+function autoSizeWorksheetColumns(ws, rows) {
+  const headers = rows.length ? Object.keys(rows[0]) : [];
+  ws['!cols'] = headers.map(h => {
+    const maxLen = Math.max(
+      String(h).length,
+      ...rows.map(r => String(r[h] ?? '').length)
+    );
+    return { wch: Math.min(Math.max(maxLen + 2, 10), 55) };
+  });
+}
+
+function downloadAllProjectsExcel() {
+  if (typeof XLSX === 'undefined') {
+    toast('Excel export library is not loaded. Check SheetJS CDN.', 'error');
+    return;
+  }
+
+  const exportRows = buildProjectExportRows();
+
+  if (!exportRows.length) {
+    toast('No projects available to export', 'error');
+    return;
+  }
+
+  const rawRows = [...(S.projects || [])]
+    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' }));
+
+  const summaryRows = [
+    { Metric: 'Exported Projects', Value: exportRows.length },
+    { Metric: 'Fiscal Year', Value: `FY${S.fiscalYear + 1}` },
+    { Metric: 'Exported At', Value: new Date().toLocaleString() },
+  ];
+
+  const wb = XLSX.utils.book_new();
+
+  const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+  autoSizeWorksheetColumns(wsSummary, summaryRows);
+  XLSX.utils.book_append_sheet(wb, wsSummary, 'Export Summary');
+
+  const wsCompare = XLSX.utils.json_to_sheet(exportRows);
+  autoSizeWorksheetColumns(wsCompare, exportRows);
+  wsCompare['!freeze'] = { xSplit: 0, ySplit: 1 };
+  XLSX.utils.book_append_sheet(wb, wsCompare, 'Projects Compare');
+
+  const wsRaw = XLSX.utils.json_to_sheet(rawRows);
+  autoSizeWorksheetColumns(wsRaw, rawRows);
+  XLSX.utils.book_append_sheet(wb, wsRaw, 'Projects Raw');
+
+  const filename = `all_projects_export_${projectExportDateStamp()}.xlsx`;
+  XLSX.writeFile(wb, filename);
+  toast(`Downloaded ${exportRows.length} projects`);
+}
+
 /* ================================================================ PROJECTS DRILL-DOWN (All Projects modal) */
 function openProjectsModal() {
   const sorted = [...S.projects].sort((a, b) => {
@@ -2447,7 +2562,10 @@ function openProjectsModal() {
     </div>
     <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
       <span class="text-xs text-gray-400" id="projModalCount">${S.projects.length} project${S.projects.length === 1 ? '' : 's'}</span>
-      <button onclick="closeModal()" class="btn-gray">Close</button>
+      <div class="flex items-center gap-2">
+        <button onclick="downloadAllProjectsExcel()" class="btn-blue">Download Excel</button>
+        <button onclick="closeModal()" class="btn-gray">Close</button>
+      </div>
     </div>`, 'max-w-3xl');
 
   let activeStage = '';
