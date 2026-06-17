@@ -41,6 +41,7 @@ const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'
 const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const PCOLORS = ['#8B5CF6', '#14B8A6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#06B6D4', '#F43F5E', '#84CC16', '#A855F7', '#0EA5E9', '#EAB308', '#22C55E', '#3B82F6', '#D946EF'];
+const PROJECT_PEOPLE_CHART_DISPLAY_MAX = 300;
 const DEPT_COLORS = { 'Solution': '#2563EB', 'Professional Services': '#8B5CF6', 'Finance': '#14B8A6', 'Sales': '#F59E0B', 'Operations': '#10B981', 'Management': '#EC4899' };
 const STAGE_COLOR = { 'Prospect': '#6B7280', 'Qualify': '#0EA5E9', 'Validate': '#8B5CF6', 'Presentation - Solve': '#EC4899', 'Proposal': '#F59E0B', 'Negotiate': '#F97316', 'Closed Won': '#10B981', 'Closed Lost': '#DC2626' };
 const STAGE_PILL = { 'Prospect': 'bg-gray-100 text-gray-700', 'Qualify': 'bg-sky-100 text-sky-700', 'Validate': 'bg-purple-100 text-purple-700', 'Presentation - Solve': 'bg-pink-100 text-pink-700', 'Proposal': 'bg-amber-100 text-amber-700', 'Negotiate': 'bg-orange-100 text-orange-700', 'Closed Won': 'bg-green-100 text-green-700', 'Closed Lost': 'bg-red-100 text-red-700' };
@@ -140,6 +141,20 @@ function weekDateRange(year, month, week) {
     start: formatDateInputLocal(new Date(year, month - 1, startDay)),
     end: formatDateInputLocal(new Date(year, month - 1, endDay)),
   };
+}
+
+function matrixSlotDayCount(year, month, week) {
+  const y = Number(year);
+  const m = Number(month);
+  const w = Number(week);
+
+  if (!y || !m || !w) return 0;
+
+  const lastDayOfMonth = new Date(y, m, 0).getDate();
+  const startDay = ((w - 1) * 7) + 1;
+  const endDay = w >= 4 ? lastDayOfMonth : Math.min(w * 7, lastDayOfMonth);
+
+  return Math.max(0, endDay - startDay + 1);
 }
 
 /* ── filter helpers ──────────────────────────────────────────── */
@@ -1552,6 +1567,8 @@ function getProjectWisePeopleBreakdown() {
         weightedWeeks: 0,
         slotCount: 0,
         totalPct: 0,
+        assignedDays: 0,
+        assignedDaySlots: new Set(),
       });
     }
 
@@ -1562,6 +1579,13 @@ function getProjectWisePeopleBreakdown() {
     person.weightedWeeks += weighted;
     person.slotCount += 1;
     person.totalPct += pct;
+
+    const daySlotKey = `${a.year}-${a.month}-${a.week}`;
+    if (!person.assignedDaySlots.has(daySlotKey)) {
+      person.assignedDaySlots.add(daySlotKey);
+      person.assignedDays += matrixSlotDayCount(a.year, a.month, a.week);
+    }
+
     bucket.weightedWeeks += weighted;
     bucket.slotCount += 1;
   }
@@ -1575,6 +1599,7 @@ function getProjectWisePeopleBreakdown() {
           ...p,
           contribution: +((p.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2),
           avgPct: p.slotCount ? +(p.totalPct / p.slotCount).toFixed(1) : 0,
+          assignedDays: p.assignedDays || 0,
         }))
         .sort((a, b) => b.contribution - a.contribution || String(a.employee.name || '').localeCompare(String(b.employee.name || ''))),
     }))
@@ -1607,6 +1632,7 @@ function openProjectWisePeopleModal(projectId) {
         </div>
         <div class="text-right flex-shrink-0">
           <div class="text-lg font-bold text-gray-900">${p.contribution}%</div>
+          <div class="text-xs font-semibold text-gray-500 mt-0.5">${p.assignedDays} day${p.assignedDays === 1 ? '' : 's'} assigned</div>
           <div class="text-xs text-gray-400">FY contribution</div>
         </div>
       </div>
@@ -1656,7 +1682,7 @@ function renderProjectWisePeopleChart() {
   const { projects, employees } = getProjectWisePeopleBreakdown();
 
   if (info) {
-    info.textContent = `${projects.length} assigned project${projects.length === 1 ? '' : 's'} · ${employees.length} active resource${employees.length === 1 ? '' : 's'}`;
+    info.textContent = `${projects.length} assigned project${projects.length === 1 ? '' : 's'} · ${employees.length} active resource${employees.length === 1 ? '' : 's'} · chart capped at ${PROJECT_PEOPLE_CHART_DISPLAY_MAX}%`;
   }
 
   const labels = projects.map(item => item.project.name || item.project.code || 'Project');
@@ -1664,20 +1690,30 @@ function renderProjectWisePeopleChart() {
 
   const datasets = employees.map((emp, idx) => {
     const color = PCOLORS[idx % PCOLORS.length];
+    const rawData = projects.map(item => {
+      const person = item.peopleList.find(p => p.employee.id === emp.id);
+      return person ? person.contribution : 0;
+    });
+    const displayData = rawData.map((rawValue, projectIndex) => {
+      const total = totalByProject[projectIndex] || 0;
+      if (total > PROJECT_PEOPLE_CHART_DISPLAY_MAX) {
+        return +((rawValue * PROJECT_PEOPLE_CHART_DISPLAY_MAX) / total).toFixed(2);
+      }
+      return rawValue;
+    });
+
     return {
       label: emp.name,
       employeeId: emp.id,
       employeeName: emp.name,
+      rawData,
       backgroundColor: color,
       borderColor: color,
       borderWidth: 0,
       borderRadius: 2,
       barPercentage: 0.72,
       categoryPercentage: 0.78,
-      data: projects.map(item => {
-        const person = item.peopleList.find(p => p.employee.id === emp.id);
-        return person ? person.contribution : 0;
-      }),
+      data: displayData,
     };
   });
 
@@ -1736,7 +1772,7 @@ function renderProjectWisePeopleChart() {
               return `${item.project.code || ''} · ${item.project.name || 'Project'} · Total ${total}%`;
             },
             label: c => {
-              const val = c.parsed.y || 0;
+              const val = c.dataset.rawData?.[c.dataIndex] ?? c.parsed.y ?? 0;
               if (!val) return '';
               return ` ${c.dataset.employeeName}: ${val}%`;
             },
@@ -1757,6 +1793,7 @@ function renderProjectWisePeopleChart() {
         y: {
           stacked: true,
           beginAtZero: true,
+          max: PROJECT_PEOPLE_CHART_DISPLAY_MAX,
           ticks: {
             font: { size: 11 },
             color: '#6B7280',
