@@ -19,6 +19,64 @@ try {
   db.prepare("ALTER TABLE employees ADD COLUMN active INTEGER NOT NULL DEFAULT 1").run();
 } catch (_) { /* column already exists — safe to ignore */ }
 
+
+/* Allow multiple project/product rows under the same Opportunity Number.
+   Older DB versions may have UNIQUE(code), which blocks importing separate
+   product rows for the same SA number. This migration removes only that
+   single-column UNIQUE(code) constraint while preserving project ids. */
+function ensureProjectsAllowDuplicateCodes() {
+  const table = db.prepare("SELECT sql FROM sqlite_master WHERE type='table' AND name='projects'").get();
+  if (!table || !table.sql) return;
+
+  const indexes = db.prepare("PRAGMA index_list('projects')").all();
+  let hasSingleCodeUniqueIndex = false;
+
+  for (const idx of indexes) {
+    if (!idx.unique) continue;
+    const cols = db.prepare(`PRAGMA index_info(${quoteIdent(idx.name)})`).all().map(c => c.name);
+    if (cols.length === 1 && cols[0] === 'code') {
+      hasSingleCodeUniqueIndex = true;
+      break;
+    }
+  }
+
+  const inlineUniqueCode = /\bcode\b[^,)]*\bUNIQUE\b/i.test(table.sql);
+  const tableUniqueCode = /UNIQUE\s*\(\s*code\s*\)/i.test(table.sql);
+
+  if (!hasSingleCodeUniqueIndex && !inlineUniqueCode && !tableUniqueCode) return;
+
+  const backupName = `projects_code_unique_backup_${Date.now()}`;
+  let createSql = table.sql;
+
+  createSql = createSql
+    .replace(/\bcode\b\s+TEXT\s+NOT\s+NULL\s+UNIQUE/ig, 'code TEXT NOT NULL')
+    .replace(/\bcode\b\s+TEXT\s+UNIQUE/ig, 'code TEXT')
+    .replace(/,\s*UNIQUE\s*\(\s*code\s*\)/ig, '')
+    .replace(/UNIQUE\s*\(\s*code\s*\)\s*,/ig, '');
+
+  const cols = db.prepare("PRAGMA table_info('projects')").all().map(c => c.name);
+  const colList = cols.map(quoteIdent).join(', ');
+
+  const txn = db.transaction(() => {
+    db.prepare('PRAGMA foreign_keys = OFF').run();
+    db.prepare(`ALTER TABLE projects RENAME TO ${quoteIdent(backupName)}`).run();
+    db.prepare(createSql).run();
+    db.prepare(`INSERT INTO projects (${colList}) SELECT ${colList} FROM ${quoteIdent(backupName)}`).run();
+    db.prepare(`DROP TABLE ${quoteIdent(backupName)}`).run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_code ON projects(code)').run();
+    db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_import_key ON projects(code, product_name, product_amount)').run();
+    db.prepare('PRAGMA foreign_keys = ON').run();
+  });
+
+  txn();
+}
+
+try {
+  ensureProjectsAllowDuplicateCodes();
+} catch (e) {
+  console.error('Project duplicate-code compatibility migration failed:', e);
+}
+
 /* ─── Time Sheet summary table ───────────────────────────────── */
 try {
   db.prepare(`
@@ -210,6 +268,158 @@ function calcDealStatuses(allProjects) {
 
 const safeNum = (v, fb) => { const n = Number(v); return Number.isFinite(n) ? n : fb; };
 
+function quoteIdent(name) {
+  return '"' + String(name).replace(/"/g, '""') + '"';
+}
+
+function normCode(v) {
+  return cleanText(v).toUpperCase();
+}
+
+function normProductName(v) {
+  return cleanText(v).toUpperCase().replace(/\s+/g, ' ');
+}
+
+function normImportAmountKey(v) {
+  const n = normalizeImportNumber(v);
+  return Number.isFinite(n) ? n.toFixed(2) : '0.00';
+}
+
+function projectImportCompositeKey(code, productName, productAmount) {
+  return [
+    normCode(code),
+    normProductName(productName),
+    normImportAmountKey(productAmount),
+  ].join('\u001F');
+}
+
+function getProjectImportKeyFromProjectRow(row) {
+  return projectImportCompositeKey(row.code, row.product_name, row.product_amount);
+}
+
+function normalizeImportNumber(v) {
+  if (v === null || v === undefined || v === '') return 0;
+  const n = Number(String(v).replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+function normalizeImportProbability(v) {
+  const n = normalizeImportNumber(v);
+  if (!n) return 0;
+  return n > 0 && n <= 1 ? +(n * 100).toFixed(2) : +n.toFixed(2);
+}
+
+function normalizeImportDate(v) {
+  const s = cleanText(v);
+  if (!s) return null;
+
+  // Already ISO-like
+  let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (m) {
+    const y = +m[1], mo = +m[2], d = +m[3];
+    if (y && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+
+  // M/D/YYYY or D/M/YYYY. Salesforce export usually uses M/D/YYYY.
+  m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (m) {
+    let mo = +m[1], d = +m[2], y = +m[3];
+    if (y < 100) y += 2000;
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+
+  const dObj = new Date(s);
+  if (!isNaN(dObj)) return dObj.toISOString().slice(0, 10);
+  return null;
+}
+
+function normalizeImportedProjectRows(rows) {
+  const byCompositeKey = new Map();
+
+  for (const raw of rows || []) {
+    const code = normCode(raw.code || raw.opportunity_number || raw['Opportunity Number']);
+    const name = cleanText(raw.name || raw.opportunity_name || raw['Opportunity Name']);
+    if (!code || !name) continue;
+
+    const productFamily = cleanText(raw.product_family || raw['Product Family']);
+    const productName = cleanText(
+      raw.product_name ||
+      raw.product_description ||
+      raw['Product Name'] ||
+      raw['Product Description']
+    );
+    const productAmount = normalizeImportNumber(raw.product_amount ?? raw['Product Amount']);
+    const oppAmount = normalizeImportNumber(raw.opp_amount ?? raw.amount ?? raw['Amount']);
+    const probability = normalizeImportProbability(raw.probability ?? raw['Probability (%)']);
+    const closeDate = normalizeImportDate(raw.end_date || raw.close_date || raw['Close Date']);
+    const createdDate = normalizeImportDate(raw.created_date || raw['Created Date']);
+
+    // IMPORTANT:
+    // Import uniqueness is NOT only Opportunity Number.
+    // A project line is unique by:
+    // Opportunity Number + resolved Product Name/Product Description + Product Amount.
+    const compositeKey = projectImportCompositeKey(code, productName, productAmount);
+
+    const row = {
+      code,
+      name,
+      client: cleanText(raw.account_name || raw['Account Name']),
+      account_name: cleanText(raw.account_name || raw['Account Name']),
+      opportunity_owner: cleanText(raw.opportunity_owner || raw['Opportunity Owner']),
+      probability,
+      product_family: productFamily,
+      product_name: productName,
+      stage: cleanText(raw.stage || raw['Stage']) || 'Prospect',
+      end_date: closeDate,
+      created_date: createdDate,
+      product_amount: +productAmount.toFixed(2),
+      opp_amount: +oppAmount.toFixed(2),
+      budget: +oppAmount.toFixed(2),
+      spent_pct: 0,
+      progress: 0,
+      color: '#8B5CF6',
+      priority: 'Medium',
+      project_closing_date: null,
+      _import_key: compositeKey,
+    };
+
+    if (!byCompositeKey.has(compositeKey)) {
+      byCompositeKey.set(compositeKey, row);
+      continue;
+    }
+
+    // If the same Opportunity Number + Product Name + Product Amount appears
+    // more than once inside the uploaded Excel, keep one row and fill blanks.
+    const existing = byCompositeKey.get(compositeKey);
+    if (!existing.name && row.name) existing.name = row.name;
+    if (!existing.account_name && row.account_name) existing.account_name = row.account_name;
+    if (!existing.client && row.client) existing.client = row.client;
+    if (!existing.opportunity_owner && row.opportunity_owner) existing.opportunity_owner = row.opportunity_owner;
+    if (!existing.product_family && row.product_family) existing.product_family = row.product_family;
+    if (!existing.stage && row.stage) existing.stage = row.stage;
+    if (!existing.end_date && row.end_date) existing.end_date = row.end_date;
+    if (!existing.created_date && row.created_date) existing.created_date = row.created_date;
+    if (!existing.probability && row.probability) existing.probability = row.probability;
+    if (!existing.opp_amount && row.opp_amount) {
+      existing.opp_amount = row.opp_amount;
+      existing.budget = row.opp_amount;
+    }
+  }
+
+  return [...byCompositeKey.values()]
+    .sort((a, b) => {
+      const codeCompare = String(a.code).localeCompare(String(b.code), undefined, { numeric: true, sensitivity: 'base' });
+      if (codeCompare !== 0) return codeCompare;
+      const productCompare = String(a.product_name || '').localeCompare(String(b.product_name || ''), undefined, { numeric: true, sensitivity: 'base' });
+      if (productCompare !== 0) return productCompare;
+      return (Number(a.product_amount) || 0) - (Number(b.product_amount) || 0);
+    });
+}
+
 function cleanText(v) {
   return String(v ?? '').trim();
 }
@@ -267,8 +477,9 @@ app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
       if (fy === null) continue;
       if (!fyData[fy]) fyData[fy] = { total: 0, ps: 0, allProjects: [], psProjects: [] };
 
-      // Total Amount = opp_amount (opportunity total value, once per SA code)
-      const totalAmt = r.opp_amount || 0;
+      // Total Amount MUST use Product Amount only.
+      // Never use Amount / opp_amount for this revenue chart.
+      const totalAmt = r.product_amount || 0;
       fyData[fy].total += totalAmt;
       fyData[fy].allProjects.push({
         name: r.name || r.code,
@@ -278,7 +489,7 @@ app.get('/api/dashboard/ps-revenue-chart', (_, res) => {
         product_family: r.product_family || '—',
       });
 
-      // PS Amount = product_amount (sum of PS product lines, stored in seed as summed value)
+      // PS Amount MUST also use Product Amount only, limited to PS product rows.
       const pnUpper = (r.product_name || '').toUpperCase();
       const isPSProduct = (r.product_family || '') === 'Professional Services' &&
         (pnUpper.includes('PS SYSTEM SUPPORT') || pnUpper.includes('PS PROJECT IMPLEMENT'));
@@ -384,6 +595,94 @@ app.post('/api/projects', (req, res) => {
     if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'project code must be unique' });
     throw e;
   }
+
+});
+
+app.post('/api/projects/import', (req, res) => {
+  const rows = normalizeImportedProjectRows(req.body?.rows || []);
+
+  if (!rows.length) {
+    return res.status(400).json({ error: 'No valid project rows found in uploaded Excel.' });
+  }
+
+  const existingImportKeys = new Set(
+    db.prepare('SELECT code, product_name, product_amount FROM projects').all().map(getProjectImportKeyFromProjectRow)
+  );
+
+  const toInsert = rows.filter(r => !existingImportKeys.has(r._import_key));
+  const skippedExisting = rows.filter(r => existingImportKeys.has(r._import_key));
+
+  const insertProject = db.prepare(`
+    INSERT INTO projects (code,name,client,budget,spent_pct,end_date,stage,progress,color,priority,
+      product_amount,account_name,product_name,product_family,opportunity_owner,opp_amount,probability,
+      created_date,project_closing_date)
+    VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+  `);
+
+  const inserted = [];
+  const failed = [];
+
+  const txn = db.transaction(() => {
+    for (const p of toInsert) {
+      try {
+        const info = insertProject.run(
+          p.code,
+          p.name,
+          p.client || p.account_name || null,
+          safeNum(p.budget ?? p.opp_amount, 0),
+          safeNum(p.spent_pct, 0),
+          p.end_date || null,
+          p.stage || 'Prospect',
+          safeNum(p.progress, 0),
+          p.color || '#8B5CF6',
+          p.priority || 'Medium',
+          safeNum(p.product_amount, 0),
+          p.account_name || null,
+          p.product_name || null,
+          p.product_family || null,
+          p.opportunity_owner || null,
+          safeNum(p.opp_amount, 0),
+          safeNum(p.probability, 0),
+          p.created_date || null,
+          p.project_closing_date || null
+        );
+        inserted.push({
+          id: info.lastInsertRowid,
+          code: p.code,
+          name: p.name,
+          product_name: p.product_name,
+          product_amount: p.product_amount,
+        });
+        existingImportKeys.add(p._import_key);
+      } catch (e) {
+        failed.push({ code: p.code, name: p.name, product_name: p.product_name, product_amount: p.product_amount, error: e.message });
+      }
+    }
+  });
+
+  txn();
+
+  res.status(201).json({
+    ok: true,
+    parsed_rows: Array.isArray(req.body?.rows) ? req.body.rows.length : 0,
+    normalized_projects: rows.length,
+    inserted_count: inserted.length,
+    skipped_existing_count: skippedExisting.length,
+    failed_count: failed.length,
+    inserted,
+    import_unique_key: 'Opportunity Number + resolved Product Name/Product Description + Product Amount',
+    skipped_existing: skippedExisting.map(p => ({
+      code: p.code,
+      name: p.name,
+      product_name: p.product_name,
+      product_amount: p.product_amount,
+      reason: 'Already exists in the app with the same Opportunity Number + resolved Product Name/Product Description + Product Amount.',
+    })),
+    failed: failed.map(p => ({
+      ...p,
+      reason: p.error || 'Database insert failed.',
+    })),
+  });
 });
 
 app.put('/api/projects/:id', (req, res) => {

@@ -417,14 +417,56 @@ function buildMatrix() { S.matrix = {}; for (const a of S.assignments) { const k
 
 /* ================================================================ FILTER POPULATION */
 function populateMatrixFilter() {
+  const activeEmployeeIds = getActiveEmployeeIdSet();
+
+  if (S.matrixResourceFilter && !activeEmployeeIds.has(+S.matrixResourceFilter)) {
+    S.matrixResourceFilter = null;
+  }
+
   const ps = document.getElementById('matrixProjectFilter');
-  if (ps) { const pids = new Set(S.assignments.map(a => a.project_id)); ps.innerHTML = '<option value="">All Projects</option>' + S.projects.filter(p => pids.has(p.id)).map(p => `<option value="${p.id}">${esc(p.code)} — ${esc(p.name)}</option>`).join(''); ps.value = String(S.matrixProjectFilter || ''); }
+  if (ps) {
+    const pids = new Set(
+      S.assignments
+        .filter(a => activeEmployeeIds.has(a.employee_id))
+        .map(a => a.project_id)
+    );
+
+    ps.innerHTML =
+      '<option value="">All Projects</option>' +
+      S.projects
+        .filter(p => pids.has(p.id))
+        .map(p => `<option value="${p.id}">${esc(p.code)} — ${esc(p.name)}</option>`)
+        .join('');
+
+    ps.value = String(S.matrixProjectFilter || '');
+  }
+
   const rs = document.getElementById('matrixResourceFilter');
-  if (rs) { rs.innerHTML = '<option value="">All Resources</option>' + S.employees.map(e => `<option value="${e.id}">${esc(e.name)}</option>`).join(''); rs.value = String(S.matrixResourceFilter || ''); }
+  if (rs) {
+    rs.innerHTML =
+      '<option value="">All Resources</option>' +
+      getActiveEmployees()
+        .map(e => `<option value="${e.id}">${esc(e.name)}</option>`)
+        .join('');
+
+    rs.value = String(S.matrixResourceFilter || '');
+  }
+
   const ms = document.getElementById('matrixMonthFilter');
-  if (ms && ms.options.length <= 1) { ms.innerHTML = '<option value="">All Months</option>' + fiscalMonths(S.fiscalYear).map(m => `<option value="${m.y}-${m.m}">${esc(m.label)}</option>`).join(''); }
+  if (ms && ms.options.length <= 1) {
+    ms.innerHTML =
+      '<option value="">All Months</option>' +
+      fiscalMonths(S.fiscalYear)
+        .map(m => `<option value="${m.y}-${m.m}">${esc(m.label)}</option>`)
+        .join('');
+  }
+
   const ss = document.getElementById('matrixStageFilter');
-  if (ss && ss.options.length <= 1) { ss.innerHTML = '<option value="">All Stages</option>' + STAGES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join(''); }
+  if (ss && ss.options.length <= 1) {
+    ss.innerHTML =
+      '<option value="">All Stages</option>' +
+      STAGES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  }
 }
 
 function populatePipelineStageFilter() {
@@ -472,7 +514,8 @@ function renderMatrix() {
   t.querySelector('thead').innerHTML = th;
 
   const q = S.searchQuery.toLowerCase();
-  let emps = S.employees.filter(e => !q || e.name.toLowerCase().includes(q) || e.dept.toLowerCase().includes(q));
+  const activeEmployees = getActiveEmployees();
+  let emps = activeEmployees.filter(e => !q || e.name.toLowerCase().includes(q) || e.dept.toLowerCase().includes(q));
 
   if (S.matrixProjectFilter) { const pid = +S.matrixProjectFilter; emps = emps.filter(e => S.assignments.some(a => a.employee_id === e.id && a.project_id === pid)); }
   if (S.matrixResourceFilter) { emps = emps.filter(e => e.id === +S.matrixResourceFilter); }
@@ -494,7 +537,9 @@ function renderMatrix() {
   else if (S.matrixSortLow) { emps = [...emps].sort((a, b) => (S.employeeUtil.get(a.id) || 0) - (S.employeeUtil.get(b.id) || 0)); }
 
   const info = document.getElementById('matrixFilterInfo');
-  if (info) info.textContent = emps.length < S.employees.length ? `Showing ${emps.length} resource${emps.length === 1 ? '' : 's'}` : '';
+  if (info) {
+    info.textContent = emps.length < activeEmployees.length ? `Showing ${emps.length} active resource${emps.length === 1 ? '' : 's'}` : '';
+  }
 
   const rows = [];
   emps.forEach((emp, idx) => {
@@ -664,8 +709,51 @@ function aggregateTimesheetRows(rows) {
   }));
 }
 
+function normalizePersonName(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function compactPersonKey(value) {
+  return normalizePersonName(value).replace(/\s+/g, '');
+}
+
+function getActiveEmployees() {
+  return (S.employees || []).filter(e => e.active !== 0);
+}
+
+function getActiveEmployeeIdSet() {
+  return new Set(getActiveEmployees().map(e => e.id));
+}
+
+function getInactiveEmployeeKeySet() {
+  return new Set(
+    (S.employees || [])
+      .filter(e => e.active === 0)
+      .map(e => compactPersonKey(e.name))
+      .filter(Boolean)
+  );
+}
+
+function isInactiveTimesheetWorker(workerName) {
+  const key = compactPersonKey(workerName);
+  if (!key) return false;
+  return getInactiveEmployeeKeySet().has(key);
+}
+
+function getVisibleTimesheetRows() {
+  // Time Sheet names may not always exactly match the employee master list.
+  // Therefore, do NOT require every Time Sheet worker to exist in active employees.
+  // Only remove workers whose names explicitly match inactive employees.
+  return (S.timesheetRows || []).filter(r => !isInactiveTimesheetWorker(r.worker));
+}
+
 function getTimesheetMonthOptions() {
-  return [...new Set((S.timesheetRows || []).map(r => r.month).filter(Boolean))]
+  return [...new Set(getVisibleTimesheetRows().map(r => r.month).filter(Boolean))]
     .sort((a, b) => monthSortKey(a) - monthSortKey(b));
 }
 
@@ -727,7 +815,7 @@ async function loadSavedTimesheetFromDb() {
 }
 
 function getIndividualSummaryRows() {
-  const rows = S.timesheetRows || [];
+  const rows = getVisibleTimesheetRows();
   const month = S.individualSummaryMonthFilter;
   return month ? rows.filter(r => r.month === month) : rows;
 }
@@ -793,15 +881,108 @@ function setTimesheetEmptyState(kind, hasData) {
   if (empty) empty.classList.toggle('hidden', hasData); if (wrap) wrap.classList.toggle('hidden', !hasData);
 }
 function renderTeamSummaryChart() {
-  const canvas = document.getElementById('teamSummaryChart'); if (!canvas) return;
-  if (S.charts.teamSummary) S.charts.teamSummary.destroy();
-  const rows = S.timesheetRows || []; const info = document.getElementById('teamSummaryInfo');
-  if (!rows.length) { setTimesheetEmptyState('team', false); if (info) info.textContent = ''; return; }
+  const canvas = document.getElementById('teamSummaryChart');
+  if (!canvas) return;
+
+  if (S.charts.teamSummary) {
+    S.charts.teamSummary.destroy();
+  }
+
+  const allRows = S.timesheetRows || [];
+  const rows = getVisibleTimesheetRows();
+  const info = document.getElementById('teamSummaryInfo');
+
+  if (!allRows.length) {
+    setTimesheetEmptyState('team', false);
+    if (info) info.textContent = '';
+    return;
+  }
+
+  if (!rows.length) {
+    setTimesheetEmptyState('team', false);
+    if (info) info.textContent = 'No active Time Sheet rows found. Inactive employees are excluded.';
+    return;
+  }
+
   setTimesheetEmptyState('team', true);
-  const pivot = buildWorkTypePivot(rows, 'month'), datasets = buildStackedPercentDatasets(pivot, 'team'), totalHours = rows.reduce((s, r) => s + r.qty, 0);
-  if (info) info.textContent = `${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs`;
-  S.charts.teamSummary = new Chart(canvas.getContext('2d'), { type: 'bar', plugins: [stackedPercentLabelPlugin], data: { labels: pivot.rowOrder, datasets }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, onClick: (event, elements) => { if (elements.length) openTimesheetSummaryModal('team', pivot.rowOrder[elements[0].index]); }, onHover: (event, elements) => { const target = event.native?.target; if (target) target.style.cursor = elements.length ? 'pointer' : 'default'; }, plugins: { legend: { display: true, position: 'right', labels: timesheetLegendLabels() }, tooltip: { callbacks: { title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`, label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)` } } }, scales: { x: { stacked: true, grid: { display: false }, ticks: { font: { size: 11 }, color: '#374151' } }, y: { stacked: true, beginAtZero: true, max: 100, ticks: { callback: v => `${v}%`, font: { size: 11 }, color: '#6B7280' }, grid: { color: '#F3F4F6' } } } } });
+
+  const pivot = buildWorkTypePivot(rows, 'month');
+  const datasets = buildStackedPercentDatasets(pivot, 'team');
+  const totalHours = rows.reduce((s, r) => s + r.qty, 0);
+
+  if (info) {
+    info.textContent = `${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs · inactive employees excluded`;
+  }
+
+  S.charts.teamSummary = new Chart(canvas.getContext('2d'), {
+    type: 'bar',
+    plugins: [stackedPercentLabelPlugin],
+    data: {
+      labels: pivot.rowOrder,
+      datasets,
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: {
+        mode: 'index',
+        intersect: false,
+      },
+      onClick: (event, elements) => {
+        if (elements.length) {
+          openTimesheetSummaryModal('team', pivot.rowOrder[elements[0].index]);
+        }
+      },
+      onHover: (event, elements) => {
+        const target = event.native?.target;
+        if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: timesheetLegendLabels(),
+        },
+        tooltip: {
+          callbacks: {
+            title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`,
+            label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)`,
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          grid: {
+            display: false,
+          },
+          ticks: {
+            font: {
+              size: 11,
+            },
+            color: '#374151',
+          },
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          max: 100,
+          ticks: {
+            callback: v => `${v}%`,
+            font: {
+              size: 11,
+            },
+            color: '#6B7280',
+          },
+          grid: {
+            color: '#F3F4F6',
+          },
+        },
+      },
+    },
+  });
 }
+
 function renderIndividualSummaryChart() {
   const canvas = document.getElementById('individualSummaryChart');
   if (!canvas) return;
@@ -813,6 +994,7 @@ function renderIndividualSummaryChart() {
   populateIndividualMonthFilter();
 
   const allRows = S.timesheetRows || [];
+  const visibleRows = getVisibleTimesheetRows();
   const rows = getIndividualSummaryRows();
   const info = document.getElementById('individualSummaryInfo');
 
@@ -822,9 +1004,15 @@ function renderIndividualSummaryChart() {
     return;
   }
 
+  if (!visibleRows.length) {
+    setTimesheetEmptyState('individual', false);
+    if (info) info.textContent = 'No active Time Sheet rows found. Inactive employees are excluded.';
+    return;
+  }
+
   if (!rows.length) {
     setTimesheetEmptyState('individual', false);
-    if (info) info.textContent = 'No rows found for selected month.';
+    if (info) info.textContent = 'No active employee rows found for selected month.';
     return;
   }
 
@@ -836,7 +1024,7 @@ function renderIndividualSummaryChart() {
   const monthText = S.individualSummaryMonthFilter ? ` · Month: ${S.individualSummaryMonthFilter}` : ' · All months';
 
   if (info) {
-    info.textContent = `${pivot.rowOrder.length} employee${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs${monthText}`;
+    info.textContent = `${pivot.rowOrder.length} employee${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs${monthText} · inactive employees excluded`;
   }
 
   S.charts.individualSummary = new Chart(canvas.getContext('2d'), {
@@ -911,7 +1099,7 @@ function renderIndividualSummaryChart() {
 }
 
 function openTimesheetSummaryModal(kind, label) {
-  const rows = (S.timesheetRows || []).filter(r => {
+  const rows = getVisibleTimesheetRows().filter(r => {
     if (kind === 'team') return r.month === label;
     if (S.individualSummaryMonthFilter && r.month !== S.individualSummaryMonthFilter) return false;
     return r.worker === label;
@@ -941,6 +1129,10 @@ function switchResourceMatrixTab(tab) {
   if (tab === 'project') {
     setTimeout(() => renderYearlyWorkByProjectChart(), 0);
   }
+
+  if (tab === 'people') {
+    setTimeout(() => renderProjectWisePeopleChart(), 0);
+  }
 }
 
 function switchWorkSummaryTab(tab) {
@@ -958,6 +1150,214 @@ function switchWorkSummaryTab(tab) {
   if (safeTab === 'team') renderTeamSummaryChart();
   if (safeTab === 'individual') renderIndividualSummaryChart();
 }
+
+function getProjectImportCellValue(row, names) {
+  const wanted = names.map(n => String(n).toLowerCase().replace(/[^a-z0-9]/g, ''));
+  for (const [key, value] of Object.entries(row || {})) {
+    const normalizedKey = String(key).toLowerCase().replace(/[^a-z0-9]/g, '');
+    if (wanted.includes(normalizedKey)) return value;
+  }
+  return '';
+}
+
+function normalizeProjectImportDate(value) {
+  const s = String(value ?? '').trim();
+  if (!s) return '';
+
+  let m = s.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (m) {
+    const y = +m[1], mo = +m[2], d = +m[3];
+    if (y && mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+
+  m = s.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (m) {
+    let mo = +m[1], d = +m[2], y = +m[3];
+    if (y < 100) y += 2000;
+    if (mo >= 1 && mo <= 12 && d >= 1 && d <= 31) {
+      return `${y}-${String(mo).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
+    }
+  }
+
+  const dObj = new Date(s);
+  if (!isNaN(dObj)) return dObj.toISOString().slice(0, 10);
+  return '';
+}
+
+function normalizeProjectImportNumber(value) {
+  if (value === null || value === undefined || value === '') return 0;
+  const n = Number(String(value).replace(/,/g, '').trim());
+  return Number.isFinite(n) ? n : 0;
+}
+
+function parseProjectExcelRows(sheetRows) {
+  return (sheetRows || []).map(row => {
+    const code = String(getProjectImportCellValue(row, [
+      'Opportunity Number', 'Opportunity No', 'Opportunity #', 'SA Number', 'SA No', 'Code'
+    ]) || '').trim().toUpperCase();
+
+    const name = String(getProjectImportCellValue(row, [
+      'Opportunity Name', 'Project Name', 'Name'
+    ]) || '').trim();
+
+    return {
+      code,
+      name,
+      account_name: String(getProjectImportCellValue(row, ['Account Name', 'Customer Name', 'Client']) || '').trim(),
+      opportunity_owner: String(getProjectImportCellValue(row, ['Opportunity Owner', 'Owner']) || '').trim(),
+      probability: normalizeProjectImportNumber(getProjectImportCellValue(row, ['Probability (%)', 'Probability', 'Probability %'])),
+      product_family: String(getProjectImportCellValue(row, ['Product Family']) || '').trim(),
+      product_name: String(getProjectImportCellValue(row, [
+        'Product Name',
+        'Product Description',
+        'Product Desc',
+        'Product Detail',
+        'Item Description'
+      ]) || '').trim(),
+      stage: String(getProjectImportCellValue(row, ['Stage']) || '').trim(),
+      close_date: normalizeProjectImportDate(getProjectImportCellValue(row, ['Close Date', 'Closed Won Date', 'Close Won Date'])),
+      created_date: normalizeProjectImportDate(getProjectImportCellValue(row, ['Created Date'])),
+      product_amount: normalizeProjectImportNumber(getProjectImportCellValue(row, ['Product Amount'])),
+      amount: normalizeProjectImportNumber(getProjectImportCellValue(row, ['Amount', 'Opportunity Amount'])),
+    };
+  }).filter(r => r.code && r.name);
+}
+
+function openProjectImportResultModal(result, fileName) {
+  const inserted = result.inserted || [];
+  const skipped = result.skipped_existing || [];
+  const failed = result.failed || [];
+  const notInserted = [
+    ...skipped.map(p => ({ ...p, _kind: 'skipped' })),
+    ...failed.map(p => ({ ...p, _kind: 'failed' })),
+  ];
+
+  const defaultExistingReason = 'Not inserted because an app project already has the same Opportunity Number + resolved Product Name/Product Description + Product Amount.';
+
+  const row = (p, badgeCls, badgeText) => {
+    const reason = p.reason || p.error || (p._kind === 'skipped' ? defaultExistingReason : 'Not inserted because the row failed validation or database insert.');
+
+    return `
+      <div class="flex items-start justify-between gap-3 py-2.5 border-b border-gray-100 last:border-0">
+        <div class="min-w-0">
+          <div class="text-xs font-bold text-blue-600 mono">${esc(p.code || '—')}</div>
+          <div class="text-sm font-semibold text-gray-900 truncate" title="${esc(p.name || '—')}">${esc(p.name || '—')}</div>
+          ${(p.product_name || p.product_amount !== undefined) ? `<div class="text-xs text-gray-500 mt-0.5 truncate" title="${esc(p.product_name || '—')}">${esc(p.product_name || '—')} · ${Number(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>` : ''}
+          <div class="text-xs ${p._kind === 'failed' ? 'text-red-600' : 'text-gray-500'} mt-1 leading-snug">
+            <span class="font-semibold">Reason:</span> ${esc(reason)}
+          </div>
+        </div>
+        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls} flex-shrink-0">${badgeText}</span>
+      </div>`;
+  };
+
+  openModal(
+    mHdr('Project Excel Import Completed', `${fileName || 'Uploaded Excel'} · ${result.normalized_projects || 0} unique project lines traced by Opportunity Number + resolved Product Name/Product Description + Product Amount`)
+    + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
+        <div class="grid grid-cols-3 gap-3 mb-5">
+          <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-center">
+            <div class="text-2xl font-bold text-emerald-700">${result.inserted_count || 0}</div>
+            <div class="text-xs text-emerald-700 mt-1">Inserted Lines</div>
+          </div>
+          <div class="rounded-xl bg-gray-50 border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-gray-700">${result.skipped_existing_count || 0}</div>
+            <div class="text-xs text-gray-500 mt-1">Already Existing Lines</div>
+          </div>
+          <div class="rounded-xl bg-red-50 border border-red-100 p-4 text-center">
+            <div class="text-2xl font-bold text-red-700">${result.failed_count || 0}</div>
+            <div class="text-xs text-red-600 mt-1">Failed Lines</div>
+          </div>
+        </div>
+
+        <div class="grid grid-cols-2 gap-4">
+          <div>
+            <div class="text-sm font-semibold text-gray-700 mb-2">Inserted Projects</div>
+            <div class="rounded-xl border border-gray-100 bg-white max-h-80 overflow-y-auto nice-scroll px-3">
+              ${inserted.length ? inserted.map(p => row({ ...p, reason: 'Inserted because this composite project line was not found in the app.', _kind: 'inserted' }, 'bg-emerald-100 text-emerald-700', 'Inserted')).join('') : '<p class="text-sm text-gray-400 text-center py-6">No new projects inserted.</p>'}
+            </div>
+          </div>
+          <div>
+            <div class="flex items-center justify-between gap-3 mb-2">
+              <div class="text-sm font-semibold text-gray-700">Not Inserted Projects</div>
+              <div class="text-xs text-gray-400">${notInserted.length} line${notInserted.length === 1 ? '' : 's'}</div>
+            </div>
+            <div class="rounded-xl border border-gray-100 bg-white max-h-80 overflow-y-auto nice-scroll px-3">
+              ${notInserted.map(p => row(p, p._kind === 'failed' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600', p._kind === 'failed' ? 'Failed' : 'Exists')).join('')}
+              ${!notInserted.length ? '<p class="text-sm text-gray-400 text-center py-6">No skipped or failed rows.</p>' : ''}
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-2xl">
+        <button onclick="openProjectsModal()" class="btn-blue">View Projects</button>
+        <button onclick="closeModal()" class="btn-gray">Close</button>
+      </div>`,
+    'max-w-5xl'
+  );
+}
+
+async function handleProjectExcelUpload(file) {
+  if (!file) return;
+
+  if (typeof XLSX === 'undefined') {
+    toast('Excel parser is not loaded. Check SheetJS CDN.', 'error');
+    return;
+  }
+
+  try {
+    const buf = await file.arrayBuffer();
+    const workbook = XLSX.read(buf, { type: 'array', cellDates: false });
+    const sheetName = workbook.SheetNames[0];
+    const sheetRows = XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      defval: '',
+      raw: false,
+    });
+
+    const rows = parseProjectExcelRows(sheetRows);
+
+    if (!rows.length) {
+      toast('No valid project rows found. Required: Opportunity Number and Opportunity Name. Product Name or Product Description + Product Amount are used for duplicate matching when available.', 'error');
+      return;
+    }
+
+    const result = await api('POST', '/api/projects/import', { rows });
+
+    const [projs, nlChart, psRevChart, psTypeChart, dl] = await Promise.all([
+      api('GET', '/api/projects'),
+      api('GET', '/api/dashboard/new-logo-chart'),
+      api('GET', '/api/dashboard/ps-revenue-chart'),
+      api('GET', '/api/dashboard/ps-type-chart'),
+      api('GET', '/api/dashboard/deadlines'),
+    ]);
+
+    S.projects = projs;
+    S.psRevenueData = psRevChart;
+    S.psTypeData = psTypeChart;
+    S.lastRunningData = dl;
+
+    buildMatrix();
+    renderMatrix();
+    renderYearlyWorkByProjectChart();
+    renderNewLogoChart(nlChart, S.newLogoFilter, S.nlProductFilter);
+    renderServicePipeline(projs);
+    applyAndRenderRunning();
+    populateMatrixFilter();
+    populatePipelineStageFilter();
+    populateProductFamilyDropdowns();
+
+    const stats = await api('GET', `/api/dashboard/stats?fiscalYear=${S.fiscalYear}`);
+    renderStats(stats);
+
+    toast(`Inserted ${result.inserted_count || 0} new project${(result.inserted_count || 0) === 1 ? '' : 's'}`);
+    openProjectImportResultModal(result, file.name);
+  } catch (e) {
+    console.error(e);
+    toast('Failed to import projects from Excel', 'error');
+  }
+}
+
 async function handleTimesheetUpload(file) {
   if (!file) return;
 
@@ -1034,6 +1434,259 @@ function renderYearlyWorkByProjectChart() {
   const datasets = assignedProjects.map(project => ({ label: `${project.code || ''} — ${project.name || ''}`, projectCode: project.code || '', projectName: project.name || '', data: employees.map(e => { const item = empProjectMap[e.id]?.[project.id]; return item ? +((item.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2) : 0; }), backgroundColor: project.color || '#8B5CF6', borderWidth: 0, borderRadius: 2, barPercentage: 0.75, categoryPercentage: 0.78 }));
   const totalUtilByEmployee = employees.map(e => { const weightedWeeks = Object.values(empProjectMap[e.id] || {}).reduce((sum, item) => sum + item.weightedWeeks, 0); return +((weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1); });
   S.charts.yearlyWork = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, onClick: (event, elements) => { if (!elements.length) return; const emp = employees[elements[0].index]; if (emp) openYearlyWorkProjectModal(emp.id); }, onHover: (event, elements) => { const target = event.native?.target; if (target) target.style.cursor = elements.length ? 'pointer' : 'default'; }, interaction: { mode: 'nearest', intersect: true }, plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, boxHeight: 10, font: { size: 10 }, padding: 8, generateLabels: chart => { const shortText = (txt, max = 32) => { const t = String(txt || '').trim(); return t.length > max ? t.slice(0, max - 1) + '…' : t; }; return chart.data.datasets.map((ds, i) => ({ text: shortText(ds.projectName || ds.label), fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, lineWidth: 0, hidden: !chart.isDatasetVisible(i), datasetIndex: i })); } } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 12, weight: '600' }, padding: 10, callbacks: { title: items => `${employees[items[0].dataIndex].name} · Total ${totalUtilByEmployee[items[0].dataIndex]}%`, label: c => { const val = c.parsed.y || 0; if (!val) return ''; return [` ${c.dataset.projectCode}: ${val}%`, ` ${c.dataset.projectName}`]; } } } }, scales: { x: { stacked: true, ticks: { font: { size: 11 }, color: '#374151', maxRotation: 45, minRotation: 35 }, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { font: { size: 11 }, color: '#6B7280', callback: v => `${v}%` }, grid: { color: '#F3F4F6' }, title: { display: true, text: 'FY workload contribution (%)', font: { size: 11 }, color: '#9CA3AF' } } } } });
+}
+
+
+function getProjectWisePeopleBreakdown() {
+  const TOTAL_FY_WEEKS = 48;
+  const activeEmployees = S.employees.filter(e => e.active !== 0);
+  const employeeMap = new Map(activeEmployees.map(e => [e.id, e]));
+  const projectMap = new Map();
+
+  for (const a of S.assignments || []) {
+    const emp = employeeMap.get(a.employee_id);
+    if (!emp) continue;
+
+    const project = S.projects.find(p => p.id === a.project_id);
+    if (!project) continue;
+
+    if (!projectMap.has(project.id)) {
+      projectMap.set(project.id, {
+        project,
+        people: new Map(),
+        weightedWeeks: 0,
+        slotCount: 0,
+      });
+    }
+
+    const bucket = projectMap.get(project.id);
+    if (!bucket.people.has(emp.id)) {
+      bucket.people.set(emp.id, {
+        employee: emp,
+        weightedWeeks: 0,
+        slotCount: 0,
+        totalPct: 0,
+      });
+    }
+
+    const pct = Number(a.percentage) || 0;
+    const weighted = pct / 100;
+    const person = bucket.people.get(emp.id);
+
+    person.weightedWeeks += weighted;
+    person.slotCount += 1;
+    person.totalPct += pct;
+    bucket.weightedWeeks += weighted;
+    bucket.slotCount += 1;
+  }
+
+  const projects = [...projectMap.values()]
+    .map(item => ({
+      ...item,
+      contribution: +((item.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2),
+      peopleList: [...item.people.values()]
+        .map(p => ({
+          ...p,
+          contribution: +((p.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2),
+          avgPct: p.slotCount ? +(p.totalPct / p.slotCount).toFixed(1) : 0,
+        }))
+        .sort((a, b) => b.contribution - a.contribution || String(a.employee.name || '').localeCompare(String(b.employee.name || ''))),
+    }))
+    .filter(item => item.contribution > 0)
+    .sort((a, b) => String(a.project.name || '').localeCompare(String(b.project.name || '')));
+
+  const employeeIds = [...new Set(projects.flatMap(item => item.peopleList.map(p => p.employee.id)))]
+    .sort((a, b) => String(employeeMap.get(a)?.name || '').localeCompare(String(employeeMap.get(b)?.name || '')));
+
+  return { projects, employees: employeeIds.map(id => employeeMap.get(id)).filter(Boolean), TOTAL_FY_WEEKS };
+}
+
+function openProjectWisePeopleModal(projectId) {
+  const { projects } = getProjectWisePeopleBreakdown();
+  const item = projects.find(p => p.project.id === projectId);
+  if (!item) return;
+
+  const project = item.project;
+  const rows = item.peopleList.map((p, idx) => {
+    const color = PCOLORS[idx % PCOLORS.length];
+    return `<div class="rounded-xl border border-gray-100 bg-gray-50 p-4 mb-3">
+      <div class="flex items-start justify-between gap-4">
+        <div class="flex items-start gap-3 min-w-0">
+          <div class="w-9 h-9 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:${color}">${esc(inits(p.employee.name || ''))}</div>
+          <div class="min-w-0">
+            <div class="text-sm font-semibold text-gray-900 truncate">${esc(p.employee.name || '—')}</div>
+            <div class="text-xs text-gray-500 mt-0.5">${esc(p.employee.dept || '—')}</div>
+            <div class="text-xs text-gray-400 mt-1">${p.slotCount} week slot${p.slotCount === 1 ? '' : 's'} · ${p.avgPct}% avg workload</div>
+          </div>
+        </div>
+        <div class="text-right flex-shrink-0">
+          <div class="text-lg font-bold text-gray-900">${p.contribution}%</div>
+          <div class="text-xs text-gray-400">FY contribution</div>
+        </div>
+      </div>
+      <div class="mt-3 flex items-center gap-2">
+        <div class="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+          <div class="h-full rounded-full" style="width:${Math.min(p.contribution, 100)}%;background:${color}"></div>
+        </div>
+        <span class="text-xs font-semibold text-gray-600 w-12 text-right">${p.contribution}%</span>
+      </div>
+    </div>`;
+  }).join('');
+
+  openModal(
+    mHdr(
+      `${project.code || 'Project'} — ${project.name || 'Project-wise People'}`,
+      `${item.peopleList.length} assigned active resource${item.peopleList.length === 1 ? '' : 's'} · Total ${item.contribution.toFixed(2)}% FY contribution`
+    )
+    + `<div class="px-6 pt-4 pb-2 border-b border-gray-100">
+        <div class="text-xs text-gray-500">
+          ${esc(project.account_name || project.client || '—')}
+          <span class="text-gray-300 mx-1">·</span>
+          ${esc(project.product_name || '—')}
+          <span class="text-gray-300 mx-1">·</span>
+          ${esc(project.stage || '—')}
+        </div>
+      </div>
+      <div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
+        ${rows || '<p class="text-sm text-gray-400 text-center py-8">No assigned active resources found.</p>'}
+      </div>
+      <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+        <button onclick="closeModal()" class="btn-gray">Close</button>
+      </div>`,
+    'max-w-3xl'
+  );
+}
+
+function renderProjectWisePeopleChart() {
+  const canvas = document.getElementById('projectPeopleChart');
+  if (!canvas) return;
+
+  if (S.charts.projectPeople) {
+    S.charts.projectPeople.destroy();
+  }
+
+  const info = document.getElementById('projectPeopleInfo');
+  const ctx = canvas.getContext('2d');
+  const { projects, employees } = getProjectWisePeopleBreakdown();
+
+  if (info) {
+    info.textContent = `${projects.length} assigned project${projects.length === 1 ? '' : 's'} · ${employees.length} active resource${employees.length === 1 ? '' : 's'}`;
+  }
+
+  const labels = projects.map(item => item.project.name || item.project.code || 'Project');
+  const totalByProject = projects.map(item => item.contribution);
+
+  const datasets = employees.map((emp, idx) => {
+    const color = PCOLORS[idx % PCOLORS.length];
+    return {
+      label: emp.name,
+      employeeId: emp.id,
+      employeeName: emp.name,
+      backgroundColor: color,
+      borderColor: color,
+      borderWidth: 0,
+      borderRadius: 2,
+      barPercentage: 0.72,
+      categoryPercentage: 0.78,
+      data: projects.map(item => {
+        const person = item.peopleList.find(p => p.employee.id === emp.id);
+        return person ? person.contribution : 0;
+      }),
+    };
+  });
+
+  S.charts.projectPeople = new Chart(ctx, {
+    type: 'bar',
+    data: { labels, datasets },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      onClick: (event, elements) => {
+        if (!elements.length) return;
+        const project = projects[elements[0].index]?.project;
+        if (project) openProjectWisePeopleModal(project.id);
+      },
+      onHover: (event, elements) => {
+        const target = event.native?.target;
+        if (target) target.style.cursor = elements.length ? 'pointer' : 'default';
+      },
+      interaction: {
+        mode: 'nearest',
+        intersect: true,
+      },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'right',
+          labels: {
+            boxWidth: 10,
+            boxHeight: 10,
+            font: { size: 10 },
+            padding: 8,
+            generateLabels: chart => {
+              const shortText = (txt, max = 30) => {
+                const t = String(txt || '').trim();
+                return t.length > max ? t.slice(0, max - 1) + '…' : t;
+              };
+              return chart.data.datasets.map((ds, i) => ({
+                text: shortText(ds.employeeName || ds.label),
+                fillStyle: ds.backgroundColor,
+                strokeStyle: ds.backgroundColor,
+                lineWidth: 0,
+                hidden: !chart.isDatasetVisible(i),
+                datasetIndex: i,
+              }));
+            },
+          },
+        },
+        tooltip: {
+          bodyFont: { size: 11 },
+          titleFont: { size: 12, weight: '600' },
+          padding: 10,
+          callbacks: {
+            title: items => {
+              const item = projects[items[0].dataIndex];
+              const total = totalByProject[items[0].dataIndex] || 0;
+              return `${item.project.code || ''} · ${item.project.name || 'Project'} · Total ${total}%`;
+            },
+            label: c => {
+              const val = c.parsed.y || 0;
+              if (!val) return '';
+              return ` ${c.dataset.employeeName}: ${val}%`;
+            },
+          },
+        },
+      },
+      scales: {
+        x: {
+          stacked: true,
+          ticks: {
+            font: { size: 11 },
+            color: '#374151',
+            maxRotation: 45,
+            minRotation: 35,
+          },
+          grid: { display: false },
+        },
+        y: {
+          stacked: true,
+          beginAtZero: true,
+          ticks: {
+            font: { size: 11 },
+            color: '#6B7280',
+            callback: v => `${v}%`,
+          },
+          grid: { color: '#F3F4F6' },
+          title: {
+            display: true,
+            text: 'FY workload contribution (%)',
+            font: { size: 11 },
+            color: '#9CA3AF',
+          },
+        },
+      },
+    },
+  });
 }
 
 
@@ -1329,7 +1982,7 @@ function openRevenueModal(d) {
   const psAmt = d.ps_amount || 0;
   const pct = totalAmt > 0 ? (psAmt / totalAmt * 100) : 0;
 
-  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · Total = opp_amount per SA code · PS = sum of PS product lines')}
+  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · Total Amount and PS Amount both use Product Amount only')}
     <div class="p-6 overflow-y-auto nice-scroll space-y-6" style="max-height:65vh">
 
       <!-- Total Amount section -->
@@ -1370,11 +2023,11 @@ function openRevenueModal(d) {
         </div>
         <div class="font-mono text-sm text-emerald-900 space-y-1">
           <div class="flex items-center justify-between">
-            <span class="text-emerald-700">PS Amount (sum of PS product lines)</span>
+            <span class="text-emerald-700">PS Amount (Product Amount from PS product rows)</span>
             <span class="font-bold">${fmtFull(psAmt)}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-emerald-700">Total Amount (opp_amount per SA code)</span>
+            <span class="text-emerald-700">Total Amount (sum of Product Amount)</span>
             <span class="font-bold">${fmtFull(totalAmt)}</span>
           </div>
           <div class="border-t border-emerald-200 my-2"></div>
@@ -1774,7 +2427,14 @@ function openViewAllModal(type) {
 /* ── Assignment modal ─────────────────────────────────────────── */
 function openAssignmentModal(opts = {}) {
   const editing = !!opts.id, cur = editing ? S.assignments.find(a => a.id === opts.id) : null;
-  const empId = (opts.employee_id || (cur && cur.employee_id) || (S.employees[0] && S.employees[0].id));
+  const selectableEmployees = getActiveEmployees();
+  const employeeOptions = selectableEmployees.length ? selectableEmployees : S.employees;
+  let empId = opts.employee_id || (cur && cur.employee_id) || (employeeOptions[0] && employeeOptions[0].id);
+
+  if (!employeeOptions.some(e => e.id === empId)) {
+    empId = employeeOptions[0] && employeeOptions[0].id;
+  }
+
   const pct = (cur && cur.percentage) || 50;
   const today = new Date();
   let defStart = today.toISOString().slice(0, 10), defEnd = today.toISOString().slice(0, 10);
@@ -1866,7 +2526,7 @@ function openAssignmentModal(opts = {}) {
     openModal(`${mHdr('Edit Assignment', 'Update workload allocation')}
       <div class="p-6 space-y-4">
         <div><label class="field-label">Resource</label>
-          <select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
+          <select id="fa_emp" class="field-input">${employeeOptions.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
         </div>
         <div><label class="field-label">Project</label>${projCombo(cur?.project_id)}</div>
         ${projInfoBlock(cur?.project_id, cur)}
@@ -1895,7 +2555,7 @@ function openAssignmentModal(opts = {}) {
     openModal(`${mHdr('Add Assignment', 'Assign a resource to a project across a date range')}
       <div class="p-6 space-y-4">
         <div><label class="field-label">Resource</label>
-          <select id="fa_emp" class="field-input">${S.employees.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
+          <select id="fa_emp" class="field-input">${employeeOptions.map(e => `<option value="${e.id}" ${e.id === empId ? 'selected' : ''}>${esc(e.name)} – ${esc(e.dept)}</option>`).join('')}</select>
         </div>
         <div><label class="field-label">Project</label>${projCombo(opts.project_id || null)}</div>
         ${projInfoBlock(opts.project_id || null, {})}
@@ -2148,6 +2808,7 @@ function initEvents() {
     if (b.dataset.add === 'resource') openEmployeeModal();
     if (b.dataset.add === 'project') openProjectModal();
     if (b.dataset.add === 'assignment') openAssignmentModal();
+    if (b.dataset.add === 'project-excel') document.getElementById('projectExcelUpload')?.click();
   }));
 
   document.getElementById('searchBox').addEventListener('input', e => { S.searchQuery = e.target.value; renderMatrix(); });
@@ -2285,6 +2946,12 @@ function initEvents() {
     e.target.value = '';
   });
 
+  document.getElementById('projectExcelUpload')?.addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    handleProjectExcelUpload(file);
+    e.target.value = '';
+  });
+
   initColResize(); initSectionDrag();
 }
 
@@ -2368,135 +3035,123 @@ function openResourceModal() {
 async function toggleEmployeeActive(empId) {
   try {
     const updated = await api('PATCH', `/api/employees/${empId}/active`);
-    // Update local state
+
     const idx = S.employees.findIndex(e => e.id === empId);
-    if (idx >= 0) S.employees[idx] = { ...S.employees[idx], ...updated };
-    S.employeeUtil = S.employeeUtil || new Map();
-    // Re-render resource modal in place
-    openResourceModal();
-    // Refresh insights list
-    renderInsights();
-    // Reload stats so Active Resources count + Productivity Score update live
-    const fy = S.fiscalYear;
-    api('GET', `/api/dashboard/stats?fiscalYear=${fy}`).then(stats => renderStats(stats)).catch(() => { });
-    toast(updated.active ? `${updated.name} set to Active` : `${updated.name} set to Inactive`);
-  } catch (e) { toast('Failed to update status', 'error'); }
-}
-
-
-function projectExportDateStamp() {
-  const d = new Date();
-  const pad = n => String(n).padStart(2, '0');
-  return `${d.getFullYear()}${pad(d.getMonth() + 1)}${pad(d.getDate())}_${pad(d.getHours())}${pad(d.getMinutes())}`;
-}
-
-function buildProjectExportRows() {
-  const fy = S.fiscalYear;
-
-  return [...(S.projects || [])]
-    .sort((a, b) => {
-      const codeA = String(a.code || '');
-      const codeB = String(b.code || '');
-      return codeA.localeCompare(codeB, undefined, { numeric: true, sensitivity: 'base' });
-    })
-    .map((p, index) => {
-      const allAssignments = S.assignments.filter(a => a.project_id === p.id);
-      const fyAssignments = allAssignments.filter(a =>
-        (a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3)
-      );
-      const assignedResources = new Set(allAssignments.map(a => a.employee_id));
-      const fyAssignedResources = new Set(fyAssignments.map(a => a.employee_id));
-      const assignedResourceNames = [...fyAssignedResources]
-        .map(empId => S.employees.find(e => e.id === empId)?.name)
-        .filter(Boolean)
-        .sort((a, b) => a.localeCompare(b))
-        .join(', ');
-
-      return {
-        'SL': index + 1,
-        'Database Project ID': p.id ?? '',
-        'Opportunity Number': p.code ?? '',
-        'Project Name': p.name ?? '',
-        'Account Name': p.account_name ?? '',
-        'Client': p.client ?? '',
-        'Product Name': p.product_name ?? '',
-        'Product Family': p.product_family ?? '',
-        'Opportunity Owner': p.opportunity_owner ?? '',
-        'Stage': p.stage ?? '',
-        'Deal Status': p.deal_status ?? '',
-        'Priority': p.priority ?? '',
-        'Probability (%)': Number(p.probability) || 0,
-        'Product Amount': Number(p.product_amount) || 0,
-        'Opportunity Amount': Number(p.opp_amount) || 0,
-        'Budget': Number(p.budget) || 0,
-        'Spent (%)': Number(p.spent_pct) || 0,
-        'Progress (%)': Number(p.progress) || 0,
-        'Created Date': p.created_date ?? '',
-        'Close / Closed Won Date': p.end_date ?? '',
-        'Project Closing Date': p.project_closing_date ?? '',
-        'Color': p.color ?? '',
-        'Total Assignment Slots': allAssignments.length,
-        [`FY${fy + 1} Assignment Slots`]: fyAssignments.length,
-        'Total Assigned Resource Count': assignedResources.size,
-        [`FY${fy + 1} Assigned Resource Count`]: fyAssignedResources.size,
-        [`FY${fy + 1} Assigned Resource Names`]: assignedResourceNames,
-        'Created At': p.created_at ?? '',
+    if (idx >= 0) {
+      S.employees[idx] = {
+        ...S.employees[idx],
+        ...updated,
       };
-    });
+    }
+
+    if (!updated.active && S.matrixResourceFilter && +S.matrixResourceFilter === empId) {
+      S.matrixResourceFilter = null;
+    }
+
+    buildMatrix();
+    populateMatrixFilter();
+    renderMatrix();
+    renderYearlyWorkByProjectChart();
+    renderProjectWisePeopleChart();
+    renderTeamSummaryChart();
+    renderIndividualSummaryChart();
+    renderInsights();
+
+    openResourceModal();
+
+    const fy = S.fiscalYear;
+    api('GET', `/api/dashboard/stats?fiscalYear=${fy}`)
+      .then(stats => renderStats(stats))
+      .catch(() => {});
+
+    toast(updated.active ? `${updated.name} set to Active` : `${updated.name} set to Inactive`);
+  } catch (e) {
+    toast('Failed to update status', 'error');
+  }
 }
 
-function autoSizeWorksheetColumns(ws, rows) {
-  const headers = rows.length ? Object.keys(rows[0]) : [];
-  ws['!cols'] = headers.map(h => {
-    const maxLen = Math.max(
-      String(h).length,
-      ...rows.map(r => String(r[h] ?? '').length)
-    );
-    return { wch: Math.min(Math.max(maxLen + 2, 10), 55) };
-  });
-}
 
 function downloadAllProjectsExcel() {
-  if (typeof XLSX === 'undefined') {
-    toast('Excel export library is not loaded. Check SheetJS CDN.', 'error');
-    return;
+  try {
+    if (typeof XLSX === 'undefined') {
+      toast('Excel library is not loaded. Please check SheetJS CDN access.', 'error');
+      return;
+    }
+
+    const projectRows = (S.projects || []).map((p, idx) => {
+      const asgs = (S.assignments || []).filter(a => a.project_id === p.id);
+      const employeeIds = [...new Set(asgs.map(a => a.employee_id).filter(Boolean))];
+      const resourceNames = employeeIds
+        .map(id => (S.employees || []).find(e => e.id === id)?.name)
+        .filter(Boolean)
+        .sort((a, b) => a.localeCompare(b));
+
+      const assignedWeightedWeeks = asgs.reduce((sum, a) => sum + ((Number(a.percentage) || 0) / 100), 0);
+      const uniqueKey = [p.code || '', p.product_name || '', Number(p.product_amount || 0).toFixed(2)].join(' | ');
+
+      return {
+        'SL': idx + 1,
+        'Opportunity Number': p.code || '',
+        'Project Name': p.name || '',
+        'Account Name': p.account_name || '',
+        'Client': p.client || '',
+        'Product Name': p.product_name || '',
+        'Product Family': p.product_family || '',
+        'Opportunity Owner': p.opportunity_owner || '',
+        'Stage': p.stage || '',
+        'Deal Status': p.deal_status || '',
+        'Priority': p.priority || '',
+        'Probability (%)': Number(p.probability) || 0,
+        'Product Amount': Number(p.product_amount) || 0,
+        'Amount': Number(p.opp_amount) || 0,
+        'Budget': Number(p.budget) || 0,
+        'Progress (%)': Number(p.progress) || 0,
+        'Created Date': p.created_date || '',
+        'Close Won Date': p.end_date || '',
+        'Project Closing Date': p.project_closing_date || '',
+        'Assignment Slot Count': asgs.length,
+        'Assigned Resource Count': employeeIds.length,
+        'Assigned Weighted Weeks': +assignedWeightedWeeks.toFixed(2),
+        'Assigned Resource Names': resourceNames.join(', '),
+        'Composite Import Key': uniqueKey,
+      };
+    });
+
+    const stageSummary = {};
+    for (const p of S.projects || []) {
+      const key = p.stage || 'Unknown';
+      stageSummary[key] ||= { 'Stage': key, 'Project Count': 0, 'Total Product Amount': 0, 'Total Amount': 0 };
+      stageSummary[key]['Project Count'] += 1;
+      stageSummary[key]['Total Product Amount'] += Number(p.product_amount) || 0;
+      stageSummary[key]['Total Amount'] += Number(p.opp_amount) || 0;
+    }
+
+    const summaryRows = [
+      { 'Metric': 'Export Date', 'Value': new Date().toLocaleString() },
+      { 'Metric': 'Total Projects', 'Value': (S.projects || []).length },
+      { 'Metric': 'Total Assignment Slots', 'Value': (S.assignments || []).length },
+      { 'Metric': 'Composite Key Used For Import Matching', 'Value': 'Opportunity Number + Product Name/Product Description + Product Amount' },
+    ];
+
+    const wb = XLSX.utils.book_new();
+    const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
+    const wsCompare = XLSX.utils.json_to_sheet(projectRows);
+    const wsStage = XLSX.utils.json_to_sheet(Object.values(stageSummary));
+
+    XLSX.utils.book_append_sheet(wb, wsSummary, 'Export Summary');
+    XLSX.utils.book_append_sheet(wb, wsCompare, 'Projects Compare');
+    XLSX.utils.book_append_sheet(wb, wsStage, 'Stage Summary');
+
+    const stamp = new Date().toISOString().slice(0, 19).replace(/[:T]/g, '-');
+    XLSX.writeFile(wb, `allocation_dashboard_projects_${stamp}.xlsx`);
+    toast(`Exported ${projectRows.length} projects`);
+  } catch (e) {
+    console.error(e);
+    toast('Failed to download project Excel', 'error');
   }
-
-  const exportRows = buildProjectExportRows();
-
-  if (!exportRows.length) {
-    toast('No projects available to export', 'error');
-    return;
-  }
-
-  const rawRows = [...(S.projects || [])]
-    .sort((a, b) => String(a.code || '').localeCompare(String(b.code || ''), undefined, { numeric: true, sensitivity: 'base' }));
-
-  const summaryRows = [
-    { Metric: 'Exported Projects', Value: exportRows.length },
-    { Metric: 'Fiscal Year', Value: `FY${S.fiscalYear + 1}` },
-    { Metric: 'Exported At', Value: new Date().toLocaleString() },
-  ];
-
-  const wb = XLSX.utils.book_new();
-
-  const wsSummary = XLSX.utils.json_to_sheet(summaryRows);
-  autoSizeWorksheetColumns(wsSummary, summaryRows);
-  XLSX.utils.book_append_sheet(wb, wsSummary, 'Export Summary');
-
-  const wsCompare = XLSX.utils.json_to_sheet(exportRows);
-  autoSizeWorksheetColumns(wsCompare, exportRows);
-  wsCompare['!freeze'] = { xSplit: 0, ySplit: 1 };
-  XLSX.utils.book_append_sheet(wb, wsCompare, 'Projects Compare');
-
-  const wsRaw = XLSX.utils.json_to_sheet(rawRows);
-  autoSizeWorksheetColumns(wsRaw, rawRows);
-  XLSX.utils.book_append_sheet(wb, wsRaw, 'Projects Raw');
-
-  const filename = `all_projects_export_${projectExportDateStamp()}.xlsx`;
-  XLSX.writeFile(wb, filename);
-  toast(`Downloaded ${exportRows.length} projects`);
 }
+
+window.downloadAllProjectsExcel = downloadAllProjectsExcel;
 
 /* ================================================================ PROJECTS DRILL-DOWN (All Projects modal) */
 function openProjectsModal() {
@@ -2563,7 +3218,7 @@ function openProjectsModal() {
     <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
       <span class="text-xs text-gray-400" id="projModalCount">${S.projects.length} project${S.projects.length === 1 ? '' : 's'}</span>
       <div class="flex items-center gap-2">
-        <button onclick="downloadAllProjectsExcel()" class="btn-blue">Download Excel</button>
+        <button onclick="window.downloadAllProjectsExcel()" class="btn-blue">Download Excel</button>
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>
     </div>`, 'max-w-3xl');

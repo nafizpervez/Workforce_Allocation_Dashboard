@@ -782,6 +782,7 @@ td.cell:hover .cell-add {
   display: none;
 }
 
+
 /* ================================================================
    Yearly Work / Time Sheet Summary tabs
    ================================================================ */
@@ -841,6 +842,7 @@ td.cell:hover .cell-add {
 }
 
 .yearly-work-chart-wrap,
+.project-people-chart-wrap,
 .timesheet-chart-wrap {
   height: 430px;
   min-width: 100%;
@@ -849,6 +851,7 @@ td.cell:hover .cell-add {
 }
 
 .yearly-work-chart-wrap canvas,
+.project-people-chart-wrap canvas,
 .timesheet-chart-wrap canvas {
   min-width: 1180px;
 }
@@ -900,6 +903,7 @@ td.cell:hover .cell-add {
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
 }
 
+
 /* ================================================================
    Resource Assignment Matrix / Yearly Work by Project tabs
    ================================================================ */
@@ -936,19 +940,27 @@ td.cell:hover .cell-add {
   display: none;
 }
 
+
+/* ==============================================================
+   Project import helper modal
+   ============================================================== */
+.import-help-list {
+  margin: 0;
+  padding-left: 1rem;
+  color: #6b7280;
+  font-size: 12px;
+}
+
 /* ==============================================================
    Compact filters for Running Projects and Service Pipeline
    ============================================================== */
 
-/* General compact filter style */
+/* Base compact style for both card filter areas */
 .card-filter-bar {
-  padding: 7px 14px !important;
+  padding: 8px 16px !important;
   border-bottom: 1px solid #f3f4f6;
   background: #f9fafb;
-  display: flex;
-  gap: 5px !important;
-  align-items: center;
-  box-sizing: border-box;
+  box-sizing: border-box !important;
 }
 
 .card-filter-bar select,
@@ -956,157 +968,112 @@ td.cell:hover .cell-add {
 .card-filter-bar button,
 .card-filter-bar .flt-select,
 .card-filter-bar .flt-sort-btn {
-  height: 27px !important;
-  min-height: 27px !important;
-  max-height: 27px !important;
-  font-size: 10.5px !important;
+  height: 28px !important;
+  min-height: 28px !important;
+  max-height: 28px !important;
+  font-size: 11px !important;
   line-height: 1.2 !important;
-  padding-top: 3px !important;
-  padding-bottom: 3px !important;
+  padding-top: 4px !important;
+  padding-bottom: 4px !important;
   box-sizing: border-box !important;
+  min-width: 0 !important;
+  max-width: 100% !important;
+  width: 100% !important;
   white-space: nowrap !important;
-  flex: 0 0 auto !important;
-}
-
-/* Search inputs have SVG icon, so keep left padding */
-#runSearch,
-#pipeSearch {
-  padding-left: 28px !important;
-  padding-right: 7px !important;
-}
-
-/* --------------------------------------------------------------
-   Running Projects filter bar
-   Force exactly one row
-   -------------------------------------------------------------- */
-
-.card-filter-bar:has(#runSearch) {
-  flex-wrap: nowrap !important;
-  overflow-x: hidden !important;
-  overflow-y: hidden !important;
-}
-
-/* Running Projects exact compact widths */
-#runSearch {
-  width: 118px !important;
-  min-width: 118px !important;
-  max-width: 118px !important;
-}
-
-#runAmountFilt {
-  width: 86px !important;
-  min-width: 86px !important;
-  max-width: 86px !important;
-}
-
-#runCloseFilt {
-  width: 86px !important;
-  min-width: 86px !important;
-  max-width: 86px !important;
-}
-
-#runProjCloseFilt {
-  width: 98px !important;
-  min-width: 98px !important;
-  max-width: 98px !important;
-}
-
-#runProdFamilyFilt {
-  width: 105px !important;
-  min-width: 105px !important;
-  max-width: 105px !important;
-}
-
-#runProductTypeFilt {
-  width: 155px !important;
-  min-width: 155px !important;
-  max-width: 155px !important;
-}
-
-#runSortAssignedBtn {
-  width: 90px !important;
-  min-width: 90px !important;
-  max-width: 90px !important;
-  justify-content: center !important;
-  padding-left: 6px !important;
-  padding-right: 6px !important;
-}
-
-/* --------------------------------------------------------------
-   Service Pipeline filter bar
-   Keep maximum two rows
-   -------------------------------------------------------------- */
-
-.card-filter-bar:has(#pipeSearch) {
-  flex-wrap: wrap !important;
-  overflow: hidden !important;
-  max-height: 62px !important;
-}
-
-/* Service Pipeline compact widths */
-#pipeSearch {
-  width: 130px !important;
-  min-width: 130px !important;
-  max-width: 130px !important;
-}
-
-#pipeStageFilt {
-  width: 105px !important;
-  min-width: 105px !important;
-  max-width: 105px !important;
-}
-
-#pipeDealStatusFilt {
-  width: 110px !important;
-  min-width: 110px !important;
-  max-width: 110px !important;
-}
-
-#pipeAmountFilt {
-  width: 95px !important;
-  min-width: 95px !important;
-  max-width: 95px !important;
-}
-
-#pipeCloseFilt {
-  width: 108px !important;
-  min-width: 108px !important;
-  max-width: 108px !important;
-}
-
-#pipeProjCloseFilt {
-  width: 108px !important;
-  min-width: 108px !important;
-  max-width: 108px !important;
-}
-
-#pipeProdFamilyFilt {
-  width: 115px !important;
-  min-width: 115px !important;
-  max-width: 115px !important;
-}
-
-#pipeProductTypeFilt {
-  width: 260px !important;
-  min-width: 260px !important;
-  max-width: 260px !important;
-}
-
-#pipeSortAssignedBtn {
-  width: 96px !important;
-  min-width: 96px !important;
-  max-width: 96px !important;
-  justify-content: center !important;
-  padding-left: 6px !important;
-  padding-right: 6px !important;
-}
-
-/* Prevent long selected text from visually expanding controls */
-.card-filter-bar select {
   overflow: hidden !important;
   text-overflow: ellipsis !important;
 }
 
-.card-filter-bar:has(#pipeSearch) {
-  padding-bottom: 12px !important;
+.card-filter-bar .flt-sort-btn {
+  justify-content: center !important;
+  padding-left: 6px !important;
+  padding-right: 6px !important;
+}
+
+.card-filter-bar .filter-control-wrap {
+  min-width: 0 !important;
+  width: 100% !important;
+}
+
+/* Keep search icon spacing */
+#runSearch,
+#pipeSearch {
+  padding-left: 28px !important;
+  padding-right: 8px !important;
+}
+
+/* Running Projects: exactly one row */
+.filter-bar-run {
+  display: grid !important;
+  grid-template-columns:
+    minmax(105px, 1.15fr)
+    minmax(82px, 0.72fr)
+    minmax(84px, 0.72fr)
+    minmax(98px, 0.86fr)
+    minmax(108px, 0.95fr)
+    minmax(125px, 1.45fr)
+    minmax(86px, 0.78fr) !important;
+  gap: 6px !important;
+  align-items: center !important;
+  flex-wrap: nowrap !important;
+  overflow: hidden !important;
+}
+
+/* Service Pipeline: exactly two rows */
+.filter-bar-pipe {
+  display: flex !important;
+  flex-direction: column !important;
+  gap: 6px !important;
+  padding-bottom: 10px !important;
+  max-height: none !important;
+  overflow: visible !important;
+}
+
+.filter-bar-pipe .filter-row {
+  display: grid !important;
+  gap: 6px !important;
+  align-items: center !important;
+  width: 100% !important;
+  min-width: 0 !important;
+}
+
+.filter-bar-pipe .pipe-row-1 {
+  grid-template-columns:
+    minmax(120px, 1.2fr)
+    minmax(100px, 1fr)
+    minmax(110px, 1fr)
+    minmax(95px, 0.86fr)
+    minmax(110px, 1fr)
+    minmax(110px, 1fr) !important;
+}
+
+.filter-bar-pipe .pipe-row-2 {
+  grid-template-columns:
+    minmax(120px, 1fr)
+    minmax(260px, 4fr)
+    minmax(95px, 0.8fr) !important;
+}
+
+/* Hard overrides for Tailwind utility widths on these controls */
+#runSearch,
+#pipeSearch {
+  width: 100% !important;
+}
+
+/* Small screens: allow horizontal scroll rather than creating extra rows */
+@media (max-width: 1200px) {
+  .filter-bar-run {
+    overflow-x: auto !important;
+    grid-template-columns: 120px 90px 90px 105px 115px 150px 95px !important;
+  }
+
+  .filter-bar-pipe .pipe-row-1 {
+    grid-template-columns: 130px 105px 115px 100px 115px 115px !important;
+    overflow-x: auto !important;
+  }
+
+  .filter-bar-pipe .pipe-row-2 {
+    grid-template-columns: 125px 280px 100px !important;
+    overflow-x: auto !important;
+  }
 }
