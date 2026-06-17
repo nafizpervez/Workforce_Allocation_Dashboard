@@ -62,8 +62,77 @@ function shortCustomerName(name) {
 }
 function fmtUsd(n) { return (Number(n) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 }) + ' USD'; }
 
-function expandDateRange(start, end) { const out = [], seen = new Set(); if (!start || !end) return out; const s = new Date(start + 'T00:00:00'), e = new Date(end + 'T00:00:00'); if (isNaN(s) || isNaN(e) || e < s) return out; const cur = new Date(s); while (cur <= e) { const y = cur.getFullYear(), m = cur.getMonth() + 1, d = cur.getDate(), w = d <= 7 ? 1 : d <= 14 ? 2 : d <= 21 ? 3 : 4, k = `${y}-${m}-${w}`; if (!seen.has(k)) { seen.add(k); out.push({ year: y, month: m, week: w }); } cur.setDate(d + 1); } return out; }
-function weekDateRange(year, month, week) { const startDay = { 1: 1, 2: 8, 3: 15, 4: 22 }[week] || 1; const endDay = { 1: 7, 2: 14, 3: 21, 4: 28 }[week] || 7; const fmt = d => d.toISOString().slice(0, 10); return { start: fmt(new Date(year, month - 1, startDay)), end: fmt(new Date(year, month - 1, endDay)) }; }
+function parseDateInputLocal(value) {
+  if (!value) return null;
+
+  const parts = String(value).split('-').map(Number);
+
+  if (parts.length !== 3 || parts.some(n => Number.isNaN(n))) {
+    return null;
+  }
+
+  const [year, month, day] = parts;
+  return new Date(year, month - 1, day);
+}
+
+function formatDateInputLocal(date) {
+  if (!(date instanceof Date) || Number.isNaN(date.getTime())) return '';
+
+  const y = date.getFullYear();
+  const m = String(date.getMonth() + 1).padStart(2, '0');
+  const d = String(date.getDate()).padStart(2, '0');
+
+  return `${y}-${m}-${d}`;
+}
+
+function addDaysLocal(date, days) {
+  const d = new Date(date.getFullYear(), date.getMonth(), date.getDate());
+  d.setDate(d.getDate() + days);
+  return d;
+}
+
+function getMatrixSlotFromDate(date) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  const day = date.getDate();
+
+  let week = Math.floor((day - 1) / 7) + 1;
+  if (week > 4) week = 4;
+
+  return { year, month, week };
+}
+
+function expandDateRange(start, end) {
+  const out = [];
+  const seen = new Set();
+  const s = parseDateInputLocal(start);
+  const e = parseDateInputLocal(end || start);
+
+  if (!s || !e || e < s) return out;
+
+  for (let cur = new Date(s.getFullYear(), s.getMonth(), s.getDate()); cur <= e; cur = addDaysLocal(cur, 1)) {
+    const slot = getMatrixSlotFromDate(cur);
+    const k = `${slot.year}-${slot.month}-${slot.week}`;
+
+    if (!seen.has(k)) {
+      seen.add(k);
+      out.push(slot);
+    }
+  }
+
+  return out;
+}
+
+function weekDateRange(year, month, week) {
+  const lastDayOfMonth = new Date(year, month, 0).getDate();
+  const startDay = ((week - 1) * 7) + 1;
+  const endDay = week >= 4 ? lastDayOfMonth : week * 7;
+
+  return {
+    start: formatDateInputLocal(new Date(year, month - 1, startDay)),
+    end: formatDateInputLocal(new Date(year, month - 1, endDay)),
+  };
+}
 
 /* ── filter helpers ──────────────────────────────────────────── */
 function parseAmountRange(r) { if (!r) return null; if (r.endsWith('+')) return [+r.slice(0, -1), Infinity]; const p = r.split('-'); return [+p[0], +p[1]]; }
@@ -836,18 +905,20 @@ function buildWorkTypePivot(rows, rowField) {
   const typeOrder = orderedPresentWorkTypes(rows);
   return { rowOrder, typeOrder, table, totals };
 }
-const stackedPercentLabelPlugin = { id: 'stackedPercentLabel', afterDatasetsDraw(chart) {
-  const { ctx } = chart;
-  chart.data.datasets.forEach((ds, datasetIndex) => {
-    const meta = chart.getDatasetMeta(datasetIndex);
-    meta.data.forEach((bar, index) => {
-      const val = Number(ds.data[index]) || 0;
-      if (val < 3) return;
-      const props = bar.getProps(['x', 'y', 'base'], true);
-      ctx.save(); ctx.fillStyle = val >= 15 ? '#111827' : '#374151'; ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val.toFixed(val >= 10 ? 0 : 1)}%`, props.x, (props.y + props.base) / 2); ctx.restore();
+const stackedPercentLabelPlugin = {
+  id: 'stackedPercentLabel', afterDatasetsDraw(chart) {
+    const { ctx } = chart;
+    chart.data.datasets.forEach((ds, datasetIndex) => {
+      const meta = chart.getDatasetMeta(datasetIndex);
+      meta.data.forEach((bar, index) => {
+        const val = Number(ds.data[index]) || 0;
+        if (val < 3) return;
+        const props = bar.getProps(['x', 'y', 'base'], true);
+        ctx.save(); ctx.fillStyle = val >= 15 ? '#111827' : '#374151'; ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val.toFixed(val >= 10 ? 0 : 1)}%`, props.x, (props.y + props.base) / 2); ctx.restore();
+      });
     });
-  });
-}};
+  }
+};
 function buildStackedPercentDatasets(pivot, mode = 'team') {
   const isIndividual = mode === 'individual';
 
@@ -1229,29 +1300,17 @@ function openProjectImportResultModal(result, fileName) {
   const inserted = result.inserted || [];
   const skipped = result.skipped_existing || [];
   const failed = result.failed || [];
-  const notInserted = [
-    ...skipped.map(p => ({ ...p, _kind: 'skipped' })),
-    ...failed.map(p => ({ ...p, _kind: 'failed' })),
-  ];
 
-  const defaultExistingReason = 'Not inserted because an app project already has the same Opportunity Number + resolved Product Name/Product Description + Product Amount.';
-
-  const row = (p, badgeCls, badgeText) => {
-    const reason = p.reason || p.error || (p._kind === 'skipped' ? defaultExistingReason : 'Not inserted because the row failed validation or database insert.');
-
-    return `
-      <div class="flex items-start justify-between gap-3 py-2.5 border-b border-gray-100 last:border-0">
-        <div class="min-w-0">
-          <div class="text-xs font-bold text-blue-600 mono">${esc(p.code || '—')}</div>
-          <div class="text-sm font-semibold text-gray-900 truncate" title="${esc(p.name || '—')}">${esc(p.name || '—')}</div>
-          ${(p.product_name || p.product_amount !== undefined) ? `<div class="text-xs text-gray-500 mt-0.5 truncate" title="${esc(p.product_name || '—')}">${esc(p.product_name || '—')} · ${Number(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>` : ''}
-          <div class="text-xs ${p._kind === 'failed' ? 'text-red-600' : 'text-gray-500'} mt-1 leading-snug">
-            <span class="font-semibold">Reason:</span> ${esc(reason)}
-          </div>
-        </div>
-        <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls} flex-shrink-0">${badgeText}</span>
-      </div>`;
-  };
+  const row = (p, badgeCls, badgeText) => `
+    <div class="flex items-start justify-between gap-3 py-2 border-b border-gray-100 last:border-0">
+      <div class="min-w-0">
+        <div class="text-xs font-bold text-blue-600 mono">${esc(p.code || '—')}</div>
+        <div class="text-sm font-semibold text-gray-900 truncate">${esc(p.name || '—')}</div>
+        ${(p.product_name || p.product_amount !== undefined) ? `<div class="text-xs text-gray-500 mt-0.5 truncate">${esc(p.product_name || '—')} · ${Number(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>` : ''}
+        ${p.error ? `<div class="text-xs text-red-500 mt-0.5">${esc(p.error)}</div>` : ''}
+      </div>
+      <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls} flex-shrink-0">${badgeText}</span>
+    </div>`;
 
   openModal(
     mHdr('Project Excel Import Completed', `${fileName || 'Uploaded Excel'} · ${result.normalized_projects || 0} unique project lines traced by Opportunity Number + resolved Product Name/Product Description + Product Amount`)
@@ -1267,25 +1326,23 @@ function openProjectImportResultModal(result, fileName) {
           </div>
           <div class="rounded-xl bg-red-50 border border-red-100 p-4 text-center">
             <div class="text-2xl font-bold text-red-700">${result.failed_count || 0}</div>
-            <div class="text-xs text-red-600 mt-1">Failed Lines</div>
+            <div class="text-xs text-red-600 mt-1">Failed</div>
           </div>
         </div>
 
         <div class="grid grid-cols-2 gap-4">
           <div>
             <div class="text-sm font-semibold text-gray-700 mb-2">Inserted Projects</div>
-            <div class="rounded-xl border border-gray-100 bg-white max-h-80 overflow-y-auto nice-scroll px-3">
-              ${inserted.length ? inserted.map(p => row({ ...p, reason: 'Inserted because this composite project line was not found in the app.', _kind: 'inserted' }, 'bg-emerald-100 text-emerald-700', 'Inserted')).join('') : '<p class="text-sm text-gray-400 text-center py-6">No new projects inserted.</p>'}
+            <div class="rounded-xl border border-gray-100 bg-white max-h-72 overflow-y-auto nice-scroll px-3">
+              ${inserted.length ? inserted.map(p => row(p, 'bg-emerald-100 text-emerald-700', 'Inserted')).join('') : '<p class="text-sm text-gray-400 text-center py-6">No new projects inserted.</p>'}
             </div>
           </div>
           <div>
-            <div class="flex items-center justify-between gap-3 mb-2">
-              <div class="text-sm font-semibold text-gray-700">Not Inserted Projects</div>
-              <div class="text-xs text-gray-400">${notInserted.length} line${notInserted.length === 1 ? '' : 's'}</div>
-            </div>
-            <div class="rounded-xl border border-gray-100 bg-white max-h-80 overflow-y-auto nice-scroll px-3">
-              ${notInserted.map(p => row(p, p._kind === 'failed' ? 'bg-red-100 text-red-700' : 'bg-gray-100 text-gray-600', p._kind === 'failed' ? 'Failed' : 'Exists')).join('')}
-              ${!notInserted.length ? '<p class="text-sm text-gray-400 text-center py-6">No skipped or failed rows.</p>' : ''}
+            <div class="text-sm font-semibold text-gray-700 mb-2">Skipped / Failed</div>
+            <div class="rounded-xl border border-gray-100 bg-white max-h-72 overflow-y-auto nice-scroll px-3">
+              ${skipped.slice(0, 80).map(p => row(p, 'bg-gray-100 text-gray-600', 'Exists')).join('')}
+              ${failed.map(p => row(p, 'bg-red-100 text-red-700', 'Failed')).join('')}
+              ${!skipped.length && !failed.length ? '<p class="text-sm text-gray-400 text-center py-6">No skipped or failed rows.</p>' : ''}
             </div>
           </div>
         </div>
@@ -1294,7 +1351,7 @@ function openProjectImportResultModal(result, fileName) {
         <button onclick="openProjectsModal()" class="btn-blue">View Projects</button>
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>`,
-    'max-w-5xl'
+    'max-w-4xl'
   );
 }
 
@@ -2437,7 +2494,7 @@ function openAssignmentModal(opts = {}) {
 
   const pct = (cur && cur.percentage) || 50;
   const today = new Date();
-  let defStart = today.toISOString().slice(0, 10), defEnd = today.toISOString().slice(0, 10);
+  let defStart = formatDateInputLocal(today), defEnd = formatDateInputLocal(today);
   if (editing && cur && cur.year && cur.month && cur.week) {
     const dr = weekDateRange(cur.year, cur.month, cur.week);
     defStart = dr.start;
@@ -2693,7 +2750,28 @@ function openAssignmentModal(opts = {}) {
   }, true);
 }
 
-function setDateRange(preset) { const fmt = d => d.toISOString().slice(0, 10), t = new Date(); let s, e; if (preset === 'week') { s = new Date(t); e = new Date(t); e.setDate(e.getDate() + 6); } else if (preset === 'month') { s = new Date(t); e = new Date(t); e.setMonth(e.getMonth() + 1); } else if (preset === '3months') { s = new Date(t); e = new Date(t); e.setMonth(e.getMonth() + 3); } else { s = new Date(S.fiscalYear, 3, 1); e = new Date(S.fiscalYear + 1, 2, 31); } document.getElementById('fa_start').value = fmt(s); document.getElementById('fa_end').value = fmt(e); updateSlotPreview(); }
+function setDateRange(preset) {
+  const t = new Date();
+  let s, e;
+
+  if (preset === 'week') {
+    s = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    e = addDaysLocal(s, 6);
+  } else if (preset === 'month') {
+    s = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    e = new Date(t.getFullYear(), t.getMonth() + 1, t.getDate());
+  } else if (preset === '3months') {
+    s = new Date(t.getFullYear(), t.getMonth(), t.getDate());
+    e = new Date(t.getFullYear(), t.getMonth() + 3, t.getDate());
+  } else {
+    s = new Date(S.fiscalYear, 3, 1);
+    e = new Date(S.fiscalYear + 1, 2, 31);
+  }
+
+  document.getElementById('fa_start').value = formatDateInputLocal(s);
+  document.getElementById('fa_end').value = formatDateInputLocal(e);
+  updateSlotPreview();
+}
 
 function updateSlotPreview() { const s = document.getElementById('fa_start'), e = document.getElementById('fa_end'), pv = document.getElementById('slotPreview'); if (!s || !e || !pv) return; const slots = expandDateRange(s.value, e.value); pv.innerHTML = `Will create <span class="font-semibold">${slots.length}</span> weekly assignment${slots.length === 1 ? '' : 's'}`; pv.className = slots.length > 0 ? 'bg-blue-50 border border-blue-200 rounded-lg p-3 text-sm text-blue-800' : 'bg-amber-50 border border-amber-200 rounded-lg p-3 text-sm text-amber-800'; }
 
@@ -3062,7 +3140,7 @@ async function toggleEmployeeActive(empId) {
     const fy = S.fiscalYear;
     api('GET', `/api/dashboard/stats?fiscalYear=${fy}`)
       .then(stats => renderStats(stats))
-      .catch(() => {});
+      .catch(() => { });
 
     toast(updated.active ? `${updated.name} set to Active` : `${updated.name} set to Inactive`);
   } catch (e) {
