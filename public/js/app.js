@@ -47,6 +47,14 @@ const STAGE_PILL = { 'Prospect': 'bg-gray-100 text-gray-700', 'Qualify': 'bg-sky
 const PRIORITY_COLOR = { Critical: '#DC2626', High: '#D97706', Medium: '#2563EB', Low: '#6B7280' };
 const PRIORITY_PILL = { Critical: 'bg-red-100 text-red-700', High: 'bg-orange-100 text-orange-700', Medium: 'bg-blue-100 text-blue-700', Low: 'bg-gray-100 text-gray-700' };
 
+
+// Employees/managers listed here are kept in the team master list,
+// but excluded from assignment matrix rows, assignment charts, insights,
+// and uploaded Time Sheet summary charts.
+const NON_ASSIGNABLE_PERSON_KEYS = new Set([
+  'debashishbhowmick',
+]);
+
 /* ── helpers ─────────────────────────────────────────────────── */
 function fiscalMonths(fy) { return [{ y: fy, m: 4 }, { y: fy, m: 5 }, { y: fy, m: 6 }, { y: fy, m: 7 }, { y: fy, m: 8 }, { y: fy, m: 9 }, { y: fy, m: 10 }, { y: fy, m: 11 }, { y: fy, m: 12 }, { y: fy + 1, m: 1 }, { y: fy + 1, m: 2 }, { y: fy + 1, m: 3 }].map(x => ({ ...x, label: `${MN[x.m - 1]} ${x.y}` })); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
@@ -298,7 +306,7 @@ function calcLocalUtil(period) {
     empWeighted[a.employee_id] = (empWeighted[a.employee_id] || 0) + (a.percentage / 100);
   }
 
-  const active = S.employees.filter(e => e.active !== 0);
+  const active = getActiveEmployees();
   const all = active.map(e => ({
     id: e.id, name: e.name, dept: e.dept,
     utilization: +Math.min(((empWeighted[e.id] || 0) / totalWeeks * 100), 100).toFixed(1)
@@ -658,6 +666,12 @@ const TIMESHEET_WORK_TYPE_ORDER = [
   'General Admin',
 ];
 
+// Chart.js stacks datasets from bottom to top. To show the visual stack as:
+// Training Delivery → Skill Development → Service Delivery - Local PS →
+// Service Delivery - Intrasourcing → Pre - Sales → General Admin
+// from top to bottom, datasets are built in reverse order.
+const TIMESHEET_WORK_TYPE_STACK_ORDER = [...TIMESHEET_WORK_TYPE_ORDER].reverse();
+
 const TIMESHEET_WORK_TYPE_COLORS = {
   'Training Delivery': '#449328',
   'Skill Development': '#F6C6AD',
@@ -698,20 +712,29 @@ function timesheetLegendLabels() {
     boxHeight: 10,
     font: { size: 11 },
     padding: 10,
-    generateLabels: chart => chart.data.datasets.map((ds, i) => ({
-      text: ds.label,
-      fillStyle: ds.timesheetColor || ds.backgroundColor,
-      strokeStyle: ds.timesheetColor || ds.borderColor || ds.backgroundColor,
-      lineWidth: 0,
-      hidden: !chart.isDatasetVisible(i),
-      datasetIndex: i,
-    })),
+    generateLabels: chart => {
+      const labels = chart.data.datasets.map((ds, i) => ({
+        text: ds.label,
+        fillStyle: ds.timesheetColor || ds.backgroundColor,
+        strokeStyle: ds.timesheetColor || ds.borderColor || ds.backgroundColor,
+        lineWidth: 0,
+        hidden: !chart.isDatasetVisible(i),
+        datasetIndex: i,
+      }));
+
+      // Keep legend displayed in the requested top-to-bottom business order,
+      // even though datasets are reversed for correct stacked-bar drawing.
+      return labels.sort((a, b) => (
+        TIMESHEET_WORK_TYPE_ORDER.indexOf(a.text) -
+        TIMESHEET_WORK_TYPE_ORDER.indexOf(b.text)
+      ));
+    },
   };
 }
 
 function orderedPresentWorkTypes(rows) {
   const present = new Set((rows || []).map(r => r.workType).filter(Boolean));
-  return TIMESHEET_WORK_TYPE_ORDER.filter(type => present.has(type));
+  return TIMESHEET_WORK_TYPE_STACK_ORDER.filter(type => present.has(type));
 }
 function monthSortKey(label, fallbackIndex = 0) {
   const s = String(label || '').trim();
@@ -791,8 +814,12 @@ function compactPersonKey(value) {
   return normalizePersonName(value).replace(/\s+/g, '');
 }
 
+function isNonAssignablePerson(value) {
+  return NON_ASSIGNABLE_PERSON_KEYS.has(compactPersonKey(value));
+}
+
 function getActiveEmployees() {
-  return (S.employees || []).filter(e => e.active !== 0);
+  return (S.employees || []).filter(e => e.active !== 0 && !isNonAssignablePerson(e.name));
 }
 
 function getActiveEmployeeIdSet() {
@@ -800,12 +827,16 @@ function getActiveEmployeeIdSet() {
 }
 
 function getInactiveEmployeeKeySet() {
-  return new Set(
-    (S.employees || [])
-      .filter(e => e.active === 0)
-      .map(e => compactPersonKey(e.name))
-      .filter(Boolean)
-  );
+  const keys = new Set(NON_ASSIGNABLE_PERSON_KEYS);
+
+  for (const e of (S.employees || [])) {
+    if (e.active === 0) {
+      const key = compactPersonKey(e.name);
+      if (key) keys.add(key);
+    }
+  }
+
+  return keys;
 }
 
 function isInactiveTimesheetWorker(workerName) {
@@ -905,20 +936,18 @@ function buildWorkTypePivot(rows, rowField) {
   const typeOrder = orderedPresentWorkTypes(rows);
   return { rowOrder, typeOrder, table, totals };
 }
-const stackedPercentLabelPlugin = {
-  id: 'stackedPercentLabel', afterDatasetsDraw(chart) {
-    const { ctx } = chart;
-    chart.data.datasets.forEach((ds, datasetIndex) => {
-      const meta = chart.getDatasetMeta(datasetIndex);
-      meta.data.forEach((bar, index) => {
-        const val = Number(ds.data[index]) || 0;
-        if (val < 3) return;
-        const props = bar.getProps(['x', 'y', 'base'], true);
-        ctx.save(); ctx.fillStyle = val >= 15 ? '#111827' : '#374151'; ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val.toFixed(val >= 10 ? 0 : 1)}%`, props.x, (props.y + props.base) / 2); ctx.restore();
-      });
+const stackedPercentLabelPlugin = { id: 'stackedPercentLabel', afterDatasetsDraw(chart) {
+  const { ctx } = chart;
+  chart.data.datasets.forEach((ds, datasetIndex) => {
+    const meta = chart.getDatasetMeta(datasetIndex);
+    meta.data.forEach((bar, index) => {
+      const val = Number(ds.data[index]) || 0;
+      if (val < 3) return;
+      const props = bar.getProps(['x', 'y', 'base'], true);
+      ctx.save(); ctx.fillStyle = val >= 15 ? '#111827' : '#374151'; ctx.font = 'bold 10px Inter, sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle'; ctx.fillText(`${val.toFixed(val >= 10 ? 0 : 1)}%`, props.x, (props.y + props.base) / 2); ctx.restore();
     });
-  }
-};
+  });
+}};
 function buildStackedPercentDatasets(pivot, mode = 'team') {
   const isIndividual = mode === 'individual';
 
@@ -982,7 +1011,7 @@ function renderTeamSummaryChart() {
   const totalHours = rows.reduce((s, r) => s + r.qty, 0);
 
   if (info) {
-    info.textContent = `${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs · inactive employees excluded`;
+    info.textContent = `${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs · inactive employees/managers excluded`;
   }
 
   S.charts.teamSummary = new Chart(canvas.getContext('2d'), {
@@ -1095,7 +1124,7 @@ function renderIndividualSummaryChart() {
   const monthText = S.individualSummaryMonthFilter ? ` · Month: ${S.individualSummaryMonthFilter}` : ' · All months';
 
   if (info) {
-    info.textContent = `${pivot.rowOrder.length} employee${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs${monthText} · inactive employees excluded`;
+    info.textContent = `${pivot.rowOrder.length} employee${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs${monthText} · inactive employees/managers excluded`;
   }
 
   S.charts.individualSummary = new Chart(canvas.getContext('2d'), {
@@ -1482,7 +1511,7 @@ function openYearlyWorkProjectModal(empId) {
 }
 function renderYearlyWorkByProjectChart() {
   const canvas = document.getElementById('yearlyWorkChart'); if (!canvas) return; if (S.charts.yearlyWork) S.charts.yearlyWork.destroy();
-  const ctx = canvas.getContext('2d'), TOTAL_FY_WEEKS = 48, employees = S.employees.filter(e => e.active !== 0), empProjectMap = {};
+  const ctx = canvas.getContext('2d'), TOTAL_FY_WEEKS = 48, employees = getActiveEmployees(), empProjectMap = {};
   for (const e of employees) empProjectMap[e.id] = {};
   for (const a of S.assignments) { if (!empProjectMap[a.employee_id]) continue; const project = S.projects.find(p => p.id === a.project_id); if (!project) continue; empProjectMap[a.employee_id][a.project_id] ||= { weightedWeeks: 0 }; empProjectMap[a.employee_id][a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100; }
   const assignedProjectIds = [...new Set(S.assignments.filter(a => employees.some(e => e.id === a.employee_id)).map(a => a.project_id))];
@@ -1496,7 +1525,7 @@ function renderYearlyWorkByProjectChart() {
 
 function getProjectWisePeopleBreakdown() {
   const TOTAL_FY_WEEKS = 48;
-  const activeEmployees = S.employees.filter(e => e.active !== 0);
+  const activeEmployees = getActiveEmployees();
   const employeeMap = new Map(activeEmployees.map(e => [e.id, e]));
   const projectMap = new Map();
 
@@ -3140,7 +3169,7 @@ async function toggleEmployeeActive(empId) {
     const fy = S.fiscalYear;
     api('GET', `/api/dashboard/stats?fiscalYear=${fy}`)
       .then(stats => renderStats(stats))
-      .catch(() => { });
+      .catch(() => {});
 
     toast(updated.active ? `${updated.name} set to Active` : `${updated.name} set to Inactive`);
   } catch (e) {
