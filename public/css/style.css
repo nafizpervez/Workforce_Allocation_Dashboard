@@ -1191,3 +1191,11 @@ td.cell:hover .cell-add {
     overflow-x: auto !important;
   }
 }
+
+
+/* ==============================================================
+   Password-protected header logout button
+   ============================================================== */
+header form button svg {
+  flex-shrink: 0;
+}

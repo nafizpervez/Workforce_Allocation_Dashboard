@@ -5,6 +5,7 @@
 const express = require('express');
 const cors = require('cors');
 const path = require('path');
+const crypto = require('crypto');
 const { getDb, createSchema } = require('./db');
 
 const app = express();
@@ -132,6 +133,187 @@ try {
 
 app.use(cors());
 app.use(express.json({ limit: '25mb' }));
+app.use(express.urlencoded({ extended: false }));
+app.set('trust proxy', 1);
+
+/* ─── password protection ─────────────────────────────────────── */
+const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'Esr!@9122';
+const AUTH_COOKIE_NAME = 'wa_auth';
+const AUTH_MAX_AGE_SECONDS = 60 * 60 * 12; // 12 hours
+const AUTH_SECRET = process.env.DASHBOARD_AUTH_SECRET ||
+  crypto.createHash('sha256').update(`${DASHBOARD_PASSWORD}:${__dirname}`).digest('hex');
+
+function parseCookies(header = '') {
+  return String(header || '')
+    .split(';')
+    .map(v => v.trim())
+    .filter(Boolean)
+    .reduce((acc, part) => {
+      const eq = part.indexOf('=');
+      if (eq === -1) return acc;
+      const key = part.slice(0, eq).trim();
+      const val = part.slice(eq + 1).trim();
+      acc[key] = decodeURIComponent(val);
+      return acc;
+    }, {});
+}
+
+function signAuthPayload(payload) {
+  return crypto.createHmac('sha256', AUTH_SECRET).update(payload).digest('hex');
+}
+
+function createAuthToken() {
+  const expiresAt = Date.now() + AUTH_MAX_AGE_SECONDS * 1000;
+  const payload = String(expiresAt);
+  const signature = signAuthPayload(payload);
+  return `${payload}.${signature}`;
+}
+
+function isValidAuthToken(token) {
+  if (!token || typeof token !== 'string' || !token.includes('.')) return false;
+  const [payload, signature] = token.split('.');
+  const expiresAt = Number(payload);
+  if (!Number.isFinite(expiresAt) || expiresAt < Date.now()) return false;
+
+  const expected = signAuthPayload(payload);
+  const sigBuffer = Buffer.from(signature || '', 'hex');
+  const expectedBuffer = Buffer.from(expected, 'hex');
+
+  if (sigBuffer.length !== expectedBuffer.length) return false;
+  return crypto.timingSafeEqual(sigBuffer, expectedBuffer);
+}
+
+function isAuthenticated(req) {
+  const cookies = parseCookies(req.headers.cookie);
+  return isValidAuthToken(cookies[AUTH_COOKIE_NAME]);
+}
+
+function cookieSecureFlag(req) {
+  const proto = String(req.headers['x-forwarded-proto'] || '').toLowerCase();
+  return req.secure || proto === 'https' ? '; Secure' : '';
+}
+
+function sendLoginPage(res, errorMessage = '') {
+  res.type('html').send(`<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1.0" />
+  <title>Login — Workforce Allocation Dashboard</title>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      min-height: 100vh;
+      font-family: Inter, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+      background: #f8fafc;
+      color: #111827;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 24px;
+    }
+    .card {
+      width: 100%;
+      max-width: 420px;
+      background: #fff;
+      border: 1px solid #e5e7eb;
+      border-radius: 18px;
+      box-shadow: 0 16px 40px rgba(15, 23, 42, 0.12);
+      overflow: hidden;
+    }
+    .head {
+      padding: 28px 30px 18px;
+      border-bottom: 1px solid #f1f5f9;
+    }
+    .brand { display: flex; align-items: center; gap: 12px; }
+    .icon {
+      width: 42px; height: 42px; border-radius: 13px;
+      background: #2563eb; color: #fff; display: grid; place-items: center;
+      font-weight: 800;
+    }
+    h1 { margin: 0; font-size: 19px; line-height: 1.2; }
+    p { margin: 6px 0 0; color: #64748b; font-size: 13px; }
+    form { padding: 24px 30px 30px; }
+    label { display: block; font-size: 13px; font-weight: 700; color: #374151; margin-bottom: 8px; }
+    input {
+      width: 100%; height: 44px; border: 1px solid #cbd5e1; border-radius: 10px;
+      padding: 0 12px; font-size: 14px; outline: none;
+    }
+    input:focus { border-color: #2563eb; box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+    button {
+      width: 100%; height: 44px; margin-top: 18px; border: 0; border-radius: 10px;
+      background: #2563eb; color: #fff; font-size: 14px; font-weight: 800; cursor: pointer;
+    }
+    button:hover { background: #1d4ed8; }
+    .error {
+      margin-top: 12px; padding: 10px 12px; border-radius: 10px;
+      background: #fef2f2; color: #b91c1c; font-size: 13px; font-weight: 700;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <div class="head">
+      <div class="brand">
+        <div class="icon">▦</div>
+        <div>
+          <h1>Workforce Allocation Dashboard</h1>
+          <p>Password required</p>
+        </div>
+      </div>
+    </div>
+    <form method="post" action="/login" autocomplete="off">
+      <label for="password">Password</label>
+      <input id="password" name="password" type="password" autofocus required />
+      ${errorMessage ? `<div class="error">${errorMessage}</div>` : ''}
+      <button type="submit">Sign in</button>
+    </form>
+  </div>
+</body>
+</html>`);
+}
+
+app.get('/login', (req, res) => {
+  if (isAuthenticated(req)) return res.redirect('/');
+  return sendLoginPage(res);
+});
+
+app.post('/login', (req, res) => {
+  const password = String(req.body?.password || '');
+
+  if (password !== DASHBOARD_PASSWORD) {
+    return sendLoginPage(res.status(401), 'Incorrect password.');
+  }
+
+  const token = createAuthToken();
+  res.setHeader(
+    'Set-Cookie',
+    `${AUTH_COOKIE_NAME}=${encodeURIComponent(token)}; HttpOnly; SameSite=Lax; Path=/; Max-Age=${AUTH_MAX_AGE_SECONDS}${cookieSecureFlag(req)}`
+  );
+
+  return res.redirect('/');
+});
+
+app.post('/logout', (req, res) => {
+  res.setHeader(
+    'Set-Cookie',
+    `${AUTH_COOKIE_NAME}=; HttpOnly; SameSite=Lax; Path=/; Max-Age=0${cookieSecureFlag(req)}`
+  );
+  return res.redirect('/login');
+});
+
+function requireDashboardAuth(req, res, next) {
+  if (isAuthenticated(req)) return next();
+
+  if (req.path.startsWith('/api/')) {
+    return res.status(401).json({ error: 'Authentication required' });
+  }
+
+  return res.redirect('/login');
+}
+
+app.use(requireDashboardAuth);
 app.use(express.static(path.join(__dirname, 'public')));
 
 /* ─── helpers ─────────────────────────────────────────────────── */
