@@ -704,6 +704,145 @@ app.delete('/api/projects/:id', (req, res) => {
   res.json({ ok: true });
 });
 
+
+function compactAssignmentTextKey(value) {
+  return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
+}
+
+function normalizeAssignmentImportRows(rows) {
+  return (rows || []).map((raw, idx) => {
+    const employeeCode = cleanText(raw.employee_code || raw['Resource ID'] || raw['Employee Code'] || raw['Res ID']).toUpperCase();
+    const employeeName = cleanText(raw.employee_name || raw['Resource Name'] || raw['Employee Name'] || raw['Worker']);
+    const projectCode = normCode(raw.project_code || raw['Opportunity Number'] || raw['Project Code'] || raw['SA Number']);
+    const projectName = cleanText(raw.project_name || raw['Project Name'] || raw['Opportunity Name']);
+    const productName = cleanText(raw.product_name || raw['Product Name'] || raw['Product Description']);
+    const productAmount = normalizeImportNumber(raw.product_amount ?? raw['Product Amount']);
+    const year = Math.trunc(normalizeImportNumber(raw.year ?? raw['Year']));
+    const month = Math.trunc(normalizeImportNumber(raw.month ?? raw['Month Number'] ?? raw['Month']));
+    const week = Math.trunc(normalizeImportNumber(raw.week ?? raw['Week']));
+    const percentage = normalizeImportNumber(raw.percentage ?? raw['Allocation %'] ?? raw['Percentage'] ?? raw['Workload Allocation']);
+
+    return {
+      source_row: Math.trunc(normalizeImportNumber(raw.source_row)) || idx + 2,
+      employee_code: employeeCode,
+      employee_name: employeeName,
+      project_code: projectCode,
+      project_name: projectName,
+      product_name: productName,
+      product_amount: +productAmount.toFixed(2),
+      year,
+      month,
+      week,
+      percentage: +percentage.toFixed(2),
+    };
+  });
+}
+
+function buildAssignmentImportResolvers() {
+  const employees = db.prepare('SELECT id, employee_code, name FROM employees').all();
+  const projects = db.prepare('SELECT id, code, name, product_name, product_amount FROM projects').all();
+
+  const employeeByCode = new Map();
+  const employeeByName = new Map();
+
+  for (const e of employees) {
+    const codeKey = normCode(e.employee_code);
+    if (codeKey && !employeeByCode.has(codeKey)) employeeByCode.set(codeKey, e);
+
+    const nameKey = compactAssignmentTextKey(e.name);
+    if (nameKey) {
+      if (!employeeByName.has(nameKey)) employeeByName.set(nameKey, []);
+      employeeByName.get(nameKey).push(e);
+    }
+  }
+
+  const projectByComposite = new Map();
+  const projectByCodeNameAmount = new Map();
+  const projectByCodeName = new Map();
+  const projectByCode = new Map();
+
+  for (const p of projects) {
+    const compositeKey = getProjectImportKeyFromProjectRow(p);
+    if (!projectByComposite.has(compositeKey)) projectByComposite.set(compositeKey, []);
+    projectByComposite.get(compositeKey).push(p);
+
+    const code = normCode(p.code);
+    const nameKey = compactAssignmentTextKey(p.name);
+    const amountKey = normImportAmountKey(p.product_amount);
+
+    const codeNameAmountKey = [code, nameKey, amountKey].join('\u001F');
+    if (!projectByCodeNameAmount.has(codeNameAmountKey)) projectByCodeNameAmount.set(codeNameAmountKey, []);
+    projectByCodeNameAmount.get(codeNameAmountKey).push(p);
+
+    const codeNameKey = [code, nameKey].join('\u001F');
+    if (!projectByCodeName.has(codeNameKey)) projectByCodeName.set(codeNameKey, []);
+    projectByCodeName.get(codeNameKey).push(p);
+
+    if (code) {
+      if (!projectByCode.has(code)) projectByCode.set(code, []);
+      projectByCode.get(code).push(p);
+    }
+  }
+
+  const chooseProjectCandidate = (candidates, row) => {
+    if (!candidates || !candidates.length) return null;
+    if (candidates.length === 1) return candidates[0];
+
+    const rowNameKey = compactAssignmentTextKey(row.project_name);
+    if (rowNameKey) {
+      const exactName = candidates.filter(p => compactAssignmentTextKey(p.name) === rowNameKey);
+      if (exactName.length === 1) return exactName[0];
+    }
+
+    return { ambiguous: true, count: candidates.length };
+  };
+
+  return {
+    resolveEmployee(row) {
+      if (row.employee_code && employeeByCode.has(normCode(row.employee_code))) {
+        return { employee: employeeByCode.get(normCode(row.employee_code)) };
+      }
+
+      const nameKey = compactAssignmentTextKey(row.employee_name);
+      const byName = nameKey ? employeeByName.get(nameKey) : null;
+      if (byName && byName.length === 1) return { employee: byName[0] };
+      if (byName && byName.length > 1) {
+        return { reason: 'Multiple employees matched the Resource Name. Add a unique Resource ID in the Excel.' };
+      }
+
+      return { reason: 'Employee not found by Resource ID or Resource Name.' };
+    },
+
+    resolveProject(row) {
+      const compositeKey = projectImportCompositeKey(row.project_code, row.product_name, row.product_amount);
+      let candidate = chooseProjectCandidate(projectByComposite.get(compositeKey), row);
+      if (candidate && !candidate.ambiguous) return { project: candidate };
+      if (candidate?.ambiguous) {
+        return { reason: 'Multiple projects matched Opportunity Number + Product Name + Product Amount. Project Name did not make it unique.' };
+      }
+
+      const code = normCode(row.project_code);
+      const nameKey = compactAssignmentTextKey(row.project_name);
+      const amountKey = normImportAmountKey(row.product_amount);
+
+      candidate = chooseProjectCandidate(projectByCodeNameAmount.get([code, nameKey, amountKey].join('\u001F')), row);
+      if (candidate && !candidate.ambiguous) return { project: candidate };
+
+      candidate = chooseProjectCandidate(projectByCodeName.get([code, nameKey].join('\u001F')), row);
+      if (candidate && !candidate.ambiguous) return { project: candidate };
+
+      const byCode = projectByCode.get(code);
+      if (byCode && byCode.length === 1) return { project: byCode[0] };
+      if (byCode && byCode.length > 1) {
+        return { reason: 'Multiple projects share this Opportunity Number. Product Name/Product Amount did not match uniquely.' };
+      }
+
+      return { reason: 'Project not found by Opportunity Number + Product Name + Product Amount.' };
+    },
+  };
+}
+
+
 /* ─── assignments ─────────────────────────────────────────────── */
 app.get('/api/assignments', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
@@ -742,6 +881,139 @@ app.post('/api/assignments/bulk', (req, res) => {
   });
   res.status(201).json({ created: txn(slots) });
 });
+
+
+app.post('/api/assignments/import', (req, res) => {
+  const body = req.body || {};
+  const fiscalYear = Math.trunc(safeNum(body.fiscalYear, new Date().getFullYear()));
+  const replaceFiscalYear = body.replaceFiscalYear !== false;
+  const rows = normalizeAssignmentImportRows(body.rows || []);
+
+  if (!rows.length) {
+    return res.status(400).json({ error: 'No valid assignment rows found in uploaded Excel.' });
+  }
+
+  const { resolveEmployee, resolveProject } = buildAssignmentImportResolvers();
+
+  const toInsert = [];
+  const skipped = [];
+
+  for (const row of rows) {
+    if (!row.employee_code && !row.employee_name) {
+      skipped.push({ ...row, reason: 'Missing Resource ID/Resource Name.' });
+      continue;
+    }
+
+    if (!row.project_code && !row.project_name) {
+      skipped.push({ ...row, reason: 'Missing Opportunity Number/Project Name.' });
+      continue;
+    }
+
+    if (!row.year || row.month < 1 || row.month > 12 || row.week < 1 || row.week > 4) {
+      skipped.push({ ...row, reason: 'Invalid Year, Month Number, or Week.' });
+      continue;
+    }
+
+    if (row.percentage < 0) {
+      skipped.push({ ...row, reason: 'Allocation percentage cannot be negative.' });
+      continue;
+    }
+
+    const empResolved = resolveEmployee(row);
+    if (!empResolved.employee) {
+      skipped.push({ ...row, reason: empResolved.reason || 'Employee could not be resolved.' });
+      continue;
+    }
+
+    const projectResolved = resolveProject(row);
+    if (!projectResolved.project) {
+      skipped.push({ ...row, reason: projectResolved.reason || 'Project could not be resolved.' });
+      continue;
+    }
+
+    toInsert.push({
+      ...row,
+      employee_id: empResolved.employee.id,
+      project_id: projectResolved.project.id,
+      employee_code: empResolved.employee.employee_code || row.employee_code,
+      employee_name: empResolved.employee.name || row.employee_name,
+      project_code: projectResolved.project.code || row.project_code,
+      project_name: projectResolved.project.name || row.project_name,
+    });
+  }
+
+  const imported = [];
+  const failed = [];
+  let deletedCount = 0;
+
+  const insertAssignment = db.prepare(`
+    INSERT INTO assignments(employee_id, project_id, year, month, week, percentage)
+    VALUES (?, ?, ?, ?, ?, ?)
+  `);
+
+  const txn = db.transaction(() => {
+    if (replaceFiscalYear) {
+      const del = db.prepare(`
+        DELETE FROM assignments
+        WHERE ((year = ? AND month >= 4) OR (year = ? AND month <= 3))
+      `).run(fiscalYear, fiscalYear + 1);
+      deletedCount = del.changes || 0;
+    }
+
+    for (const row of toInsert) {
+      try {
+        const info = insertAssignment.run(
+          row.employee_id,
+          row.project_id,
+          row.year,
+          row.month,
+          row.week,
+          safeNum(row.percentage, 0)
+        );
+
+        imported.push({
+          id: info.lastInsertRowid,
+          source_row: row.source_row,
+          employee_code: row.employee_code,
+          employee_name: row.employee_name,
+          project_code: row.project_code,
+          project_name: row.project_name,
+          year: row.year,
+          month: row.month,
+          week: row.week,
+          percentage: row.percentage,
+        });
+      } catch (e) {
+        failed.push({
+          ...row,
+          error: e.message,
+          reason: 'Database insert failed.',
+        });
+      }
+    }
+  });
+
+  txn();
+
+  res.status(201).json({
+    ok: true,
+    fiscal_year: fiscalYear,
+    replace_fiscal_year: replaceFiscalYear,
+    received_rows: rows.length,
+    deleted_count: deletedCount,
+    imported_count: imported.length,
+    skipped_count: skipped.length,
+    failed_count: failed.length,
+    imported,
+    skipped,
+    failed,
+    restore_matching: {
+      employee: 'Resource ID, then Resource Name',
+      project: 'Opportunity Number + Product Name + Product Amount, then Project Name fallback',
+    },
+  });
+});
+
 
 app.put('/api/assignments/:id', (req, res) => {
   const id = Number(req.params.id);

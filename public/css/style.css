@@ -842,7 +842,6 @@ td.cell:hover .cell-add {
 }
 
 .yearly-work-chart-wrap,
-.project-people-chart-wrap,
 .timesheet-chart-wrap {
   height: 430px;
   min-width: 100%;
@@ -851,7 +850,6 @@ td.cell:hover .cell-add {
 }
 
 .yearly-work-chart-wrap canvas,
-.project-people-chart-wrap canvas,
 .timesheet-chart-wrap canvas {
   min-width: 1180px;
 }
@@ -903,9 +901,33 @@ td.cell:hover .cell-add {
   box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
 }
 
+/* ── Resource Assignment backup/restore buttons ─────────────── */
+.assignment-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.assignment-download-btn:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
 
 /* ================================================================
-   Resource Assignment Matrix / Yearly Work by Project tabs
+   Resource Assignment Matrix / Yearly Work / Project-wise People tabs
+   Restored tab pill styling after assignment backup update
    ================================================================ */
 .resource-matrix-tab-btn {
   display: inline-flex;
@@ -921,6 +943,7 @@ td.cell:hover .cell-add {
   font-size: 12px;
   font-weight: 700;
   white-space: nowrap;
+  cursor: pointer;
   transition: all 0.15s ease;
 }
 
@@ -940,22 +963,40 @@ td.cell:hover .cell-add {
   display: none;
 }
 
-
-/* ==============================================================
-   Project import helper modal
-   ============================================================== */
-.import-help-list {
-  margin: 0;
-  padding-left: 1rem;
-  color: #6b7280;
-  font-size: 12px;
+.project-people-chart-wrap {
+  height: 430px;
+  min-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
 }
 
-/* ==============================================================
-   Compact filters for Running Projects and Service Pipeline
-   ============================================================== */
+.project-people-chart-wrap canvas {
+  min-width: 1180px;
+}
 
-/* Base compact style for both card filter areas */
+/* ── Resource Assignment matrix filter row ────────────────────── */
+.matrix-filter-bar {
+  gap: 8px !important;
+  align-items: center !important;
+}
+
+.matrix-filter-bar select,
+.matrix-filter-bar button {
+  height: 30px !important;
+  box-sizing: border-box !important;
+}
+
+.matrix-download-btn {
+  height: 30px !important;
+  margin-left: 2px;
+  margin-right: 2px;
+  flex-shrink: 0;
+}
+
+/* ================================================================
+   Compact filters for Running Projects and Service Pipeline
+   Running Projects = one row, Service Pipeline = two rows
+   ================================================================ */
 .card-filter-bar {
   padding: 8px 16px !important;
   border-bottom: 1px solid #f3f4f6;
@@ -995,14 +1036,14 @@ td.cell:hover .cell-add {
   width: 100% !important;
 }
 
-/* Keep search icon spacing */
 #runSearch,
 #pipeSearch {
   padding-left: 28px !important;
   padding-right: 8px !important;
+  width: 100% !important;
 }
 
-/* Running Projects: exactly one row */
+/* Running Projects: fixed one-line grid */
 .filter-bar-run {
   display: grid !important;
   grid-template-columns:
@@ -1019,7 +1060,7 @@ td.cell:hover .cell-add {
   overflow: hidden !important;
 }
 
-/* Service Pipeline: exactly two rows */
+/* Service Pipeline: fixed two-line layout */
 .filter-bar-pipe {
   display: flex !important;
   flex-direction: column !important;
@@ -1054,13 +1095,6 @@ td.cell:hover .cell-add {
     minmax(95px, 0.8fr) !important;
 }
 
-/* Hard overrides for Tailwind utility widths on these controls */
-#runSearch,
-#pipeSearch {
-  width: 100% !important;
-}
-
-/* Small screens: allow horizontal scroll rather than creating extra rows */
 @media (max-width: 1200px) {
   .filter-bar-run {
     overflow-x: auto !important;

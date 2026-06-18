@@ -16,7 +16,7 @@
       rel="stylesheet"
     />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=project-import-reasons-v1" />
+    <link rel="stylesheet" href="/css/style.css?v=assignment-layout-fix-v2" />
     <style>
       /* Thicker horizontal scrollbar on matrix table */
       #matrixWrap::-webkit-scrollbar {
@@ -120,7 +120,7 @@
             </button>
             <div
               id="addMenu"
-              class="hidden absolute right-0 mt-2 w-56 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1.5"
+              class="hidden absolute right-0 mt-2 w-52 bg-white border border-gray-200 rounded-xl shadow-lg z-50 py-1.5"
               style="box-shadow: 0 8px 24px rgba(0, 0, 0, 0.12)"
             >
               <button
@@ -185,18 +185,13 @@
                     stroke-linecap="round"
                     stroke-linejoin="round"
                   >
-                    <path
-                      d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"
-                    />
+                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
                     <path d="M14 2v6h6" />
                     <path d="M12 18v-6" />
                     <path d="m9 15 3 3 3-3" />
                   </svg>
                 </div>
-
-                <span class="block text-left leading-snug whitespace-normal">
-                  Import Projects Excel
-                </span>
+                <span class="block leading-snug text-left">Import Projects<br />Excel</span>
               </button>
               <div class="mx-4 my-1 border-t border-gray-100"></div>
               <button
@@ -220,6 +215,34 @@
                   </svg>
                 </div>
                 Add Assignment
+              </button>
+
+              <button
+                data-add="assignment-excel"
+                class="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 font-medium hover:bg-gray-50 text-left"
+              >
+                <div
+                  class="w-7 h-7 bg-orange-50 rounded-lg flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-3.5 h-3.5 text-orange-600"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <path d="M3 3v18h18" />
+                    <path d="M7 16h3" />
+                    <path d="M7 12h7" />
+                    <path d="M7 8h11" />
+                    <path d="M17 15l3 3-3 3" />
+                  </svg>
+                </div>
+                <span class="block text-left leading-snug whitespace-normal">
+                  Bulk Assign Assignment
+                </span>
               </button>
             </div>
           </div>
@@ -296,8 +319,7 @@
                       Resource Assignment
                     </h2>
                     <p class="text-sm text-gray-500 mt-0.5">
-                      Weekly allocation matrix, yearly workload and project-wise
-                      people chart
+                      Weekly allocation matrix, yearly workload and project-wise people chart
                     </p>
                   </div>
                 </div>
@@ -325,13 +347,10 @@
               </div>
             </div>
 
-            <div
-              id="resourceMatrixTab-matrix"
-              class="resource-matrix-tab-content"
-            >
+            <div id="resourceMatrixTab-matrix" class="resource-matrix-tab-content">
               <!-- Filter bar — row 1: dropdowns -->
               <div
-                class="px-4 py-2.5 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center gap-2"
+                class="matrix-filter-bar px-4 py-2.5 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center gap-2"
               >
                 <div class="flex items-center gap-1.5">
                   <label
@@ -378,9 +397,7 @@
                   </select>
                 </div>
                 <div class="flex items-center gap-1.5">
-                  <label class="text-xs font-medium text-gray-400"
-                    >Amount</label
-                  >
+                  <label class="text-xs font-medium text-gray-400">Amount</label>
                   <select
                     id="matrixAmountFilter"
                     class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
@@ -422,6 +439,13 @@
                     <option value="overdue">Overdue</option>
                   </select>
                 </div>
+                <button
+                  id="downloadAssignmentExcelBtn"
+                  type="button"
+                  class="assignment-download-btn matrix-download-btn"
+                >
+                  Download Assignment Excel
+                </button>
                 <div class="ml-auto flex items-center gap-1.5">
                   <button id="matrixSortHighBtn" class="flt-sort-btn">
                     ↓ High Util
@@ -446,17 +470,10 @@
               </div>
             </div>
 
-            <div
-              id="resourceMatrixTab-project"
-              class="resource-matrix-tab-content hidden p-6"
-            >
-              <div
-                class="flex items-center justify-between mb-3 gap-3 flex-wrap"
-              >
+            <div id="resourceMatrixTab-project" class="resource-matrix-tab-content hidden p-6">
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-800">
-                    Yearly Work by Project
-                  </h3>
+                  <h3 class="text-sm font-semibold text-gray-800">Yearly Work by Project</h3>
                   <p class="text-xs text-gray-500">
                     Fiscal year workload distribution by assigned project.
                   </p>
@@ -467,20 +484,12 @@
               </div>
             </div>
 
-            <div
-              id="resourceMatrixTab-people"
-              class="resource-matrix-tab-content hidden p-6"
-            >
-              <div
-                class="flex items-center justify-between mb-3 gap-3 flex-wrap"
-              >
+            <div id="resourceMatrixTab-people" class="resource-matrix-tab-content hidden p-6">
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-800">
-                    Project-wise People
-                  </h3>
+                  <h3 class="text-sm font-semibold text-gray-800">Project-wise People</h3>
                   <p class="text-xs text-gray-500">
-                    Assigned project bars split by the people working on each
-                    project.
+                    Assigned project bars split by the people working on each project.
                   </p>
                 </div>
                 <div id="projectPeopleInfo" class="text-xs text-gray-400"></div>
@@ -657,6 +666,8 @@
           </div>
         </div>
 
+
+
         <!-- [3.25] WORK SUMMARY TABS: TEAM / INDIVIDUAL -->
         <div class="ds" data-section="worksummarychart">
           <div class="drag-handle" title="Drag row">
@@ -731,24 +742,20 @@
                 </div>
               </div>
 
-              <div id="timesheetStatus" class="mt-3 text-xs text-gray-400">
-                Upload an Excel file with sheet name
-                <span class="font-semibold">Time Sheet</span> or matching
-                columns: Month, Work Type, Worker, Qty (Hrs).
+              <div
+                id="timesheetStatus"
+                class="mt-3 text-xs text-gray-400"
+              >
+                Upload an Excel file with sheet name <span class="font-semibold">Time Sheet</span> or matching columns: Month, Work Type, Worker, Qty (Hrs).
               </div>
             </div>
 
             <div id="workSummaryTab-team" class="work-summary-tab-content p-6">
-              <div
-                class="flex items-center justify-between mb-3 gap-3 flex-wrap"
-              >
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-800">
-                    Team Summary
-                  </h3>
+                  <h3 class="text-sm font-semibold text-gray-800">Team Summary</h3>
                   <p class="text-xs text-gray-500">
-                    Combined monthly work-type distribution for all employees
-                    from uploaded Time Sheet.
+                    Combined monthly work-type distribution for all employees from uploaded Time Sheet.
                   </p>
                 </div>
                 <div id="teamSummaryInfo" class="text-xs text-gray-400"></div>
@@ -756,54 +763,31 @@
               <div id="teamSummaryEmpty" class="timesheet-empty-state">
                 Upload a Time Sheet Excel file to generate Team Summary.
               </div>
-              <div
-                class="timesheet-chart-wrap nice-scroll hidden"
-                id="teamSummaryChartWrap"
-              >
+              <div class="timesheet-chart-wrap nice-scroll hidden" id="teamSummaryChartWrap">
                 <canvas id="teamSummaryChart"></canvas>
               </div>
             </div>
 
-            <div
-              id="workSummaryTab-individual"
-              class="work-summary-tab-content hidden p-6"
-            >
-              <div
-                class="flex items-center justify-between mb-3 gap-3 flex-wrap"
-              >
+            <div id="workSummaryTab-individual" class="work-summary-tab-content hidden p-6">
+              <div class="flex items-center justify-between mb-3 gap-3 flex-wrap">
                 <div>
-                  <h3 class="text-sm font-semibold text-gray-800">
-                    Individual Summary
-                  </h3>
+                  <h3 class="text-sm font-semibold text-gray-800">Individual Summary</h3>
                   <p class="text-xs text-gray-500">
                     Work-type distribution by employee from uploaded Time Sheet.
                   </p>
                 </div>
                 <div class="flex items-center gap-2 flex-wrap justify-end">
-                  <label
-                    for="individualSummaryMonthFilter"
-                    class="timesheet-filter-label"
-                    >Month</label
-                  >
-                  <select
-                    id="individualSummaryMonthFilter"
-                    class="timesheet-filter-select"
-                  >
+                  <label for="individualSummaryMonthFilter" class="timesheet-filter-label">Month</label>
+                  <select id="individualSummaryMonthFilter" class="timesheet-filter-select">
                     <option value="">All Months</option>
                   </select>
-                  <div
-                    id="individualSummaryInfo"
-                    class="text-xs text-gray-400"
-                  ></div>
+                  <div id="individualSummaryInfo" class="text-xs text-gray-400"></div>
                 </div>
               </div>
               <div id="individualSummaryEmpty" class="timesheet-empty-state">
                 Upload a Time Sheet Excel file to generate Individual Summary.
               </div>
-              <div
-                class="timesheet-chart-wrap timesheet-chart-wrap-wide nice-scroll hidden"
-                id="individualSummaryChartWrap"
-              >
+              <div class="timesheet-chart-wrap timesheet-chart-wrap-wide nice-scroll hidden" id="individualSummaryChartWrap">
                 <canvas id="individualSummaryChart"></canvas>
               </div>
             </div>
@@ -1689,13 +1673,9 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
 
-    <input
-      id="projectExcelUpload"
-      type="file"
-      accept=".xlsx,.xls"
-      class="hidden"
-    />
+    <input id="projectExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
+    <input id="assignmentExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=project-import-reasons-v1"></script>
+    <script src="/js/app.js?v=assignment-layout-fix-v2"></script>
   </body>
 </html>
