@@ -9,7 +9,7 @@ const crypto = require('crypto');
 const { getDb, createSchema } = require('./db');
 
 const app = express();
-const PORT = process.env.PORT || 8009;
+const PORT = process.env.PORT || 9002;
 
 const db = getDb();
 createSchema(db);
