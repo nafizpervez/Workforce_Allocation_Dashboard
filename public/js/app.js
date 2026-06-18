@@ -41,7 +41,8 @@ const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct'
 const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const PCOLORS = ['#8B5CF6', '#14B8A6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#06B6D4', '#F43F5E', '#84CC16', '#A855F7', '#0EA5E9', '#EAB308', '#22C55E', '#3B82F6', '#D946EF'];
-const PROJECT_PEOPLE_CHART_DISPLAY_MAX = 300;
+const PROJECT_PEOPLE_CHART_DISPLAY_MAX = 150;
+const PROJECT_PEOPLE_CHART_MIN_VISIBLE = 2;
 const DEPT_COLORS = { 'Solution': '#2563EB', 'Professional Services': '#8B5CF6', 'Finance': '#14B8A6', 'Sales': '#F59E0B', 'Operations': '#10B981', 'Management': '#EC4899' };
 const STAGE_COLOR = { 'Prospect': '#6B7280', 'Qualify': '#0EA5E9', 'Validate': '#8B5CF6', 'Presentation - Solve': '#EC4899', 'Proposal': '#F59E0B', 'Negotiate': '#F97316', 'Closed Won': '#10B981', 'Closed Lost': '#DC2626' };
 const STAGE_PILL = { 'Prospect': 'bg-gray-100 text-gray-700', 'Qualify': 'bg-sky-100 text-sky-700', 'Validate': 'bg-purple-100 text-purple-700', 'Presentation - Solve': 'bg-pink-100 text-pink-700', 'Proposal': 'bg-amber-100 text-amber-700', 'Negotiate': 'bg-orange-100 text-orange-700', 'Closed Won': 'bg-green-100 text-green-700', 'Closed Lost': 'bg-red-100 text-red-700' };
@@ -1687,6 +1688,7 @@ function renderProjectWisePeopleChart() {
 
   const labels = projects.map(item => item.project.name || item.project.code || 'Project');
   const totalByProject = projects.map(item => item.contribution);
+  const highestActualProjectTotal = Math.max(0, ...totalByProject.map(v => Number(v) || 0));
 
   const datasets = employees.map((emp, idx) => {
     const color = PCOLORS[idx % PCOLORS.length];
@@ -1696,10 +1698,19 @@ function renderProjectWisePeopleChart() {
     });
     const displayData = rawData.map((rawValue, projectIndex) => {
       const total = totalByProject[projectIndex] || 0;
+      if (!rawValue) return 0;
+
+      let displayValue = rawValue;
+
+      // Visual-only scaling: keep very large project bars capped so smaller projects stay visible.
+      // The tooltip and click modal still use exact rawData percentages.
       if (total > PROJECT_PEOPLE_CHART_DISPLAY_MAX) {
-        return +((rawValue * PROJECT_PEOPLE_CHART_DISPLAY_MAX) / total).toFixed(2);
+        displayValue = (rawValue * PROJECT_PEOPLE_CHART_DISPLAY_MAX) / total;
       }
-      return rawValue;
+
+      // Give very small non-zero assignments a minimum visible height on the chart.
+      // This is visual-only and does not change exact calculation values.
+      return +Math.max(displayValue, PROJECT_PEOPLE_CHART_MIN_VISIBLE).toFixed(2);
     });
 
     return {
@@ -1797,7 +1808,16 @@ function renderProjectWisePeopleChart() {
           ticks: {
             font: { size: 11 },
             color: '#6B7280',
-            callback: v => `${v}%`,
+            callback: v => {
+              const value = Number(v);
+              if (
+                value === PROJECT_PEOPLE_CHART_DISPLAY_MAX &&
+                highestActualProjectTotal > PROJECT_PEOPLE_CHART_DISPLAY_MAX
+              ) {
+                return `${highestActualProjectTotal.toFixed(2)}%`;
+              }
+              return `${value}%`;
+            },
           },
           grid: { color: '#F3F4F6' },
           title: {
