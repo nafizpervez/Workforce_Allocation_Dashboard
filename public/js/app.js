@@ -40,7 +40,17 @@ const S = {
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
-const PCOLORS = ['#8B5CF6', '#14B8A6', '#EC4899', '#F59E0B', '#10B981', '#6366F1', '#06B6D4', '#F43F5E', '#84CC16', '#A855F7', '#0EA5E9', '#EAB308', '#22C55E', '#3B82F6', '#D946EF'];
+const PCOLORS = [
+  '#8B5CF6', '#14B8A6', '#EC4899', '#F59E0B', '#10B981', '#6366F1',
+  '#06B6D4', '#F43F5E', '#84CC16', '#A855F7', '#0EA5E9', '#EAB308',
+  '#22C55E', '#3B82F6', '#D946EF', '#EF4444', '#F97316', '#65A30D',
+  '#0891B2', '#7C3AED', '#DB2777', '#0D9488', '#4F46E5', '#CA8A04',
+  '#FDE68A', '#FEF3C7', '#FCD34D', '#FBBF24', '#FCA5A5', '#FECACA',
+  '#FDBA74', '#FED7AA', '#BBF7D0', '#86EFAC', '#A7F3D0', '#5EEAD4',
+  '#BAE6FD', '#7DD3FC', '#C4B5FD', '#DDD6FE', '#FBCFE8', '#F9A8D4',
+  '#E9D5FF', '#D8B4FE', '#BFDBFE', '#93C5FD', '#D9F99D', '#BEF264',
+  '#E5E7EB', '#CBD5E1', '#94A3B8', '#64748B'
+];
 const PROJECT_PEOPLE_CHART_DISPLAY_MAX = 150;
 const PROJECT_PEOPLE_CHART_MIN_VISIBLE = 2;
 const DEPT_COLORS = { 'Solution': '#2563EB', 'Professional Services': '#8B5CF6', 'Finance': '#14B8A6', 'Sales': '#F59E0B', 'Operations': '#10B981', 'Management': '#EC4899' };
@@ -1309,7 +1319,7 @@ function normalizeProjectImportNumber(value) {
 }
 
 function parseProjectExcelRows(sheetRows) {
-  return (sheetRows || []).map(row => {
+  return (sheetRows || []).map((row, idx) => {
     const code = String(getProjectImportCellValue(row, [
       'Opportunity Number', 'Opportunity No', 'Opportunity #', 'SA Number', 'SA No', 'Code'
     ]) || '').trim().toUpperCase();
@@ -1319,6 +1329,7 @@ function parseProjectExcelRows(sheetRows) {
     ]) || '').trim();
 
     return {
+      source_row: idx + 2,
       code,
       name,
       account_name: String(getProjectImportCellValue(row, ['Account Name', 'Customer Name', 'Client']) || '').trim(),
@@ -1333,6 +1344,7 @@ function parseProjectExcelRows(sheetRows) {
         'Item Description'
       ]) || '').trim(),
       stage: String(getProjectImportCellValue(row, ['Stage']) || '').trim(),
+      fiscal_period: String(getProjectImportCellValue(row, ['Fiscal Period', 'Fiscal Year', 'Fiscal Quarter']) || '').trim(),
       close_date: normalizeProjectImportDate(getProjectImportCellValue(row, ['Close Date', 'Closed Won Date', 'Close Won Date'])),
       created_date: normalizeProjectImportDate(getProjectImportCellValue(row, ['Created Date'])),
       product_amount: normalizeProjectImportNumber(getProjectImportCellValue(row, ['Product Amount'])),
@@ -1345,29 +1357,43 @@ function openProjectImportResultModal(result, fileName) {
   const inserted = result.inserted || [];
   const skipped = result.skipped_existing || [];
   const failed = result.failed || [];
+  const isReplaceMode = result.mode === 'replace_all_projects';
 
   const row = (p, badgeCls, badgeText) => `
     <div class="flex items-start justify-between gap-3 py-2 border-b border-gray-100 last:border-0">
       <div class="min-w-0">
         <div class="text-xs font-bold text-blue-600 mono">${esc(p.code || '—')}</div>
         <div class="text-sm font-semibold text-gray-900 truncate">${esc(p.name || '—')}</div>
-        ${(p.product_name || p.product_amount !== undefined) ? `<div class="text-xs text-gray-500 mt-0.5 truncate">${esc(p.product_name || '—')} · ${Number(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD</div>` : ''}
+        ${(p.product_name || p.product_amount !== undefined) ? `<div class="text-xs text-gray-500 mt-0.5 truncate">${esc(p.product_name || '—')} · ${Number(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD${p.fiscal_period ? ' · ' + esc(p.fiscal_period) : ''}</div>` : ''}
+        ${p.reason ? `<div class="text-xs text-gray-500 mt-0.5">${esc(p.reason)}</div>` : ''}
         ${p.error ? `<div class="text-xs text-red-500 mt-0.5">${esc(p.error)}</div>` : ''}
       </div>
       <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls} flex-shrink-0">${badgeText}</span>
     </div>`;
 
   openModal(
-    mHdr('Project Excel Import Completed', `${fileName || 'Uploaded Excel'} · ${result.normalized_projects || 0} unique project lines traced by Opportunity Number + resolved Product Name/Product Description + Product Amount`)
+    mHdr(
+      isReplaceMode ? 'Project Excel Replacement Completed' : 'Project Excel Import Completed',
+      `${fileName || 'Uploaded Excel'} · ${(result.project_rows_ready ?? result.normalized_projects) || 0} valid project row${(((result.project_rows_ready ?? result.normalized_projects) || 0) === 1) ? '' : 's'} inserted as provided; duplicates kept`
+    )
     + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
-        <div class="grid grid-cols-3 gap-3 mb-5">
+        ${isReplaceMode ? `
+          <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 mb-5 text-xs text-amber-800 leading-relaxed">
+            Existing project data was fully replaced from this Excel. Existing assignment rows were deleted because they referenced old project IDs. Use <span class="font-semibold">Bulk Assign Assignment</span> to restore assignment data from your assignment backup Excel. Duplicate project rows from Excel are kept.
+          </div>` : ''}
+
+        <div class="grid grid-cols-4 gap-3 mb-5">
+          <div class="rounded-xl bg-slate-50 border border-slate-100 p-4 text-center">
+            <div class="text-2xl font-bold text-slate-700">${result.deleted_project_count || 0}</div>
+            <div class="text-xs text-slate-500 mt-1">Deleted Projects</div>
+          </div>
+          <div class="rounded-xl bg-orange-50 border border-orange-100 p-4 text-center">
+            <div class="text-2xl font-bold text-orange-700">${result.deleted_assignment_count || 0}</div>
+            <div class="text-xs text-orange-600 mt-1">Deleted Assignments</div>
+          </div>
           <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-center">
             <div class="text-2xl font-bold text-emerald-700">${result.inserted_count || 0}</div>
-            <div class="text-xs text-emerald-700 mt-1">Inserted Lines</div>
-          </div>
-          <div class="rounded-xl bg-gray-50 border border-gray-100 p-4 text-center">
-            <div class="text-2xl font-bold text-gray-700">${result.skipped_existing_count || 0}</div>
-            <div class="text-xs text-gray-500 mt-1">Already Existing Lines</div>
+            <div class="text-xs text-emerald-700 mt-1">Inserted Projects</div>
           </div>
           <div class="rounded-xl bg-red-50 border border-red-100 p-4 text-center">
             <div class="text-2xl font-bold text-red-700">${result.failed_count || 0}</div>
@@ -1377,17 +1403,17 @@ function openProjectImportResultModal(result, fileName) {
 
         <div class="grid grid-cols-2 gap-4">
           <div>
-            <div class="text-sm font-semibold text-gray-700 mb-2">Inserted Projects</div>
+            <div class="text-sm font-semibold text-gray-700 mb-2">Inserted / Replaced Projects</div>
             <div class="rounded-xl border border-gray-100 bg-white max-h-72 overflow-y-auto nice-scroll px-3">
-              ${inserted.length ? inserted.map(p => row(p, 'bg-emerald-100 text-emerald-700', 'Inserted')).join('') : '<p class="text-sm text-gray-400 text-center py-6">No new projects inserted.</p>'}
+              ${inserted.length ? inserted.map(p => row(p, 'bg-emerald-100 text-emerald-700', 'Inserted')).join('') : '<p class="text-sm text-gray-400 text-center py-6">No projects inserted.</p>'}
             </div>
           </div>
           <div>
-            <div class="text-sm font-semibold text-gray-700 mb-2">Skipped / Failed</div>
+            <div class="text-sm font-semibold text-gray-700 mb-2">Failed Rows</div>
             <div class="rounded-xl border border-gray-100 bg-white max-h-72 overflow-y-auto nice-scroll px-3">
-              ${skipped.slice(0, 80).map(p => row(p, 'bg-gray-100 text-gray-600', 'Exists')).join('')}
+              
               ${failed.map(p => row(p, 'bg-red-100 text-red-700', 'Failed')).join('')}
-              ${!skipped.length && !failed.length ? '<p class="text-sm text-gray-400 text-center py-6">No skipped or failed rows.</p>' : ''}
+              ${!failed.length ? '<p class="text-sm text-gray-400 text-center py-6">No failed rows.</p>' : ''}
             </div>
           </div>
         </div>
@@ -1420,14 +1446,15 @@ async function handleProjectExcelUpload(file) {
     const rows = parseProjectExcelRows(sheetRows);
 
     if (!rows.length) {
-      toast('No valid project rows found. Required: Opportunity Number and Opportunity Name. Product Name or Product Description + Product Amount are used for duplicate matching when available.', 'error');
+      toast('No valid project rows found. Required: Opportunity Number and Opportunity Name.', 'error');
       return;
     }
 
     const result = await api('POST', '/api/projects/import', { rows });
 
-    const [projs, nlChart, psRevChart, psTypeChart, dl] = await Promise.all([
+    const [projs, asgs, nlChart, psRevChart, psTypeChart, dl] = await Promise.all([
       api('GET', '/api/projects'),
+      api('GET', `/api/assignments?fiscalYear=${S.fiscalYear}`),
       api('GET', '/api/dashboard/new-logo-chart'),
       api('GET', '/api/dashboard/ps-revenue-chart'),
       api('GET', '/api/dashboard/ps-type-chart'),
@@ -1435,6 +1462,7 @@ async function handleProjectExcelUpload(file) {
     ]);
 
     S.projects = projs;
+    S.assignments = asgs;
     S.psRevenueData = psRevChart;
     S.psTypeData = psTypeChart;
     S.lastRunningData = dl;
@@ -1442,6 +1470,8 @@ async function handleProjectExcelUpload(file) {
     buildMatrix();
     renderMatrix();
     renderYearlyWorkByProjectChart();
+    renderProjectWisePeopleChart();
+    renderInsights();
     renderNewLogoChart(nlChart, S.newLogoFilter, S.nlProductFilter);
     renderServicePipeline(projs);
     applyAndRenderRunning();
@@ -1452,7 +1482,7 @@ async function handleProjectExcelUpload(file) {
     const stats = await api('GET', `/api/dashboard/stats?fiscalYear=${S.fiscalYear}`);
     renderStats(stats);
 
-    toast(`Inserted ${result.inserted_count || 0} new project${(result.inserted_count || 0) === 1 ? '' : 's'}`);
+    toast(`Replaced project list with ${result.inserted_count || 0} project${(result.inserted_count || 0) === 1 ? '' : 's'}`);
     openProjectImportResultModal(result, file.name);
   } catch (e) {
     console.error(e);
@@ -1492,6 +1522,7 @@ function downloadAssignmentExcel() {
       .map((a, idx) => {
         const emp = (S.employees || []).find(e => e.id === a.employee_id) || {};
         const project = (S.projects || []).find(p => p.id === a.project_id) || {};
+        const projectListPosition = Math.max(0, (S.projects || []).findIndex(p => p.id === a.project_id)) + 1;
         const range = weekDateRange(a.year, a.month, a.week);
         const productAmount = Number(project.product_amount || 0);
 
@@ -1505,6 +1536,8 @@ function downloadAssignmentExcel() {
           'Department': emp.dept || '',
           'Resource Email': emp.email || '',
           'Old Project ID': a.project_id || '',
+          'Project Import Row No': project.import_row_no || '',
+          'Project List Position': projectListPosition || '',
           'Opportunity Number': project.code || a.project_code || '',
           'Project Name': project.name || a.project_name || '',
           'Customer Name': project.account_name || project.client || a.account_name || '',
@@ -1519,11 +1552,6 @@ function downloadAssignmentExcel() {
           'Start Date': range.start,
           'End Date': range.end,
           'Allocation %': Number(a.percentage) || 0,
-          'Composite Project Key': [
-            project.code || a.project_code || '',
-            project.product_name || '',
-            productAmount.toFixed(2),
-          ].join(' | '),
         };
       });
 
@@ -1537,7 +1565,7 @@ function downloadAssignmentExcel() {
       { 'Metric': 'Fiscal Year', 'Value': `FY ${S.fiscalYear + 1}` },
       { 'Metric': 'Assignment Rows', 'Value': rows.length },
       { 'Metric': 'Restore Key - Employee', 'Value': 'Resource ID, then Resource Name' },
-      { 'Metric': 'Restore Key - Project', 'Value': 'Opportunity Number + Product Name + Product Amount, with Project Name fallback' },
+      { 'Metric': 'Restore Key - Project', 'Value': 'Project Import Row No / Old Project ID first, then Opportunity Number, Project Name, Product Name, and Product Amount fallback. Duplicates are allowed.' },
       { 'Metric': 'Import Behavior', 'Value': 'Bulk Assign Assignment replaces the current fiscal-year assignments before inserting these rows.' },
     ];
 
@@ -1593,6 +1621,18 @@ function parseAssignmentExcelRows(sheetRows) {
       getProjectImportCellValue(row, ['Product Amount', 'ProductAmount'])
     );
 
+    const oldProjectId = Math.trunc(normalizeProjectImportNumber(
+      getProjectImportCellValue(row, ['Old Project ID', 'Project ID'])
+    ));
+
+    const projectImportRowNo = Math.trunc(normalizeProjectImportNumber(
+      getProjectImportCellValue(row, ['Project Import Row No', 'Project Source Row', 'Excel Row'])
+    ));
+
+    const projectListPosition = Math.trunc(normalizeProjectImportNumber(
+      getProjectImportCellValue(row, ['Project List Position', 'Project Row No'])
+    ));
+
     let year = Math.trunc(normalizeProjectImportNumber(
       getProjectImportCellValue(row, ['Year'])
     ));
@@ -1628,6 +1668,9 @@ function parseAssignmentExcelRows(sheetRows) {
       source_row: idx + 2,
       employee_code: employeeCode,
       employee_name: employeeName,
+      old_project_id: oldProjectId,
+      project_import_row_no: projectImportRowNo,
+      project_list_position: projectListPosition,
       project_code: projectCode,
       project_name: projectName,
       product_name: productName,
@@ -1704,7 +1747,7 @@ function openAssignmentImportResultModal(result, fileName) {
             <div class="rounded-xl border border-gray-100 bg-white max-h-72 overflow-y-auto nice-scroll px-3">
               ${skipped.slice(0, 120).map(r => row(r, 'bg-gray-100 text-gray-600', 'Skipped')).join('')}
               ${failed.slice(0, 80).map(r => row(r, 'bg-red-100 text-red-700', 'Failed')).join('')}
-              ${!skipped.length && !failed.length ? '<p class="text-sm text-gray-400 text-center py-6">No skipped or failed rows.</p>' : ''}
+              ${!failed.length ? '<p class="text-sm text-gray-400 text-center py-6">No failed rows.</p>' : ''}
             </div>
           </div>
         </div>
@@ -2430,7 +2473,7 @@ function openRevenueModal(d) {
   const psAmt = d.ps_amount || 0;
   const pct = totalAmt > 0 ? (psAmt / totalAmt * 100) : 0;
 
-  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · Total Amount and PS Amount both use Product Amount only')}
+  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · Fiscal Period grouping · Amount uses Product Amount first, then Amount fallback')}
     <div class="p-6 overflow-y-auto nice-scroll space-y-6" style="max-height:65vh">
 
       <!-- Total Amount section -->
@@ -2471,11 +2514,11 @@ function openRevenueModal(d) {
         </div>
         <div class="font-mono text-sm text-emerald-900 space-y-1">
           <div class="flex items-center justify-between">
-            <span class="text-emerald-700">PS Amount (Product Amount from PS product rows)</span>
+            <span class="text-emerald-700">PS Amount (Product Amount first, Amount fallback from PS rows)</span>
             <span class="font-bold">${fmtFull(psAmt)}</span>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-emerald-700">Total Amount (sum of Product Amount)</span>
+            <span class="text-emerald-700">Total Amount (Product Amount first, Amount fallback)</span>
             <span class="font-bold">${fmtFull(totalAmt)}</span>
           </div>
           <div class="border-t border-emerald-200 my-2"></div>
@@ -3211,12 +3254,12 @@ function openProjectModal(opts = {}) {
     <div><label class="field-label">Project Name</label><input id="fp_name" type="text" class="field-input" value="${esc(v('name', ''))}" placeholder="e.g. Desktop SW for IWM 2026"></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Account Name</label><input id="fp_account" type="text" class="field-input" value="${esc(v('account_name', v('client', '')))}"></div><div><label class="field-label">Product Name</label><input id="fp_product_name" type="text" class="field-input" value="${esc(v('product_name', ''))}"></div></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Product Family</label><input id="fp_product_family" type="text" class="field-input" value="${esc(v('product_family', ''))}" placeholder="e.g. Professional Service, Software…"></div><div><label class="field-label">Opportunity Owner</label><input id="fp_owner" type="text" class="field-input" list="ownerList" value="${esc(v('opportunity_owner', ''))}"><datalist id="ownerList">${OWNER_OPTS.map(o => `<option value="${esc(o)}">`).join('')}</datalist></div></div>
-    <div><label class="field-label">Stage</label><select id="fp_stage" class="field-input">${STAGES.map(x => `<option ${x === v('stage', 'Prospect') ? 'selected' : ''}>${x}</option>`).join('')}</select></div>
+    <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Stage</label><select id="fp_stage" class="field-input">${STAGES.map(x => `<option ${x === v('stage', 'Prospect') ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div><label class="field-label">Fiscal Period</label><input id="fp_fiscal_period" type="text" class="field-input" value="${esc(v('fiscal_period', ''))}" placeholder="e.g. Q1-2026"></div></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Product Amount (USD)</label><input id="fp_product_amount" type="number" class="field-input" value="${v('product_amount', 0)}" min="0" step="0.01"></div><div><label class="field-label">Probability (%)</label><input id="fp_probability" type="number" class="field-input" value="${v('probability', 0)}" min="0" max="100" step="5"></div></div>
     <div class="grid grid-cols-3 gap-3"><div><label class="field-label">Created Date</label><input id="fp_created" type="date" class="field-input" value="${esc(v('created_date', todayStr))}"></div><div><label class="field-label">Closed Won Date</label><input id="fp_end" type="date" class="field-input" value="${esc(v('end_date', ''))}"></div><div><label class="field-label">Project Closing Date</label><input id="fp_closing" type="date" class="field-input" value="${esc(v('project_closing_date', ''))}"></div></div>
     <div><label class="field-label">Amount (USD)</label><input id="fp_opp_amount" type="number" class="field-input" value="${v('opp_amount', 0)}" min="0" step="0.01"></div>
     <div><label class="field-label">Progress (internal) <span class="text-xs text-gray-400 font-normal ml-1">0 – 100</span></label><input id="fp_prog" type="number" min="0" max="100" step="1" value="${v('progress', 0)}" class="field-input" placeholder="0"></div>
-    <div><label class="field-label">Color</label><div class="flex flex-wrap gap-2" id="cpkr">${PCOLORS.map(c => `<button type="button" data-c="${c}" class="w-8 h-8 rounded-lg ${c === v('color', '#8B5CF6') ? 'ring-2 ring-offset-2 ring-gray-900' : ''}" style="background:${c}"></button>`).join('')}</div><input type="hidden" id="fp_color" value="${v('color', '#8B5CF6')}"></div>
+    <div><label class="field-label">Color</label><div class="flex flex-wrap gap-2" id="cpkr">${PCOLORS.map(c => `<button type="button" data-c="${c}" title="${c}" class="w-8 h-8 rounded-lg border border-gray-300 hover:scale-105 transition-transform ${c === v('color', '#8B5CF6') ? 'ring-2 ring-offset-2 ring-gray-900' : ''}" style="background:${c}"></button>`).join('')}</div><input type="hidden" id="fp_color" value="${v('color', '#8B5CF6')}"></div>
   </div>${mFtr(editing ? opts.id : null, 'saveProject', 'deleteProject')}`);
   document.querySelectorAll('#cpkr button').forEach(b => b.addEventListener('click', () => { document.getElementById('fp_color').value = b.dataset.c; document.querySelectorAll('#cpkr button').forEach(x => x.classList.remove('ring-2', 'ring-offset-2', 'ring-gray-900')); b.classList.add('ring-2', 'ring-offset-2', 'ring-gray-900'); }));
 }
@@ -3226,7 +3269,7 @@ async function saveProject(id) {
   const name = document.getElementById('fp_name').value.trim();
   if (!code || !name) { toast('Opportunity Number and Project Name are required', 'error'); return; }
   const amount = +document.getElementById('fp_opp_amount').value;
-  const payload = { code, name, account_name: document.getElementById('fp_account').value.trim(), client: document.getElementById('fp_account').value.trim(), product_name: document.getElementById('fp_product_name').value.trim(), product_family: document.getElementById('fp_product_family').value.trim(), opportunity_owner: document.getElementById('fp_owner').value.trim(), stage: document.getElementById('fp_stage').value, priority: document.getElementById('fp_pri').value, product_amount: +document.getElementById('fp_product_amount').value, probability: +document.getElementById('fp_probability').value, created_date: document.getElementById('fp_created').value, end_date: document.getElementById('fp_end').value, project_closing_date: document.getElementById('fp_closing').value, opp_amount: amount, budget: amount, progress: +document.getElementById('fp_prog').value, color: document.getElementById('fp_color').value };
+  const payload = { code, name, account_name: document.getElementById('fp_account').value.trim(), client: document.getElementById('fp_account').value.trim(), product_name: document.getElementById('fp_product_name').value.trim(), product_family: document.getElementById('fp_product_family').value.trim(), opportunity_owner: document.getElementById('fp_owner').value.trim(), stage: document.getElementById('fp_stage').value, fiscal_period: document.getElementById('fp_fiscal_period').value.trim(), priority: document.getElementById('fp_pri').value, product_amount: +document.getElementById('fp_product_amount').value, probability: +document.getElementById('fp_probability').value, created_date: document.getElementById('fp_created').value, end_date: document.getElementById('fp_end').value, project_closing_date: document.getElementById('fp_closing').value, opp_amount: amount, budget: amount, progress: +document.getElementById('fp_prog').value, color: document.getElementById('fp_color').value };
   try { if (id) await api('PUT', `/api/projects/${id}`, payload); else await api('POST', '/api/projects', payload); closeModal(); toast(`Project ${id ? 'updated' : 'created'}`); await loadAll(); } catch (e) { toast(e.message, 'error'); }
 }
 
@@ -3565,10 +3608,10 @@ function downloadAllProjectsExcel() {
         .sort((a, b) => a.localeCompare(b));
 
       const assignedWeightedWeeks = asgs.reduce((sum, a) => sum + ((Number(a.percentage) || 0) / 100), 0);
-      const uniqueKey = [p.code || '', p.product_name || '', Number(p.product_amount || 0).toFixed(2)].join(' | ');
-
       return {
         'SL': idx + 1,
+        'Project ID': p.id || '',
+        'Project Import Row No': p.import_row_no || '',
         'Opportunity Number': p.code || '',
         'Project Name': p.name || '',
         'Account Name': p.account_name || '',
@@ -3577,6 +3620,7 @@ function downloadAllProjectsExcel() {
         'Product Family': p.product_family || '',
         'Opportunity Owner': p.opportunity_owner || '',
         'Stage': p.stage || '',
+        'Fiscal Period': p.fiscal_period || '',
         'Deal Status': p.deal_status || '',
         'Priority': p.priority || '',
         'Probability (%)': Number(p.probability) || 0,
@@ -3591,7 +3635,6 @@ function downloadAllProjectsExcel() {
         'Assigned Resource Count': employeeIds.length,
         'Assigned Weighted Weeks': +assignedWeightedWeeks.toFixed(2),
         'Assigned Resource Names': resourceNames.join(', '),
-        'Composite Import Key': uniqueKey,
       };
     });
 
@@ -3608,7 +3651,7 @@ function downloadAllProjectsExcel() {
       { 'Metric': 'Export Date', 'Value': new Date().toLocaleString() },
       { 'Metric': 'Total Projects', 'Value': (S.projects || []).length },
       { 'Metric': 'Total Assignment Slots', 'Value': (S.assignments || []).length },
-      { 'Metric': 'Composite Key Used For Import Matching', 'Value': 'Opportunity Number + Product Name/Product Description + Product Amount' },
+      { 'Metric': 'Project Import Behavior', 'Value': 'No de-duplication. Duplicate project rows are kept exactly as imported.' },
     ];
 
     const wb = XLSX.utils.book_new();
@@ -3655,7 +3698,8 @@ function openProjectsModal() {
       if (!q) return true;
       return (p.code || '').toLowerCase().includes(q)
         || (p.name || '').toLowerCase().includes(q)
-        || (p.product_name || '').toLowerCase().includes(q);
+        || (p.product_name || '').toLowerCase().includes(q)
+        || (p.fiscal_period || '').toLowerCase().includes(q);
     });
 
     const rowsHtml = filtered.map((p, i) => `
@@ -3666,6 +3710,7 @@ function openProjectsModal() {
           <div class="flex items-center gap-2 mb-0.5">
             <span class="text-xs font-bold text-blue-600 mono">${esc(p.code)}</span>
             <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700'}">${esc(p.stage)}</span>
+            ${p.fiscal_period ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">${esc(p.fiscal_period)}</span>` : ''}
             ${p.product_family ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span>` : ''}
           </div>
           <div class="text-sm font-semibold text-gray-900 truncate">${esc(p.name)}</div>
@@ -3674,7 +3719,8 @@ function openProjectsModal() {
         </div>
         <div class="text-right flex-shrink-0 min-w-[90px]">
           <div class="text-xs font-bold text-gray-800 mono">${(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USD</div>
-          <div class="text-xs text-gray-400">${p.end_date || '—'}</div>
+          <div class="text-xs text-gray-400">${p.fiscal_period || '—'}</div>
+          <div class="text-[10px] text-gray-300">${p.end_date || '—'}</div>
         </div>
       </div>`).join('');
 
