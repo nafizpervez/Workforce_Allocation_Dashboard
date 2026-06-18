@@ -39,6 +39,9 @@ const S = {
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
+const SERVICE_PIPELINE_FISCAL_YEAR = 2027;
+const SERVICE_PIPELINE_STAGES = ['Negotiate', 'Presentation - Solve', 'Proposal', 'Prospect', 'Qualify', 'Validate'];
+const SERVICE_PIPELINE_STAGE_SET = new Set(SERVICE_PIPELINE_STAGES);
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
 const PCOLORS = [
   '#8B5CF6', '#14B8A6', '#EC4899', '#F59E0B', '#10B981', '#6366F1',
@@ -262,10 +265,27 @@ function sortRunningProjects(a, b) {
   return getRunningSortDate(a) - getRunningSortDate(b);
 }
 
+function getFiscalYearFromFiscalPeriod(period) {
+  const match = String(period || '').trim().toUpperCase().match(/^Q[1-4][\s-]*(\d{4})$/);
+  return match ? Number(match[1]) : null;
+}
+
+function isServicePipelineProject(p) {
+  return (
+    p &&
+    SERVICE_PIPELINE_STAGE_SET.has(String(p.stage || '').trim()) &&
+    getFiscalYearFromFiscalPeriod(p.fiscal_period) === SERVICE_PIPELINE_FISCAL_YEAR
+  );
+}
+
+function getServicePipelineBaseProjects() {
+  return (S.projects || []).filter(isServicePipelineProject);
+}
+
 function applyPipelineFilters(list) {
   const q = (S.pipelineSearch || '').toLowerCase().trim();
   return list.filter(p => {
-    if (p.stage === 'Closed Lost') return false;
+    if (!isServicePipelineProject(p)) return false;
     if (S.pipelineDealStatusFilt && p.deal_status !== S.pipelineDealStatusFilt) return false;
     if (S.pipelineStageFilt && p.stage !== S.pipelineStageFilt) return false;
     if (!getAmountOk(p.opp_amount, S.pipelineAmountFilt)) return false;
@@ -273,7 +293,14 @@ function applyPipelineFilters(list) {
     if (!matchDateFilter(p.project_closing_date, S.pipelineProjCloseFilt)) return false;
     if (S.pipelineProdFamilyFilt && p.product_family !== S.pipelineProdFamilyFilt) return false;
     if (S.pipelineProductTypeFilt && !sameProductType(p.product_name, S.pipelineProductTypeFilt)) return false;
-    if (q && !(p.name || '').toLowerCase().includes(q) && !(p.code || '').toLowerCase().includes(q)) return false;
+    if (q &&
+      !(p.name || '').toLowerCase().includes(q) &&
+      !(p.code || '').toLowerCase().includes(q) &&
+      !(p.account_name || '').toLowerCase().includes(q) &&
+      !(p.client || '').toLowerCase().includes(q) &&
+      !(p.product_name || '').toLowerCase().includes(q) &&
+      !(p.fiscal_period || '').toLowerCase().includes(q)
+    ) return false;
     return true;
   }).sort((a, b) => {
     if (!S.pipelineSortAssigned) return 0;
@@ -574,7 +601,10 @@ function populateMatrixFilter() {
 
 function populatePipelineStageFilter() {
   const sel = document.getElementById('pipeStageFilt');
-  if (sel && sel.options.length <= 1) { sel.innerHTML = '<option value="">All Stages</option>' + STAGES.filter(s => s !== 'Closed Won' && s !== 'Closed Lost').map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join(''); }
+  if (sel && sel.options.length <= 1) {
+    sel.innerHTML = '<option value="">All Stages</option>' +
+      SERVICE_PIPELINE_STAGES.map(s => `<option value="${esc(s)}">${esc(s)}</option>`).join('');
+  }
 }
 
 /* ================================================================ STATS */
@@ -2868,9 +2898,8 @@ function servicePipelineRowHtml(p) {
 }
 
 function applyAndRenderPipeline() {
-  const active = S.projects.filter(p => p.stage !== 'Closed Won');
-  const filtered = applyPipelineFilters(active);
-  document.getElementById('pipelineList').innerHTML = filtered.map(servicePipelineRowHtml).join('') || '<div class="px-6 py-8 text-center text-sm text-gray-400">No projects</div>';
+  const filtered = applyPipelineFilters(getServicePipelineBaseProjects());
+  document.getElementById('pipelineList').innerHTML = filtered.map(servicePipelineRowHtml).join('') || '<div class="px-6 py-8 text-center text-sm text-gray-400">No FY 2027 service pipeline projects</div>';
 }
 
 function renderServicePipeline(projects) { applyAndRenderPipeline(); }
@@ -2878,9 +2907,10 @@ function renderServicePipeline(projects) { applyAndRenderPipeline(); }
 /* ── Populate Product Family / Product Type dropdowns ───────────────────────── */
 function populateProductFamilyDropdowns() {
   const runFamilies = [...new Set((S.lastRunningData || []).map(d => d.product_family).filter(Boolean))].sort();
-  const pipeFamilies = [...new Set((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost').map(p => p.product_family).filter(Boolean))].sort();
+  const servicePipelineProjects = getServicePipelineBaseProjects();
+  const pipeFamilies = [...new Set(servicePipelineProjects.map(p => p.product_family).filter(Boolean))].sort();
   const runProductTypes = uniqueNormalizedProductTypes(S.lastRunningData || []);
-  const pipeProductTypes = uniqueNormalizedProductTypes((S.projects || []).filter(p => p.stage !== 'Closed Won' && p.stage !== 'Closed Lost'));
+  const pipeProductTypes = uniqueNormalizedProductTypes(servicePipelineProjects);
   const fillSelect = (id, opts, allLabel, normalize = false) => { const el = document.getElementById(id); if (!el) return; const cur = normalize ? normalizeProductTypeName(el.value) : el.value; el.innerHTML = `<option value="">${allLabel}</option>` + opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join(''); el.value = opts.includes(cur) ? cur : ''; };
   fillSelect('runProdFamilyFilt', runFamilies, 'All Families');
   fillSelect('pipeProdFamilyFilt', pipeFamilies, 'All Families');
@@ -2904,8 +2934,8 @@ const mFtr = (id, saveFn, delFn) => `<div class="p-6 border-t border-gray-200 fl
 function openViewAllModal(type) {
   let title, items, listHtml;
   if (type === 'pipeline') {
-    title = 'All Service Pipeline';
-    items = applyPipelineFilters(S.projects.filter(p => p.stage !== 'Closed Won'));
+    title = `All Service Pipeline FY ${SERVICE_PIPELINE_FISCAL_YEAR}`;
+    items = applyPipelineFilters(getServicePipelineBaseProjects());
     listHtml = items.map(servicePipelineRowHtml).join('');
   } else {
     title = 'All Running Projects';
