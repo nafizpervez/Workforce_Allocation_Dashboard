@@ -16,7 +16,7 @@
       rel="stylesheet"
     />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=assignment-layout-fix-v2" />
+    <link rel="stylesheet" href="/css/style.css?v=matrix-download-row-fix-v1" />
     <style>
       /* Thicker horizontal scrollbar on matrix table */
       #matrixWrap::-webkit-scrollbar {
@@ -348,105 +348,93 @@
             </div>
 
             <div id="resourceMatrixTab-matrix" class="resource-matrix-tab-content">
-              <!-- Filter bar — row 1: dropdowns -->
-              <div
-                class="matrix-filter-bar px-4 py-2.5 border-b border-gray-100 bg-gray-50/60 flex flex-wrap items-center gap-2"
-              >
-                <div class="flex items-center gap-1.5">
-                  <label
-                    class="text-xs font-medium text-gray-400 whitespace-nowrap"
-                    >Project</label
+              <!-- Filter bar — row 1: dropdowns + assignment export; row 2: sort buttons -->
+              <div class="matrix-filter-bar px-4 py-2.5 border-b border-gray-100 bg-gray-50/60">
+                <div class="matrix-filter-main-row">
+                  <div class="matrix-filter-control matrix-project-filter-control">
+                    <label class="text-xs font-medium text-gray-400 whitespace-nowrap">Project</label>
+                    <select
+                      id="matrixProjectFilter"
+                      class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none"
+                    >
+                      <option value="">All Projects</option>
+                    </select>
+                  </div>
+                  <div class="matrix-filter-control">
+                    <label class="text-xs font-medium text-gray-400 whitespace-nowrap">Resource</label>
+                    <select
+                      id="matrixResourceFilter"
+                      class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
+                    >
+                      <option value="">All Resources</option>
+                    </select>
+                  </div>
+                  <div class="matrix-filter-control">
+                    <label class="text-xs font-medium text-gray-400">Month</label>
+                    <select
+                      id="matrixMonthFilter"
+                      class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
+                    >
+                      <option value="">All Months</option>
+                    </select>
+                  </div>
+                  <div class="matrix-filter-control">
+                    <label class="text-xs font-medium text-gray-400">Stage</label>
+                    <select
+                      id="matrixStageFilter"
+                      class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
+                    >
+                      <option value="">All Stages</option>
+                    </select>
+                  </div>
+                  <div class="matrix-filter-control">
+                    <label class="text-xs font-medium text-gray-400">Amount</label>
+                    <select
+                      id="matrixAmountFilter"
+                      class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
+                    >
+                      <option value="">All</option>
+                      <option value="0-10000">Under $10K</option>
+                      <option value="10000-50000">$10K–$50K</option>
+                      <option value="50000-100000">$50K–$100K</option>
+                      <option value="100000+">Over $100K</option>
+                    </select>
+                  </div>
+                  <div class="matrix-filter-control">
+                    <label class="text-xs font-medium text-gray-400 whitespace-nowrap">Close Date</label>
+                    <select
+                      id="matrixCloseDateFilter"
+                      class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
+                    >
+                      <option value="">All</option>
+                      <option value="thismonth">This Month</option>
+                      <option value="next3months">Next 3 Months</option>
+                      <option value="thisyear">This Year</option>
+                      <option value="overdue">Overdue</option>
+                    </select>
+                  </div>
+                  <div class="matrix-filter-control">
+                    <label class="text-xs font-medium text-gray-400 whitespace-nowrap">Proj Close</label>
+                    <select
+                      id="matrixProjCloseFilter"
+                      class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
+                    >
+                      <option value="">All</option>
+                      <option value="thismonth">This Month</option>
+                      <option value="next3months">Next 3 Months</option>
+                      <option value="thisyear">This Year</option>
+                      <option value="overdue">Overdue</option>
+                    </select>
+                  </div>
+                  <button
+                    id="downloadAssignmentExcelBtn"
+                    type="button"
+                    class="assignment-download-btn matrix-download-btn"
                   >
-                  <select
-                    id="matrixProjectFilter"
-                    class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white focus:outline-none"
-                    style="min-width: 160px"
-                  >
-                    <option value="">All Projects</option>
-                  </select>
+                    Download Assignment Excel
+                  </button>
                 </div>
-                <div class="flex items-center gap-1.5">
-                  <label
-                    class="text-xs font-medium text-gray-400 whitespace-nowrap"
-                    >Resource</label
-                  >
-                  <select
-                    id="matrixResourceFilter"
-                    class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
-                    style="min-width: 130px"
-                  >
-                    <option value="">All Resources</option>
-                  </select>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <label class="text-xs font-medium text-gray-400">Month</label>
-                  <select
-                    id="matrixMonthFilter"
-                    class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
-                  >
-                    <option value="">All Months</option>
-                  </select>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <label class="text-xs font-medium text-gray-400">Stage</label>
-                  <select
-                    id="matrixStageFilter"
-                    class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
-                  >
-                    <option value="">All Stages</option>
-                  </select>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <label class="text-xs font-medium text-gray-400">Amount</label>
-                  <select
-                    id="matrixAmountFilter"
-                    class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
-                  >
-                    <option value="">All</option>
-                    <option value="0-10000">Under $10K</option>
-                    <option value="10000-50000">$10K–$50K</option>
-                    <option value="50000-100000">$50K–$100K</option>
-                    <option value="100000+">Over $100K</option>
-                  </select>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <label class="text-xs font-medium text-gray-400"
-                    >Close Date</label
-                  >
-                  <select
-                    id="matrixCloseDateFilter"
-                    class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
-                  >
-                    <option value="">All</option>
-                    <option value="thismonth">This Month</option>
-                    <option value="next3months">Next 3 Months</option>
-                    <option value="thisyear">This Year</option>
-                    <option value="overdue">Overdue</option>
-                  </select>
-                </div>
-                <div class="flex items-center gap-1.5">
-                  <label class="text-xs font-medium text-gray-400"
-                    >Proj Close</label
-                  >
-                  <select
-                    id="matrixProjCloseFilter"
-                    class="text-xs border border-gray-200 rounded-md px-2 py-1.5 bg-white"
-                  >
-                    <option value="">All</option>
-                    <option value="thismonth">This Month</option>
-                    <option value="next3months">Next 3 Months</option>
-                    <option value="thisyear">This Year</option>
-                    <option value="overdue">Overdue</option>
-                  </select>
-                </div>
-                <button
-                  id="downloadAssignmentExcelBtn"
-                  type="button"
-                  class="assignment-download-btn matrix-download-btn"
-                >
-                  Download Assignment Excel
-                </button>
-                <div class="ml-auto flex items-center gap-1.5">
+                <div class="matrix-filter-sort-row">
                   <button id="matrixSortHighBtn" class="flt-sort-btn">
                     ↓ High Util
                   </button>
@@ -1676,6 +1664,6 @@
     <input id="projectExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
     <input id="assignmentExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=assignment-layout-fix-v2"></script>
+    <script src="/js/app.js?v=matrix-download-row-fix-v1"></script>
   </body>
 </html>

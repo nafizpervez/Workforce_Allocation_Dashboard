@@ -974,23 +974,103 @@ td.cell:hover .cell-add {
   min-width: 1180px;
 }
 
-/* ── Resource Assignment matrix filter row ────────────────────── */
+/* ==============================================================
+   Resource Assignment Matrix filter layout
+   ============================================================== */
+
 .matrix-filter-bar {
-  gap: 8px !important;
-  align-items: center !important;
+  display: block;
+  box-sizing: border-box;
+  overflow-x: auto;
 }
 
-.matrix-filter-bar select,
-.matrix-filter-bar button {
-  height: 30px !important;
-  box-sizing: border-box !important;
+.matrix-filter-main-row {
+  display: grid;
+  grid-template-columns:
+    minmax(210px, 0.85fr)
+    minmax(210px, 0.85fr)
+    minmax(125px, 0.5fr)
+    minmax(150px, 0.65fr)
+    minmax(115px, 0.48fr)
+    minmax(145px, 0.6fr)
+    minmax(145px, 0.6fr)
+    max-content;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.matrix-filter-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.matrix-filter-control label {
+  white-space: nowrap;
+}
+
+.matrix-filter-control select {
+  width: 100%;
+  height: 30px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.matrix-project-filter-control {
+  max-width: 250px;
+}
+
+.assignment-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 13px;
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assignment-download-btn:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
 }
 
 .matrix-download-btn {
-  height: 30px !important;
-  margin-left: 2px;
-  margin-right: 2px;
   flex-shrink: 0;
+}
+
+.matrix-filter-sort-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+@media (max-width: 1400px) {
+  .matrix-filter-main-row {
+    grid-template-columns:
+      240px
+      230px
+      135px
+      160px
+      125px
+      150px
+      150px
+      180px;
+    min-width: 1370px;
+  }
 }
 
 /* ================================================================
