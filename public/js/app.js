@@ -517,8 +517,8 @@ async function loadAll() {
     renderStats(stats);
     renderMatrix();
     renderTrends(trends);
-    renderWorkload(wl);
-    renderAllocation(wl);
+    renderBurndownChart();
+    renderBurnupChart();
     renderNewLogoChart(nlChart);
     // Sync initial category button states
     document.querySelectorAll('.nl-prod-btn').forEach(b => {
@@ -708,9 +708,177 @@ Product Name: ${chipProduct}`;
 /* ================================================================ CHARTS */
 function renderTrends(data) { if (S.charts.trends) S.charts.trends.destroy(); const ctx = document.getElementById('trendsChart').getContext('2d'); S.charts.trends = new Chart(ctx, { type: 'line', data: { labels: data.map(d => d.label), datasets: [{ label: 'Assignments', data: data.map(d => d.assignments), borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.06)', tension: 0.4, borderWidth: 2, pointRadius: 3, fill: true, yAxisID: 'y' }, { label: 'Utilization %', data: data.map(d => d.utilization), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.04)', tension: 0.4, borderWidth: 2, pointRadius: 3, yAxisID: 'y1' }] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, padding: 8 } }, scales: { x: { ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } }, y: { position: 'left', ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } }, y1: { position: 'right', ticks: { font: { size: 11 } }, grid: { display: false } } } } }); }
 
-function renderWorkload(data) { if (S.charts.workload) S.charts.workload.destroy(); const ctx = document.getElementById('workloadChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.workload = new Chart(ctx, { type: 'bar', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderRadius: 4, borderSkipped: false }] }, options: { indexAxis: 'y', responsive: true, maintainAspectRatio: false, plugins: { legend: { display: false }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 } } }, scales: { x: { beginAtZero: true, ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } }, y: { ticks: { font: { size: 12 }, color: '#374151' }, grid: { display: false } } } } }); }
+function getAssignmentBurnSeries() {
+  const months = fiscalMonths(S.fiscalYear);
+  const labels = months.map(m => m.label);
+  const activeEmployeeIds = new Set(getActiveEmployees().map(e => e.id));
+  const monthIndex = new Map(months.map((m, i) => [`${m.y}-${m.m}`, i]));
+  const planned = months.map(() => 0);
 
-function renderAllocation(data) { if (S.charts.allocation) S.charts.allocation.destroy(); const ctx = document.getElementById('allocationChart').getContext('2d'); const depts = data.map(d => d.dept), colors = depts.map(d => DEPT_COLORS[d] || '#8B5CF6'); S.charts.allocation = new Chart(ctx, { type: 'pie', data: { labels: depts, datasets: [{ data: data.map(d => d.assignment_count), backgroundColor: colors, borderWidth: 2, borderColor: '#fff' }] }, options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 10 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, callbacks: { label: c => { const tot = c.dataset.data.reduce((a, b) => a + b, 0); return ` ${c.label}: ${c.parsed} (${((c.parsed / tot) * 100).toFixed(0)}%)`; } } } } } }); }
+  for (const a of S.assignments || []) {
+    if (!activeEmployeeIds.has(a.employee_id)) continue;
+    const idx = monthIndex.get(`${a.year}-${a.month}`);
+    if (idx === undefined) continue;
+    planned[idx] += (Number(a.percentage) || 0) / 100;
+  }
+
+  const total = planned.reduce((s, v) => s + v, 0);
+  let running = 0;
+  const cumulative = planned.map(v => {
+    running += v;
+    return +running.toFixed(2);
+  });
+  const remaining = cumulative.map(v => +Math.max(total - v, 0).toFixed(2));
+  const idealBurn = months.map((_, i) => +Math.max(total - ((total / Math.max(months.length, 1)) * (i + 1)), 0).toFixed(2));
+  const idealUp = months.map((_, i) => +Math.min((total / Math.max(months.length, 1)) * (i + 1), total).toFixed(2));
+
+  return {
+    labels,
+    planned: planned.map(v => +v.toFixed(2)),
+    cumulative,
+    remaining,
+    idealBurn,
+    idealUp,
+    total: +total.toFixed(2),
+  };
+}
+
+function burnChartTooltipUnit(value) {
+  const n = Number(value) || 0;
+  return `${n.toFixed(2)} FTE-week${Math.abs(n - 1) < 0.0001 ? '' : 's'}`;
+}
+
+function renderBurndownChart() {
+  if (S.charts.burndown) S.charts.burndown.destroy();
+  const el = document.getElementById('burndownChart');
+  if (!el) return;
+  const ctx = el.getContext('2d');
+  const s = getAssignmentBurnSeries();
+
+  S.charts.burndown = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [
+        {
+          label: 'Remaining workload',
+          data: s.remaining,
+          borderColor: '#DC2626',
+          backgroundColor: 'rgba(220, 38, 38, 0.08)',
+          fill: true,
+          tension: 0.35,
+          borderWidth: 2,
+          pointRadius: 3,
+        },
+        {
+          label: 'Ideal burndown',
+          data: s.idealBurn,
+          borderColor: '#94A3B8',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0.15,
+          borderWidth: 1.5,
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 } },
+        tooltip: {
+          bodyFont: { size: 11 },
+          titleFont: { size: 11 },
+          padding: 8,
+          callbacks: { label: c => ` ${c.dataset.label}: ${burnChartTooltipUnit(c.parsed.y)}` },
+        },
+      },
+      scales: {
+        x: { ticks: { font: { size: 11 }, maxRotation: 35, minRotation: 0 }, grid: { color: '#F3F4F6' } },
+        y: {
+          beginAtZero: true,
+          suggestedMax: Math.max(s.total, 1),
+          ticks: { font: { size: 11 }, callback: v => Number(v).toFixed(0) },
+          grid: { color: '#F3F4F6' },
+          title: { display: true, text: 'Remaining workload (FTE-weeks)', font: { size: 11 }, color: '#9CA3AF' },
+        },
+      },
+    },
+  });
+}
+
+function renderBurnupChart() {
+  if (S.charts.burnup) S.charts.burnup.destroy();
+  const el = document.getElementById('burnupChart');
+  if (!el) return;
+  const ctx = el.getContext('2d');
+  const s = getAssignmentBurnSeries();
+
+  S.charts.burnup = new Chart(ctx, {
+    type: 'line',
+    data: {
+      labels: s.labels,
+      datasets: [
+        {
+          label: 'Cumulative workload',
+          data: s.cumulative,
+          borderColor: '#2563EB',
+          backgroundColor: 'rgba(37, 99, 235, 0.08)',
+          fill: true,
+          tension: 0.35,
+          borderWidth: 2,
+          pointRadius: 3,
+        },
+        {
+          label: 'Total planned workload',
+          data: s.labels.map(() => s.total),
+          borderColor: '#10B981',
+          borderDash: [5, 5],
+          fill: false,
+          tension: 0,
+          borderWidth: 1.5,
+          pointRadius: 0,
+        },
+        {
+          label: 'Ideal burnup',
+          data: s.idealUp,
+          borderColor: '#94A3B8',
+          borderDash: [3, 4],
+          fill: false,
+          tension: 0.15,
+          borderWidth: 1.25,
+          pointRadius: 0,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 } },
+        tooltip: {
+          bodyFont: { size: 11 },
+          titleFont: { size: 11 },
+          padding: 8,
+          callbacks: { label: c => ` ${c.dataset.label}: ${burnChartTooltipUnit(c.parsed.y)}` },
+        },
+      },
+      scales: {
+        x: { ticks: { font: { size: 11 }, maxRotation: 35, minRotation: 0 }, grid: { color: '#F3F4F6' } },
+        y: {
+          beginAtZero: true,
+          suggestedMax: Math.max(s.total, 1),
+          ticks: { font: { size: 11 }, callback: v => Number(v).toFixed(0) },
+          grid: { color: '#F3F4F6' },
+          title: { display: true, text: 'Cumulative workload (FTE-weeks)', font: { size: 11 }, color: '#9CA3AF' },
+        },
+      },
+    },
+  });
+}
 
 /* ================================================================ WORK SUMMARY: PROJECT / TEAM / INDIVIDUAL */
 const TIMESHEET_WORK_TYPE_ORDER = [
@@ -1501,6 +1669,8 @@ async function handleProjectExcelUpload(file) {
     renderMatrix();
     renderYearlyWorkByProjectChart();
     renderProjectWisePeopleChart();
+    renderBurndownChart();
+    renderBurnupChart();
     renderInsights();
     renderNewLogoChart(nlChart, S.newLogoFilter, S.nlProductFilter);
     renderServicePipeline(projs);
@@ -3604,6 +3774,8 @@ async function toggleEmployeeActive(empId) {
     renderMatrix();
     renderYearlyWorkByProjectChart();
     renderProjectWisePeopleChart();
+    renderBurndownChart();
+    renderBurnupChart();
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
     renderInsights();

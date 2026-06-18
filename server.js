@@ -591,7 +591,7 @@ function hslToHex(h, s, l) {
   else if (hue < 180) [r, g, b] = [0, c, x];
   else if (hue < 240) [r, g, b] = [0, x, c];
   else if (hue < 300) [r, g, b] = [x, 0, c];
-  else [r, g, b] = [c, 0, x];
+  else[r, g, b] = [c, 0, x];
 
   const toHex = v => Math.round((v + m) * 255).toString(16).padStart(2, '0');
   return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();

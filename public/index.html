@@ -16,7 +16,7 @@
       rel="stylesheet"
     />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=pipeline-fy27-v1" />
+    <link rel="stylesheet" href="/css/style.css?v=burnup-burndown-v1" />
     <style>
       /* Thicker horizontal scrollbar on matrix table */
       #matrixWrap::-webkit-scrollbar {
@@ -612,15 +612,15 @@
                   </div>
                   <div>
                     <h3 class="font-semibold text-gray-900">
-                      Department Workload
+                      Burndown Chart
                     </h3>
                     <p class="text-xs text-gray-500 mt-0.5">
-                      Active assignments by team
+                      Remaining planned workload by fiscal month
                     </p>
                   </div>
                 </div>
                 <div style="height: 260px">
-                  <canvas id="workloadChart"></canvas>
+                  <canvas id="burndownChart"></canvas>
                 </div>
               </div>
             </div>
@@ -663,13 +663,13 @@
                   </div>
                   <div>
                     <h3 class="font-semibold text-gray-900">
-                      Resource Allocation
+                      Burnup Chart
                     </h3>
-                    <p class="text-xs text-gray-500 mt-0.5">By department</p>
+                    <p class="text-xs text-gray-500 mt-0.5">Cumulative planned workload by fiscal month</p>
                   </div>
                 </div>
                 <div style="height: 260px">
-                  <canvas id="allocationChart"></canvas>
+                  <canvas id="burnupChart"></canvas>
                 </div>
               </div>
             </div>
@@ -1686,6 +1686,6 @@
     <input id="projectExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
     <input id="assignmentExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="/js/app.js?v=pipeline-fy27-v1"></script>
+    <script src="/js/app.js?v=burnup-burndown-v1"></script>
   </body>
 </html>
