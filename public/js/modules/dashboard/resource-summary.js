@@ -15,51 +15,83 @@ const RESOURCE_SUMMARY_COLUMNS = {
   ],
 };
 
-const RESOURCE_ALLOCATION_PROJECTS = Object.freeze({
-  intrasourcing: Object.freeze({
-    code: 'SA123456',
-    name: 'Esri Malaysia Intrasource',
+const RESOURCE_ALLOCATION_RULES = Object.freeze([
+  Object.freeze({
+    key: 'intrasourcing',
+    label: 'Intrasourcing',
+    pattern: /intrasource/i,
+    description: 'Project name contains “Intrasource”.',
   }),
-  preSale: Object.freeze({
-    code: 'SA112233',
-    name: 'EBD Pre Sale Project',
+  Object.freeze({
+    key: 'preSale',
+    label: 'Pre Sale',
+    pattern: /pre[\s-]*sale/i,
+    description: 'Project name contains “Pre Sale” or “Pre-Sale”.',
   }),
-  training: Object.freeze({
-    code: 'SA445566',
-    name: 'EBD Training Delivery',
+  Object.freeze({
+    key: 'training',
+    label: 'Training',
+    pattern: /training[\s-]*delivery/i,
+    description: 'Project name contains “Training Delivery” or “Training-Delivery”.',
   }),
-  generalAdmin: Object.freeze({
-    code: 'SA778899',
-    name: 'General Admin',
+  Object.freeze({
+    key: 'generalAdmin',
+    label: 'General Admin',
+    pattern: /general[\s-]*admin/i,
+    description: 'Project name contains “General Admin” or “General-Admin”.',
   }),
-});
+]);
 
-function normalizeSummaryProjectCode(value) {
-  return String(value || '').trim().toUpperCase();
-}
+const RESOURCE_ALLOCATION_RULE_BY_KEY = Object.freeze(
+  Object.fromEntries(RESOURCE_ALLOCATION_RULES.map(rule => [rule.key, rule])),
+);
 
-function getSummaryAssignmentProjectCode(assignment) {
-  if (assignment.project_code) {
-    return normalizeSummaryProjectCode(assignment.project_code);
-  }
+function getSummaryAssignmentProjectName(assignment) {
+  if (assignment.project_name) return String(assignment.project_name).trim();
 
-  const project = S.projects.find(item => item.id === assignment.project_id);
-  return normalizeSummaryProjectCode(project?.code);
+  const project = S.projects.find(item =>
+    Number(item.id) === Number(assignment.project_id),
+  );
+
+  return String(project?.name || '').trim();
 }
 
 /*
- * Assignment rows are stored once per matrix week. Repeated weekly rows must
- * not be added together because that would inflate a resource's displayed
- * percentage. Instead, matching rows are combined within each week and the
- * weekly totals are averaged across the weeks where the employee is assigned.
+ * Category matching is case-insensitive and searches the complete project name.
+ * The flexible separators allow both spaces and hyphens, including repeated
+ * combinations such as "Pre - Sale" after normalization.
  */
-function getEmployeeProjectAllocation(employeeId, projectCode) {
-  const normalizedCode = normalizeSummaryProjectCode(projectCode);
+function normalizeAllocationProjectName(value) {
+  return String(value || '')
+    .replace(/[‐‑‒–—−_]+/g, '-')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function classifyAllocationProject(projectName) {
+  const normalizedName = normalizeAllocationProjectName(projectName);
+  const matchingRule = RESOURCE_ALLOCATION_RULES.find(rule =>
+    rule.pattern.test(normalizedName),
+  );
+
+  return matchingRule?.key || 'local';
+}
+
+/*
+ * Assignment rows are stored once per matrix week. For a category, duplicate
+ * rows in the same week are added together, then the weekly totals are averaged
+ * across the weeks where that category has an assignment. Local includes every
+ * project that does not match one of the four named non-local categories.
+ */
+function getEmployeeCategoryAllocation(employeeId, categoryKey) {
   const weeklyTotals = new Map();
 
   S.assignments.forEach(assignment => {
     if (Number(assignment.employee_id) !== Number(employeeId)) return;
-    if (getSummaryAssignmentProjectCode(assignment) !== normalizedCode) return;
+
+    const projectName = getSummaryAssignmentProjectName(assignment);
+    if (classifyAllocationProject(projectName) !== categoryKey) return;
 
     const percentage = Number(assignment.percentage);
     if (!Number.isFinite(percentage)) return;
@@ -77,24 +109,11 @@ function getEmployeeProjectAllocation(employeeId, projectCode) {
 function getResourceSummaryViewData(employee) {
   return {
     allocation: {
-      intrasourcing: getEmployeeProjectAllocation(
-        employee.id,
-        RESOURCE_ALLOCATION_PROJECTS.intrasourcing.code,
-      ),
-      // Local remains intentionally uncalculated until its rule is defined.
-      local: null,
-      preSale: getEmployeeProjectAllocation(
-        employee.id,
-        RESOURCE_ALLOCATION_PROJECTS.preSale.code,
-      ),
-      training: getEmployeeProjectAllocation(
-        employee.id,
-        RESOURCE_ALLOCATION_PROJECTS.training.code,
-      ),
-      generalAdmin: getEmployeeProjectAllocation(
-        employee.id,
-        RESOURCE_ALLOCATION_PROJECTS.generalAdmin.code,
-      ),
+      intrasourcing: getEmployeeCategoryAllocation(employee.id, 'intrasourcing'),
+      local: getEmployeeCategoryAllocation(employee.id, 'local'),
+      preSale: getEmployeeCategoryAllocation(employee.id, 'preSale'),
+      training: getEmployeeCategoryAllocation(employee.id, 'training'),
+      generalAdmin: getEmployeeCategoryAllocation(employee.id, 'generalAdmin'),
     },
     // Revenue calculations remain intentionally unimplemented for now.
     revenue: {
@@ -285,17 +304,17 @@ function renderResourceSummaryCells(employee) {
   const summary = getResourceSummaryViewData(employee);
 
   const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation.map((column, index) => {
-    const sourceProject = RESOURCE_ALLOCATION_PROJECTS[column.key];
-    const projectAttributes = sourceProject
-      ? ` data-project-code="${esc(sourceProject.code)}" title="${esc(`${sourceProject.code} — ${sourceProject.name}`)}"`
-      : ' title="Local allocation calculation is not configured yet."';
+    const rule = RESOURCE_ALLOCATION_RULE_BY_KEY[column.key];
+    const description = rule?.description ||
+      'All projects not classified as Intrasourcing, Pre Sale, Training, or General Admin.';
 
     return `
       <td
         class="matrix-fixed-cell sticky-allocation-${index + 1} col-allocation matrix-summary-cell matrix-allocation-cell"
         data-employee-id="${employee.id}"
         data-summary-group="allocation"
-        data-summary-metric="${column.key}"${projectAttributes}
+        data-summary-metric="${column.key}"
+        title="${esc(description)}"
       >${formatAllocationViewValue(summary.allocation[column.key])}</td>
     `;
   }).join('');
