@@ -20,9 +20,7 @@ function openResourceModal() {
         </div>
       </td>
       <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.dept || '—')}</td>
-      <td class="py-2.5 px-4 text-xs text-gray-500">
-        ${esc(e.designation || '—')}
-      </td>
+      <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.designation || '—')}</td>
       <td class="py-2.5 px-4">
         <span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${util}%</span>
       </td>
@@ -43,9 +41,7 @@ function openResourceModal() {
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Code</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Name</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Dept</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">
-            Designation
-          </th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Designation</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Util</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Status</th>
         </tr></thead>
@@ -101,7 +97,7 @@ async function toggleEmployeeActive(empId) {
     const fy = S.fiscalYear;
     api('GET', `/api/dashboard/stats?fiscalYear=${fy}`)
       .then(stats => renderStats(stats))
-      .catch(() => { });
+      .catch(() => {});
 
     toast(updated.active ? `${updated.name} set to Active` : `${updated.name} set to Inactive`);
   } catch (e) {

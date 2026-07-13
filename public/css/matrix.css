@@ -1,26 +1,34 @@
-/* ── Matrix table ────────────────────────────────────────────── */
+/* ── Resource assignment matrix ──────────────────────────────── */
 .matrix-wrap {
   overflow: auto;
   max-height: 520px;
+  isolation: isolate;
 }
+
 table.matrix {
+  width: max-content;
+  min-width: 100%;
   border-collapse: separate;
   border-spacing: 0;
   table-layout: fixed;
   font-size: 12px;
 }
+
 table.matrix th,
 table.matrix td {
   background-clip: padding-box;
 }
+
 table.matrix th {
   white-space: nowrap;
 }
 
-/* ── Resizable column widths (updated by JS) ─────────────────── */
+/* The new fixed summary block occupies the same 522px as the former
+   SN + Res ID + Resource + Department columns. */
 :root {
-  --name-w: 220px;
-  --dept-w: 160px;
+  --name-w: 190px;
+  --allocation-w: 36px;
+  --revenue-w: 50px;
 }
 
 .col-sn {
@@ -28,63 +36,94 @@ table.matrix th {
   min-width: 52px;
   max-width: 52px;
 }
-.col-empid {
-  width: 90px;
-  min-width: 90px;
-  max-width: 90px;
-}
+
 .col-name {
   width: var(--name-w);
   min-width: var(--name-w);
   max-width: var(--name-w);
 }
-.col-dept {
-  width: var(--dept-w);
-  min-width: var(--dept-w);
-  max-width: var(--dept-w);
+
+.col-allocation {
+  width: var(--allocation-w);
+  min-width: var(--allocation-w);
+  max-width: var(--allocation-w);
 }
+
+.col-revenue {
+  width: var(--revenue-w);
+  min-width: var(--revenue-w);
+  max-width: var(--revenue-w);
+}
+
 .col-week {
   width: 110px;
   min-width: 110px;
   max-width: 110px;
 }
 
-/* ── Sticky positions ────────────────────────────────────────── */
-.sticky-sn {
+/* ── Sticky left summary block ───────────────────────────────── */
+.sticky-sn,
+.sticky-name,
+[class*="sticky-allocation-"],
+[class*="sticky-revenue-"] {
   position: sticky;
-  left: 0;
   z-index: 2;
-}
-.sticky-empid {
-  position: sticky;
-  left: 52px;
-  z-index: 2;
-}
-.sticky-name {
-  position: sticky;
-  left: 142px;
-  z-index: 2;
-}
-.sticky-dept {
-  position: sticky;
-  left: calc(142px + var(--name-w));
-  z-index: 2;
-  box-shadow: 4px 0 6px rgba(0, 0, 0, 0.05);
 }
 
-table.matrix thead .sticky-sn,
-table.matrix thead .sticky-empid,
-table.matrix thead .sticky-name,
-table.matrix thead .sticky-dept {
-  z-index: 6;
+.sticky-sn { left: 0; }
+.sticky-name { left: 52px; }
+
+.sticky-allocation-1 { left: calc(52px + var(--name-w)); }
+.sticky-allocation-2 { left: calc(52px + var(--name-w) + var(--allocation-w)); }
+.sticky-allocation-3 { left: calc(52px + var(--name-w) + var(--allocation-w) + var(--allocation-w)); }
+.sticky-allocation-4 { left: calc(52px + var(--name-w) + var(--allocation-w) + var(--allocation-w) + var(--allocation-w)); }
+.sticky-allocation-5 { left: calc(52px + var(--name-w) + var(--allocation-w) + var(--allocation-w) + var(--allocation-w) + var(--allocation-w)); }
+
+.sticky-revenue-1 {
+  left: calc(
+    52px + var(--name-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w)
+  );
 }
 
+.sticky-revenue-2 {
+  left: calc(
+    52px + var(--name-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--revenue-w)
+  );
+  box-shadow: 5px 0 7px rgba(15, 23, 42, 0.08);
+}
+
+.sticky-allocation-group,
+.sticky-revenue-group {
+  position: sticky;
+  z-index: 7;
+}
+
+.sticky-allocation-group {
+  left: calc(52px + var(--name-w));
+}
+
+.sticky-revenue-group {
+  left: calc(
+    52px + var(--name-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w)
+  );
+  box-shadow: 5px 0 7px rgba(15, 23, 42, 0.08);
+}
+
+/* ── Sticky two-row header ───────────────────────────────────── */
 table.matrix thead tr.months th {
   position: sticky;
   top: 0;
   z-index: 4;
+  height: 37px;
   background: #f9fafb;
 }
+
 table.matrix thead tr.weeks th {
   position: sticky;
   top: 37px;
@@ -92,154 +131,87 @@ table.matrix thead tr.weeks th {
   background: #f9fafb;
 }
 
-table.matrix thead tr.months .sticky-sn,
-table.matrix thead tr.months .sticky-empid,
-table.matrix thead tr.months .sticky-name,
-table.matrix thead tr.months .sticky-dept,
-table.matrix thead tr.weeks .sticky-sn,
-table.matrix thead tr.weeks .sticky-empid,
-table.matrix thead tr.weeks .sticky-name,
-table.matrix thead tr.weeks .sticky-dept {
-  z-index: 7;
+table.matrix thead .sticky-sn,
+table.matrix thead .sticky-name,
+table.matrix thead [class*="sticky-allocation-"],
+table.matrix thead [class*="sticky-revenue-"] {
+  z-index: 8;
 }
 
-/* ── Row striping ────────────────────────────────────────────── */
-tr.row-even .sticky-sn,
-tr.row-even .sticky-empid,
-tr.row-even .sticky-name,
-tr.row-even .sticky-dept,
+/* Keep the complete left summary block above horizontally scrolling
+   month/week headers and assignment cells. These selectors are
+   intentionally more specific than the shared sticky-header rules. */
+table.matrix tbody td.sticky-sn,
+table.matrix tbody td.sticky-name,
+table.matrix tbody td[class*="sticky-allocation-"],
+table.matrix tbody td[class*="sticky-revenue-"] {
+  z-index: 10;
+}
+
+table.matrix thead tr.months th.sticky-sn,
+table.matrix thead tr.months th.sticky-name,
+table.matrix thead tr.months th.sticky-allocation-group,
+table.matrix thead tr.months th.sticky-revenue-group {
+  z-index: 40;
+  background-clip: border-box;
+}
+
+table.matrix thead tr.weeks th[class*="sticky-allocation-"],
+table.matrix thead tr.weeks th[class*="sticky-revenue-"] {
+  z-index: 39;
+  background-clip: border-box;
+}
+
+/* ── Row striping and hover ──────────────────────────────────── */
+tr.row-even .matrix-fixed-cell,
 tr.row-even td.cell {
   background: #ffffff;
 }
 
-tr.row-odd .sticky-sn,
-tr.row-odd .sticky-empid,
-tr.row-odd .sticky-name,
-tr.row-odd .sticky-dept,
+tr.row-even .matrix-allocation-cell {
+  background: #f8fafc;
+}
+
+tr.row-even .matrix-revenue-cell {
+  background: #f2f7fc;
+}
+
+tr.row-odd .matrix-fixed-cell,
 tr.row-odd td.cell {
   background: #f9fafb;
 }
 
-tr.matrix-row:hover .sticky-sn,
-tr.matrix-row:hover .sticky-empid,
-tr.matrix-row:hover .sticky-name,
-tr.matrix-row:hover .sticky-dept,
+tr.row-odd .matrix-allocation-cell {
+  background: #f3f6f9;
+}
+
+tr.row-odd .matrix-revenue-cell {
+  background: #edf4fb;
+}
+
+tr.matrix-row:hover .matrix-fixed-cell,
 tr.matrix-row:hover td.cell {
   background: #eff6ff !important;
 }
 
-/* ── Month dividers ──────────────────────────────────────────── */
-th.month-end,
-td.month-end {
-  border-right: 1px solid #d1d5db !important;
-}
 
-/* ── Cell ────────────────────────────────────────────────────── */
-td.cell {
-  padding: 4px;
-  vertical-align: top;
-  cursor: pointer;
-  border-right: 1px dotted #e5e7eb;
-  border-bottom: 1px solid #f3f4f6;
-  transition: background 0.1s;
-  position: relative;
-}
-td.cell:hover {
-  background: #eff6ff !important;
-}
-
-td.cell .cell-add {
-  display: none;
-  position: absolute;
-  bottom: 2px;
-  right: 2px;
-  width: 14px;
-  height: 14px;
-  border-radius: 4px;
-  background: rgba(37, 99, 235, 0.9);
-  color: white;
-  align-items: center;
-  justify-content: center;
-  font-size: 10px;
-  line-height: 1;
-}
-td.cell:hover .cell-add {
-  display: inline-flex;
-}
-
-/* ── Column resize handle ────────────────────────────────────── */
-.col-resizer {
-  position: absolute;
-  top: 0;
-  right: 0;
-  bottom: 0;
-  width: 6px;
-  cursor: col-resize;
-  z-index: 3;
-  background: transparent;
-  transition: background 0.15s;
-}
-.col-resizer:hover,
-.col-resizer.active {
-  background: rgba(37, 99, 235, 0.35);
-  border-radius: 3px;
-}
-
-/* ── Project chip ────────────────────────────────────────────── */
-.chip {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 3px;
-  padding: 3px 6px;
-  margin-bottom: 2px;
-  font-size: 10px;
-  font-weight: 500;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: transform 0.1s;
-  line-height: 1.3;
-  position: relative;
-}
-.chip:hover {
-  transform: scale(1.03);
-}
-.chip .chip-code {
-  font-family: "JetBrains Mono", monospace;
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-  font-weight: 600;
-}
-.chip .chip-pct {
-  opacity: 0.7;
-  font-size: 9px;
-  flex-shrink: 0;
-}
-.chip .chip-del {
-  display: none;
-  position: absolute;
-  top: -4px;
-  right: -4px;
-  width: 13px;
-  height: 13px;
-  background: #dc2626;
-  color: white;
-  border-radius: 50%;
-  align-items: center;
-  justify-content: center;
-  font-size: 9px;
-  font-weight: 700;
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
-.chip:hover .chip-del {
-  display: inline-flex;
-}
-
-/* ── Avatar ──────────────────────────────────────────────────── */
+/* ── Shared matrix utilities ─────────────────────────────────── */
 .avatar-grad {
   background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
-  color: white;
+  color: #ffffff;
   font-weight: 600;
 }
 
+.matrix-empty-state {
+  padding: 32px;
+  background: #ffffff;
+  color: #94a3b8;
+  text-align: center;
+  font-size: 14px;
+}
+
+@media (max-width: 768px) {
+  :root {
+    --name-w: 190px;
+  }
+}

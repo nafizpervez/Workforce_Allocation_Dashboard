@@ -1,0 +1,114 @@
+/* ── Assignment panel — preserved from the original matrix ───── */
+th.month-end,
+td.month-end {
+  border-right: 1px solid #d1d5db !important;
+}
+
+td.cell {
+  position: relative;
+  padding: 4px;
+  border-right: 1px dotted #e5e7eb;
+  border-bottom: 1px solid #f3f4f6;
+  vertical-align: top;
+  cursor: pointer;
+  transition: background 0.1s;
+}
+
+td.cell:hover {
+  background: #eff6ff !important;
+}
+
+td.cell .cell-add {
+  display: none;
+  position: absolute;
+  right: 2px;
+  bottom: 2px;
+  width: 14px;
+  height: 14px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 4px;
+  background: rgba(37, 99, 235, 0.9);
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 1;
+}
+
+td.cell:hover .cell-add {
+  display: inline-flex;
+}
+
+/* ── Column resize handle ────────────────────────────────────── */
+.col-resizer {
+  position: absolute;
+  top: 0;
+  right: -12px;
+  bottom: 0;
+  z-index: 9;
+  width: 6px;
+  background: transparent;
+  cursor: col-resize;
+  transition: background 0.15s;
+}
+
+.col-resizer:hover,
+.col-resizer.active {
+  border-radius: 3px;
+  background: rgba(37, 99, 235, 0.35);
+}
+
+/* ── Assignment project chip ─────────────────────────────────── */
+.chip {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 3px;
+  margin-bottom: 2px;
+  padding: 3px 6px;
+  border-radius: 4px;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.3;
+  cursor: pointer;
+  transition: transform 0.1s;
+}
+
+.chip:hover {
+  transform: scale(1.03);
+}
+
+.chip .chip-code {
+  overflow: hidden;
+  font-family: "JetBrains Mono", monospace;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.chip .chip-pct {
+  flex-shrink: 0;
+  opacity: 0.7;
+  font-size: 9px;
+}
+
+.chip .chip-del {
+  display: none;
+  position: absolute;
+  top: -4px;
+  right: -4px;
+  width: 13px;
+  height: 13px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #dc2626;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+  color: #ffffff;
+  font-size: 9px;
+  font-weight: 700;
+}
+
+.chip:hover .chip-del {
+  display: inline-flex;
+}

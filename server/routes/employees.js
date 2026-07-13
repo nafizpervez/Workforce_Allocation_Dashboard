@@ -4,21 +4,21 @@ const { getAppDb } = require('../database');
 const router = express.Router();
 const db = getAppDb();
 
-router.get('/api/employees', (_, res) => {
-  const employees = db.prepare(`
-    SELECT
-      id,
-      employee_code,
-      name,
-      dept,
-      designation,
-      email,
-      COALESCE(active, 1) AS active,
-      created_at
-    FROM employees
-    ORDER BY id
-  `).all();
+const EMPLOYEE_SELECT = `
+  SELECT
+    id,
+    employee_code,
+    name,
+    dept,
+    designation,
+    email,
+    COALESCE(active, 1) AS active,
+    created_at
+  FROM employees
+`;
 
+router.get('/api/employees', (_, res) => {
+  const employees = db.prepare(`${EMPLOYEE_SELECT} ORDER BY id`).all();
   res.json(employees);
 });
 
@@ -32,50 +32,35 @@ router.post('/api/employees', (req, res) => {
   } = req.body || {};
 
   if (!name || !dept) {
-    return res.status(400).json({
-      error: 'name and dept are required',
-    });
+    return res.status(400).json({ error: 'name and dept are required' });
   }
 
-  const result = db.prepare(`
+  const info = db.prepare(`
     INSERT INTO employees (
       employee_code,
       name,
       dept,
       designation,
       email
-    )
-    VALUES (?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?)
   `).run(
     employee_code || '',
     name,
     dept,
     designation || '',
-    email || null
+    email || null,
   );
 
-  const employee = db.prepare(`
-    SELECT *
-    FROM employees
-    WHERE id = ?
-  `).get(result.lastInsertRowid);
-
+  const employee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(info.lastInsertRowid);
   res.status(201).json(employee);
 });
 
 router.put('/api/employees/:id', (req, res) => {
   const id = Number(req.params.id);
+  const existing = db.prepare('SELECT id FROM employees WHERE id = ?').get(id);
 
-  const existingEmployee = db.prepare(`
-    SELECT id
-    FROM employees
-    WHERE id = ?
-  `).get(id);
-
-  if (!existingEmployee) {
-    return res.status(404).json({
-      error: 'not found',
-    });
+  if (!existing) {
+    return res.status(404).json({ error: 'not found' });
   }
 
   const {
@@ -101,70 +86,37 @@ router.put('/api/employees/:id', (req, res) => {
     dept ?? null,
     designation ?? null,
     email ?? null,
-    id
+    id,
   );
 
-  const employee = db.prepare(`
-    SELECT *
-    FROM employees
-    WHERE id = ?
-  `).get(id);
-
+  const employee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id);
   res.json(employee);
 });
 
 router.patch('/api/employees/:id/active', (req, res) => {
   const id = Number(req.params.id);
-
   const employee = db.prepare(`
-    SELECT
-      id,
-      COALESCE(active, 1) AS active
+    SELECT id, COALESCE(active, 1) AS active
     FROM employees
     WHERE id = ?
   `).get(id);
 
   if (!employee) {
-    return res.status(404).json({
-      error: 'not found',
-    });
+    return res.status(404).json({ error: 'not found' });
   }
 
-  const newActive = employee.active ? 0 : 1;
+  const active = employee.active ? 0 : 1;
+  db.prepare('UPDATE employees SET active = ? WHERE id = ?').run(active, id);
 
-  db.prepare(`
-    UPDATE employees
-    SET active = ?
-    WHERE id = ?
-  `).run(newActive, id);
-
-  const updatedEmployee = db.prepare(`
-    SELECT
-      id,
-      employee_code,
-      name,
-      dept,
-      designation,
-      email,
-      COALESCE(active, 1) AS active,
-      created_at
-    FROM employees
-    WHERE id = ?
-  `).get(id);
-
+  const updatedEmployee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id);
   res.json(updatedEmployee);
 });
 
 router.delete('/api/employees/:id', (req, res) => {
-  const result = db.prepare(`
-    DELETE FROM employees
-    WHERE id = ?
-  `).run(Number(req.params.id));
+  const info = db.prepare('DELETE FROM employees WHERE id = ?').run(Number(req.params.id));
 
-  if (!result.changes) {
-    return res.status(404).json({
-      error: 'not found',
-    });
+  if (!info.changes) {
+    return res.status(404).json({ error: 'not found' });
   }
 
   res.json({ ok: true });

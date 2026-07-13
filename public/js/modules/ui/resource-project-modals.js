@@ -1,16 +1,17 @@
 /* ── Resource (Employee) modal ────────────────────────────────── */
 function openEmployeeModal(opts = {}) {
   const editing = Boolean(opts.id);
-
   const employee = editing
     ? S.employees.find(item => item.id === opts.id)
     : null;
 
-  const name = employee?.name || '';
-  const employeeCode = employee?.employee_code || '';
-  const email = employee?.email || '';
-  const department = employee?.dept || 'Professional Services';
-  const designation = employee?.designation || '';
+  const values = {
+    name: employee?.name || '',
+    code: employee?.employee_code || '',
+    email: employee?.email || '',
+    dept: employee?.dept || 'Professional Services',
+    designation: employee?.designation || '',
+  };
 
   const departments = [
     'Solution',
@@ -21,22 +22,20 @@ function openEmployeeModal(opts = {}) {
     'Management',
   ];
 
-  const title = editing ? 'Edit Resource' : 'Add Resource';
-  const subtitle = editing
-    ? 'Update resource details'
-    : 'Add a new team resource';
-
   openModal(`
-    ${mHdr(title, subtitle)}
+    ${mHdr(
+      editing ? 'Edit Resource' : 'Add Resource',
+      editing ? 'Update resource details' : 'Add a new team resource',
+    )}
 
-    <div class="p-6 space-y-4">
+    <div class="p-6 space-y-4 max-h-[65vh] overflow-y-auto nice-scroll">
       <div>
         <label class="field-label">Full Name</label>
         <input
           id="fe_name"
           type="text"
           class="field-input"
-          value="${esc(name)}"
+          value="${esc(values.name)}"
           placeholder="e.g. Nusrath Jahan Nisha"
         >
       </div>
@@ -47,7 +46,7 @@ function openEmployeeModal(opts = {}) {
           id="fe_code"
           type="text"
           class="field-input mono"
-          value="${esc(employeeCode)}"
+          value="${esc(values.code)}"
           placeholder="e.g. SGESA00055"
         >
       </div>
@@ -58,7 +57,7 @@ function openEmployeeModal(opts = {}) {
           id="fe_email"
           type="email"
           class="field-input"
-          value="${esc(email)}"
+          value="${esc(values.email)}"
           placeholder="employee@example.com"
         >
       </div>
@@ -66,12 +65,12 @@ function openEmployeeModal(opts = {}) {
       <div>
         <label class="field-label">Department</label>
         <select id="fe_dept" class="field-input">
-          ${departments.map(item => `
+          ${departments.map(department => `
             <option
-              value="${esc(item)}"
-              ${item === department ? 'selected' : ''}
+              value="${esc(department)}"
+              ${department === values.dept ? 'selected' : ''}
             >
-              ${esc(item)}
+              ${esc(department)}
             </option>
           `).join('')}
         </select>
@@ -83,57 +82,29 @@ function openEmployeeModal(opts = {}) {
           id="fe_designation"
           type="text"
           class="field-input"
-          value="${esc(designation)}"
-          placeholder="e.g. Senior GIS Engineer"
+          value="${esc(values.designation)}"
+          placeholder="e.g. Team Leader"
         >
       </div>
     </div>
 
-    ${mFtr(
-    editing ? opts.id : null,
-    'saveEmployee',
-    'deleteEmployee'
-  )}
+    ${mFtr(editing ? opts.id : null, 'saveEmployee', 'deleteEmployee')}
   `);
 }
 
 async function saveEmployee(id) {
-  const employeeCode = document
-    .getElementById('fe_code')
-    .value
-    .trim();
+  const payload = {
+    employee_code: document.getElementById('fe_code').value.trim(),
+    name: document.getElementById('fe_name').value.trim(),
+    email: document.getElementById('fe_email').value.trim(),
+    dept: document.getElementById('fe_dept').value,
+    designation: document.getElementById('fe_designation').value.trim(),
+  };
 
-  const name = document
-    .getElementById('fe_name')
-    .value
-    .trim();
-
-  const email = document
-    .getElementById('fe_email')
-    .value
-    .trim();
-
-  const department = document
-    .getElementById('fe_dept')
-    .value;
-
-  const designation = document
-    .getElementById('fe_designation')
-    .value
-    .trim();
-
-  if (!name) {
+  if (!payload.name) {
     toast('Name is required', 'error');
     return;
   }
-
-  const payload = {
-    employee_code: employeeCode,
-    name,
-    email,
-    dept: department,
-    designation,
-  };
 
   try {
     if (id) {
@@ -150,7 +121,19 @@ async function saveEmployee(id) {
   }
 }
 
-async function deleteEmployee(id) { if (!confirm('Delete this resource? All their assignments will also be removed.')) return; try { await api('DELETE', `/api/employees/${id}`); closeModal(); toast('Resource deleted'); await loadAll(); } catch (e) { toast(e.message, 'error'); } }
+async function deleteEmployee(id) {
+  if (!confirm('Delete this resource? All their assignments will also be removed.')) return;
+
+  try {
+    await api('DELETE', `/api/employees/${id}`);
+    closeModal();
+    toast('Resource deleted');
+    await loadAll();
+  } catch (error) {
+    toast(error.message, 'error');
+  }
+}
+
 
 /* ── Project modal ────────────────────────────────────────────── */
 function openProjectModal(opts = {}) {
