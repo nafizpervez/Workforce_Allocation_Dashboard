@@ -1,3 +1,5 @@
+const { ensureRevenueRatesTable } = require('../services/revenue-rates');
+
 function createSchema(db) {
   db.exec(`
     CREATE TABLE IF NOT EXISTS employees (
@@ -55,6 +57,8 @@ function createSchema(db) {
   for (const sql of projectColumns) {
     try { db.exec(sql); } catch (_) { /* already present */ }
   }
+
+  ensureRevenueRatesTable(db);
 }
 
 module.exports = { createSchema };

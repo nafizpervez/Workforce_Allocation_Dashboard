@@ -4,9 +4,10 @@
 async function loadAll() {
   try {
     const fy = S.fiscalYear;
-    const [emps, projs, asgs, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
+    const [emps, projs, asgs, revenueRates, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
       api('GET', '/api/employees'), api('GET', '/api/projects'),
       api('GET', `/api/assignments?fiscalYear=${fy}`),
+      api('GET', '/api/revenue-rates'),
       api('GET', `/api/dashboard/stats?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/trends?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/workload?fiscalYear=${fy}`),
@@ -17,7 +18,7 @@ async function loadAll() {
       api('GET', '/api/dashboard/ps-revenue-chart'),
       api('GET', '/api/dashboard/ps-type-chart'),
     ]);
-    S.employees = emps; S.projects = projs; S.assignments = asgs;
+    S.employees = emps; S.projects = projs; S.assignments = asgs; S.revenueRates = revenueRates;
     buildMatrix();
     S.employeeUtil = new Map(util.all.map(u => [u.id, u.utilization]));
     renderStats(stats);

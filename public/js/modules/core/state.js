@@ -8,7 +8,7 @@
 const S = {
   psTypeData: [],
   fiscalYear: 2026,
-  employees: [], projects: [], assignments: [],
+  employees: [], projects: [], assignments: [], revenueRates: [],
   matrix: {}, employeeUtil: new Map(), charts: {},
   searchQuery: '',
   insightsPeriodHigh: 'fiscal',

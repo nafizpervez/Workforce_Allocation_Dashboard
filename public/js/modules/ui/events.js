@@ -162,6 +162,7 @@ function initEvents() {
   });
 
   document.getElementById('downloadAssignmentExcelBtn')?.addEventListener('click', downloadAssignmentExcel);
+  document.getElementById('reserveRevenueBtn')?.addEventListener('click', openRevenueRatesModal);
 
   initColResize(); initSectionDrag();
 }

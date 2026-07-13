@@ -1,3 +1,5 @@
+const { ensureRevenueRatesTable } = require('../services/revenue-rates');
+
 function quoteIdent(name) {
   return `"${String(name).replace(/"/g, '""')}"`;
 }
@@ -73,6 +75,8 @@ function runMigrations(db) {
   catch (error) { console.error('Project duplicate-code compatibility migration failed:', error); }
   try { ensureTimesheetTable(db); }
   catch (error) { console.error('Time Sheet table migration failed:', error); }
+  try { ensureRevenueRatesTable(db); }
+  catch (error) { console.error('Revenue rate table migration failed:', error); }
 }
 
 module.exports = { runMigrations };

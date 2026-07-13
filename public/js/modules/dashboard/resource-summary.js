@@ -1,142 +1,6 @@
 /* Workforce Allocation Dashboard — dashboard/resource-summary.js */
 
-/* ================================================================ MATRIX */
-const RESOURCE_SUMMARY_COLUMNS = {
-  allocation: [
-    { key: 'intrasourcing', label: 'Intrasourcing' },
-    { key: 'local', label: 'Local' },
-    { key: 'preSale', label: 'Pre Sale' },
-    { key: 'training', label: 'Training' },
-    { key: 'generalAdmin', label: 'General Admin' },
-  ],
-  revenue: [
-    { key: 'service', label: 'Service' },
-    { key: 'preSale', label: 'Pre Sale' },
-  ],
-};
-
-const RESOURCE_ALLOCATION_RULES = Object.freeze([
-  Object.freeze({
-    key: 'intrasourcing',
-    label: 'Intrasourcing',
-    pattern: /intrasource/i,
-    description: 'Project name contains “Intrasource”.',
-  }),
-  Object.freeze({
-    key: 'preSale',
-    label: 'Pre Sale',
-    pattern: /pre[\s-]*sale/i,
-    description: 'Project name contains “Pre Sale” or “Pre-Sale”.',
-  }),
-  Object.freeze({
-    key: 'training',
-    label: 'Training',
-    pattern: /training[\s-]*delivery/i,
-    description: 'Project name contains “Training Delivery” or “Training-Delivery”.',
-  }),
-  Object.freeze({
-    key: 'generalAdmin',
-    label: 'General Admin',
-    pattern: /general[\s-]*admin/i,
-    description: 'Project name contains “General Admin” or “General-Admin”.',
-  }),
-]);
-
-const RESOURCE_ALLOCATION_RULE_BY_KEY = Object.freeze(
-  Object.fromEntries(RESOURCE_ALLOCATION_RULES.map(rule => [rule.key, rule])),
-);
-
-function getSummaryAssignmentProjectName(assignment) {
-  if (assignment.project_name) return String(assignment.project_name).trim();
-
-  const project = S.projects.find(item =>
-    Number(item.id) === Number(assignment.project_id),
-  );
-
-  return String(project?.name || '').trim();
-}
-
-/*
- * Category matching is case-insensitive and searches the complete project name.
- * The flexible separators allow both spaces and hyphens, including repeated
- * combinations such as "Pre - Sale" after normalization.
- */
-function normalizeAllocationProjectName(value) {
-  return String(value || '')
-    .replace(/[‐‑‒–—−_]+/g, '-')
-    .replace(/\s*-\s*/g, '-')
-    .replace(/\s+/g, ' ')
-    .trim();
-}
-
-function classifyAllocationProject(projectName) {
-  const normalizedName = normalizeAllocationProjectName(projectName);
-  const matchingRule = RESOURCE_ALLOCATION_RULES.find(rule =>
-    rule.pattern.test(normalizedName),
-  );
-
-  return matchingRule?.key || 'local';
-}
-
-/*
- * Assignment rows are stored once per matrix week. For a category, duplicate
- * rows in the same week are added together, then the weekly totals are averaged
- * across the weeks where that category has an assignment. Local includes every
- * project that does not match one of the four named non-local categories.
- */
-function getEmployeeCategoryAllocation(employeeId, categoryKey) {
-  const weeklyTotals = new Map();
-
-  S.assignments.forEach(assignment => {
-    if (Number(assignment.employee_id) !== Number(employeeId)) return;
-
-    const projectName = getSummaryAssignmentProjectName(assignment);
-    if (classifyAllocationProject(projectName) !== categoryKey) return;
-
-    const percentage = Number(assignment.percentage);
-    if (!Number.isFinite(percentage)) return;
-
-    const slotKey = `${assignment.year}-${assignment.month}-${assignment.week}`;
-    weeklyTotals.set(slotKey, (weeklyTotals.get(slotKey) || 0) + percentage);
-  });
-
-  if (!weeklyTotals.size) return 0;
-
-  const values = [...weeklyTotals.values()];
-  return values.reduce((total, value) => total + value, 0) / values.length;
-}
-
-function getResourceSummaryViewData(employee) {
-  return {
-    allocation: {
-      intrasourcing: getEmployeeCategoryAllocation(employee.id, 'intrasourcing'),
-      local: getEmployeeCategoryAllocation(employee.id, 'local'),
-      preSale: getEmployeeCategoryAllocation(employee.id, 'preSale'),
-      training: getEmployeeCategoryAllocation(employee.id, 'training'),
-      generalAdmin: getEmployeeCategoryAllocation(employee.id, 'generalAdmin'),
-    },
-    // Revenue calculations remain intentionally unimplemented for now.
-    revenue: {
-      service: null,
-      preSale: null,
-    },
-  };
-}
-
-function formatAllocationViewValue(value) {
-  return value === null || value === undefined
-    ? '—'
-    : `${Number(value).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
-}
-
-function formatRevenueViewValue(value) {
-  return value === null || value === undefined
-    ? '—'
-    : `$${Number(value).toLocaleString('en-US', {
-      minimumFractionDigits: 2,
-      maximumFractionDigits: 2,
-    })}`;
-}
+/* Matrix filtering and rendering. Allocation/revenue formulas live in resource-summary-metrics.js. */
 
 function getFilteredMatrixEmployees() {
   const query = S.searchQuery.toLowerCase().trim();
@@ -307,6 +171,8 @@ function renderResourceSummaryCells(employee) {
     const rule = RESOURCE_ALLOCATION_RULE_BY_KEY[column.key];
     const description = rule?.description ||
       'All projects not classified as Intrasourcing, Pre Sale, Training, or General Admin.';
+    const percentageTotal = summary.allocationMeta.percentageTotals[column.key];
+    const title = `${description} ${percentageTotal.toFixed(1)} total weekly percentage points ÷ ${summary.allocationMeta.fiscalWeekCount} FY weeks = ${summary.allocation[column.key].toFixed(1)}%.`;
 
     return `
       <td
@@ -314,19 +180,28 @@ function renderResourceSummaryCells(employee) {
         data-employee-id="${employee.id}"
         data-summary-group="allocation"
         data-summary-metric="${column.key}"
-        title="${esc(description)}"
+        title="${esc(title)}"
       >${formatAllocationViewValue(summary.allocation[column.key])}</td>
     `;
   }).join('');
 
-  const revenueCells = RESOURCE_SUMMARY_COLUMNS.revenue.map((column, index) => `
-    <td
-      class="matrix-fixed-cell sticky-revenue-${index + 1} col-revenue matrix-summary-cell matrix-revenue-cell"
-      data-employee-id="${employee.id}"
-      data-summary-group="revenue"
-      data-summary-metric="${column.key}"
-    >${formatRevenueViewValue(summary.revenue[column.key])}</td>
-  `).join('');
+  const revenueCells = RESOURCE_SUMMARY_COLUMNS.revenue.map((column, index) => {
+    const meta = summary.revenueMeta[column.key];
+    const revenue = summary.revenue[column.key];
+    const title = summary.revenueMeta.hasRevenueRate
+      ? `${employee.designation}: ${meta.hours.toFixed(1)} hours × ${formatExactRevenueValue(meta.rate)} per hour = ${formatExactRevenueValue(revenue)}.`
+      : 'Assign a supported designation and save its hourly rates in Reserve Revenue to calculate revenue.';
+
+    return `
+      <td
+        class="matrix-fixed-cell sticky-revenue-${index + 1} col-revenue matrix-summary-cell matrix-revenue-cell"
+        data-employee-id="${employee.id}"
+        data-summary-group="revenue"
+        data-summary-metric="${column.key}"
+        title="${esc(title)}"
+      >${formatRevenueViewValue(revenue)}</td>
+    `;
+  }).join('');
 
   return allocationCells + revenueCells;
 }

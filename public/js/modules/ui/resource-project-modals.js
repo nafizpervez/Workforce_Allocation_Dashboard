@@ -22,6 +22,27 @@ function openEmployeeModal(opts = {}) {
     'Management',
   ];
 
+  const supportedDesignation = RESOURCE_DESIGNATIONS.some(designation =>
+    normalizeDesignationKey(designation) === normalizeDesignationKey(values.designation),
+  );
+  const designationOptions = [
+    '<option value="">Select designation</option>',
+    ...RESOURCE_DESIGNATIONS.map(designation => `
+      <option
+        value="${esc(designation)}"
+        ${normalizeDesignationKey(designation) === normalizeDesignationKey(values.designation) ? 'selected' : ''}
+      >${esc(designation)}</option>
+    `),
+  ];
+
+  if (values.designation && !supportedDesignation) {
+    designationOptions.push(`
+      <option value="${esc(values.designation)}" selected>
+        ${esc(values.designation)} (legacy)
+      </option>
+    `);
+  }
+
   openModal(`
     ${mHdr(
       editing ? 'Edit Resource' : 'Add Resource',
@@ -78,13 +99,9 @@ function openEmployeeModal(opts = {}) {
 
       <div>
         <label class="field-label">Designation</label>
-        <input
-          id="fe_designation"
-          type="text"
-          class="field-input"
-          value="${esc(values.designation)}"
-          placeholder="e.g. Team Leader"
-        >
+        <select id="fe_designation" class="field-input">
+          ${designationOptions.join('')}
+        </select>
       </div>
     </div>
 
