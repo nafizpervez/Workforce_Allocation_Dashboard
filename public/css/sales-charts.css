@@ -1,0 +1,200 @@
+/* ── New Logo chart filter buttons ─────────────────────────────── */
+.nl-filter-btn.active[data-status="NEW LOGO"] {
+  background: #d1fae5 !important;
+  color: #065f46 !important;
+  border-color: #6ee7b7 !important;
+}
+.nl-filter-btn.active[data-status="REPEAT"] {
+  background: #dbeafe !important;
+  color: #1e40af !important;
+  border-color: #93c5fd !important;
+}
+.nl-filter-btn.active[data-status="REACTIVE"] {
+  background: #fef3c7 !important;
+  color: #92400e !important;
+  border-color: #fcd34d !important;
+}
+.nl-filter-btn:not(.active):hover {
+  background: #f3f4f6 !important;
+  border-color: #d1d5db !important;
+}
+.nl-filter-btn.active[data-status="COMBINED"] {
+  background: #e0e7ff !important;
+  color: #3730a3 !important;
+  border-color: #a5b4fc !important;
+}
+
+/* ── Chart section tabs (Deal Acquisition / PS Revenue / Tab 3) ── */
+.chart-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 16px;
+  margin-right: 2px;
+  font-size: 12.5px;
+  font-weight: 600;
+  color: #6b7280;
+  background: transparent;
+  border: none;
+  border-bottom: 2px solid transparent;
+  cursor: pointer;
+  transition: all 0.15s;
+  white-space: nowrap;
+}
+.chart-tab-btn:hover {
+  color: #374151;
+}
+.chart-tab-btn.active {
+  color: #2563eb;
+  border-bottom-color: #2563eb;
+}
+.chart-tab-content {
+  transition: opacity 0.15s;
+}
+.chart-tab-content.hidden {
+  display: none;
+}
+
+
+/* ================================================================
+   Yearly Work / Time Sheet Summary tabs
+   ================================================================ */
+.work-summary-tab-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.work-summary-tab-btn:hover {
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+  background: #eef2ff;
+}
+
+.work-summary-tab-btn.active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.timesheet-upload-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.timesheet-upload-btn:hover {
+  background: #d1fae5;
+  border-color: #34d399;
+}
+
+.work-summary-tab-content.hidden {
+  display: none;
+}
+
+.yearly-work-chart-wrap,
+.timesheet-chart-wrap {
+  height: 430px;
+  min-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.yearly-work-chart-wrap canvas,
+.timesheet-chart-wrap canvas {
+  min-width: 1180px;
+}
+
+.timesheet-chart-wrap-wide canvas {
+  min-width: 1400px;
+}
+
+.timesheet-empty-state {
+  border: 1px dashed #cbd5e1;
+  border-radius: 14px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 13px;
+  font-weight: 600;
+  padding: 44px 18px;
+  text-align: center;
+}
+
+.timesheet-modal-row {
+  border: 1px solid #eef2f7;
+  background: #f8fafc;
+  border-radius: 14px;
+  padding: 12px 14px;
+  margin-bottom: 10px;
+}
+
+.timesheet-filter-label {
+  color: #6b7280;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.timesheet-filter-select {
+  height: 30px;
+  min-width: 132px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 28px 0 10px;
+}
+
+.timesheet-filter-select:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(96, 165, 250, 0.25);
+}
+
+/* ── Resource Assignment backup/restore buttons ─────────────── */
+.assignment-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  cursor: pointer;
+  white-space: nowrap;
+  transition: all 0.15s ease;
+}
+
+.assignment-download-btn:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+

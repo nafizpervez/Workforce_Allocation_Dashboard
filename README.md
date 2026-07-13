@@ -1,135 +1,91 @@
-# Workforce Allocation Dashboard
+# Workforce Allocation Dashboard — Modular Edition
 
-A full-stack workforce allocation dashboard with a weekly assignment matrix, project pipeline tracking, and utilization analytics.
+The application has been reorganized into small, feature-focused frontend and backend modules while preserving the existing UI, API paths, authentication, database schema, imports, charts, assignments, and timesheet behavior.
 
-**Stack:** Node.js + Express + SQLite (better-sqlite3) backend · Vanilla JS + Tailwind + Chart.js frontend.
-
----
-
-## Features
-
-- **51-column assignment matrix** — SN · Name · Dept · 12 months (Apr 2026 – Mar 2027) × 4 weeks each. Horizontally scrollable. Sticky first 3 columns. Sticky header rows.
-- **Six KPI cards** — Active Employees, Active Projects, Avg Utilization, Total Assignments, Productivity, On-Time %.
-- **Inline cell editing** — click any cell to add an assignment, click a chip to edit, hover the ✕ to delete.
-- **Full CRUD** — Employees, Projects, Assignments. Cascading delete for FK relationships.
-- **Charts**
-  - Trends (line): monthly assignments + avg utilization.
-  - Projects Pipeline (bar): count by stage.
-  - Department Workload (horizontal bar).
-- **Lists**
-  - Top 5 Available (lowest allocation).
-  - Top 5 High Workload (highest allocation).
-  - Upcoming Deadlines with status (On Track / At Risk / Delayed).
-- **Search** employees by name or department.
-- **Toasts** for success/error feedback.
-- **SQLite** as a single file (`workforce.db`), no server install required.
-
----
-
-## Setup
-
-You need **Node.js ≥ 18**.
+## Run
 
 ```bash
-# 1. install dependencies
 npm install
-
-# 2. seed the database (creates workforce.db with ~50 employees, 25 projects, ~6,000 assignments)
-npm run seed
-
-# 3. start the server
 npm start
 ```
 
-Then open **http://localhost:3000** in your browser.
+Open `http://localhost:9002`.
 
-To re-seed from scratch:
+The compatibility password remains `Esr!@9122`. For deployment, set your own values:
+
 ```bash
-npm run reset   # deletes workforce.db
-npm run seed
+DASHBOARD_PASSWORD="your-password" \
+DASHBOARD_AUTH_SECRET="a-long-random-secret" \
+npm start
 ```
 
----
+The port can be changed with `PORT=4000 npm start`.
 
-## Project Structure
+## Database commands
 
+```bash
+npm run seed   # replace current data with the supplied JSON seed data
+npm run reset  # reset and re-seed the database
 ```
-workforce-dashboard/
-├── server.js           # Express API
-├── db.js               # SQLite schema + seed + CLI
-├── package.json
+
+The seeder validates both JSON files before deleting existing data.
+
+## Modular structure
+
+```text
+Assignment_Dashboard_Modular/
+├── server.js                         # Small process entry point
+├── db.js                             # Database CLI compatibility entry point
+├── sqlite-driver.js                  # Built-in node:sqlite compatibility wrapper
+├── server/
+│   ├── app.js                        # Express application composition
+│   ├── config.js                     # Environment and path configuration
+│   ├── auth/                         # Login, cookies and auth middleware
+│   ├── database/                     # Connection, schema, migrations and seeding
+│   ├── routes/                       # Feature-specific Express routers
+│   └── services/                     # Fiscal, import and analytics domain logic
 ├── public/
-│   └── index.html      # Single-file frontend (Tailwind + Chart.js via CDN)
-└── workforce.db        # Created on first run
+│   ├── index.html                    # Lightweight page shell
+│   ├── views/                        # Header and dashboard HTML fragments
+│   ├── css/                          # Feature-specific stylesheets
+│   └── js/
+│       ├── app.js                    # Fragment loader and initialization
+│       └── modules/                  # Dashboard feature modules
+├── historical_seed.json
+├── pipeline_seed.json
+└── workforce.db
 ```
 
----
+## Main changes
 
-## API Reference
+- `server.js`: reduced from 1,879 lines to a small startup file.
+- `public/js/app.js`: reduced from 3,976 lines to initialization only.
+- `public/index.html`: reduced from 1,690 lines to a page shell; dashboard sections are in `public/views`.
+- `public/css/style.css`: reduced from 1,201 lines to ordered stylesheet imports.
+- Database connection, schema, migrations, seed data and seed execution are separate modules.
+- Employee, project, assignment, timesheet and dashboard APIs are separate routers.
+- Project analysis, fiscal calculations, import normalization and color assignment are separate services.
+- Frontend modules remain classic browser scripts so existing inline handlers and shared functions continue to behave as before.
 
-All endpoints return JSON. Errors are returned as `{ "error": "message" }` with appropriate HTTP status.
+## Runtime requirement
 
-### Employees
-| Method | Path                  | Body                                  |
-|--------|-----------------------|---------------------------------------|
-| GET    | `/api/employees`      | —                                     |
-| POST   | `/api/employees`      | `{ name, dept, email }`               |
-| PUT    | `/api/employees/:id`  | `{ name?, dept?, email? }`            |
-| DELETE | `/api/employees/:id`  | —                                     |
+Use Node.js 22.13 or newer. The application uses Node's built-in synchronous `node:sqlite` implementation and does not install `better-sqlite3`, so Windows does not need a native SQLite addon, Visual Studio Build Tools, or a platform-specific binary.
 
-### Projects
-| Method | Path                  | Body                                                                                  |
-|--------|-----------------------|---------------------------------------------------------------------------------------|
-| GET    | `/api/projects`       | —                                                                                     |
-| POST   | `/api/projects`       | `{ code, name, client, budget, end_date, stage, progress, color, priority }`          |
-| PUT    | `/api/projects/:id`   | any subset of the above                                                               |
-| DELETE | `/api/projects/:id`   | —                                                                                     |
+After replacing an older project copy, remove its existing dependencies before reinstalling:
 
-### Assignments
-| Method | Path                                       | Body                                                                  |
-|--------|--------------------------------------------|-----------------------------------------------------------------------|
-| GET    | `/api/assignments?fiscalYear=2026`         | —                                                                     |
-| POST   | `/api/assignments`                         | `{ employee_id, project_id, year, month, week, percentage }`          |
-| PUT    | `/api/assignments/:id`                     | any subset of the above                                               |
-| DELETE | `/api/assignments/:id`                     | —                                                                     |
-
-### Dashboard
-| Method | Path                                            | Description                              |
-|--------|-------------------------------------------------|------------------------------------------|
-| GET    | `/api/dashboard/stats?fiscalYear=2026`          | Six KPIs                                 |
-| GET    | `/api/dashboard/trends?fiscalYear=2026`         | Monthly assignments + avg utilization    |
-| GET    | `/api/dashboard/workload?fiscalYear=2026`       | Assignment count per department          |
-| GET    | `/api/dashboard/utilization?fiscalYear=2026`    | All employees + top/bottom 5             |
-| GET    | `/api/dashboard/pipeline`                       | Project counts grouped by stage          |
-| GET    | `/api/dashboard/deadlines`                      | Upcoming project deadlines               |
-| GET    | `/api/fiscal-years`                             | List of fiscal years that have data      |
-
----
-
-## Data Model
-
-```
-employees    (id, name, dept, email, created_at)
-projects     (id, code UNIQUE, name, client, budget, spent_pct, end_date,
-              stage, progress, color, priority, created_at)
-assignments  (id, employee_id FK, project_id FK,
-              year, month, week, percentage, created_at)
+```powershell
+Remove-Item -Recurse -Force node_modules
+Remove-Item -Force package-lock.json -ErrorAction SilentlyContinue
+npm install
 ```
 
-A "fiscal year" `Y` covers months **Apr Y → Mar Y+1**. The current seed is fiscal year **2026** (Apr 2026 – Mar 2027).
+## Verification performed
 
----
-
-## Customisation
-
-- **Departments** — edit the `DEPARTMENTS` map in `db.js`, and the `pill-*` CSS classes + the `Add Employee` modal options in `public/index.html`.
-- **Project colors** — `PROJECT_COLORS` in both `db.js` and the `PROJECT_COLORS` const inside the `<script>` in `index.html`.
-- **Stages** — `STAGES` in `db.js`, and the `stage-*` CSS classes + `STAGES` const in `index.html`.
-- **Port** — `PORT=4000 npm start`.
-- **Adding history** — change the seed loop in `db.js` (e.g. `for (const fy of [2024, 2025, 2026])`) and re-run `npm run seed`.
-
----
-
-## License
-
-MIT — do whatever you want with it.
+- Individual and combined JavaScript syntax checks
+- Database migration startup
+- Seed process on an isolated database
+- Authentication and protected static assets
+- All existing API endpoints
+- Employee and project CRUD
+- Transactional bulk assignment creation and cleanup
+- HTML fragment reconstruction: all 73 original element IDs retained, with no duplicates

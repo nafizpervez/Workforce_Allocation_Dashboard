@@ -1,0 +1,240 @@
+/* ============================================================== */
+/*  SECTION DRAG (vertical row-reorder of .ds containers)         */
+/* ============================================================== */
+.ds {
+  position: relative;
+  transition: opacity 0.15s;
+}
+.ds.is-dragging {
+  opacity: 0.38;
+}
+
+.ds .drag-handle {
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  z-index: 12;
+  width: 26px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  color: #9ca3af;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+  cursor: grab;
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+.ds:hover .drag-handle {
+  opacity: 1;
+}
+.ds .drag-handle:hover {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+.ds .drag-handle:active {
+  cursor: grabbing;
+}
+
+/* Drop indicators (above/below) for vertical section drop targets */
+.drop-above {
+  box-shadow: 0 -3px 0 0 #2563eb;
+  border-radius: 12px;
+}
+.drop-below {
+  box-shadow: 0 3px 0 0 #2563eb;
+  border-radius: 12px;
+}
+
+/* ============================================================== */
+/*  CARD DRAG (horizontal swap of .dc cards within a row)          */
+/* ============================================================== */
+.dc {
+  position: relative;
+  transition:
+    transform 0.25s ease,
+    opacity 0.15s;
+}
+.dc.is-dragging-card {
+  opacity: 0.45;
+}
+
+.dc .dc-handle {
+  position: absolute;
+  top: 10px;
+  left: 10px;
+  z-index: 8;
+  width: 22px;
+  height: 22px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: white;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  color: #9ca3af;
+  opacity: 0;
+  transition:
+    opacity 0.15s,
+    background 0.15s,
+    color 0.15s,
+    border-color 0.15s;
+  cursor: grab;
+  box-shadow: 0 1px 2px rgba(0, 0, 0, 0.04);
+}
+.dc:hover .dc-handle {
+  opacity: 1;
+}
+.dc .dc-handle:hover {
+  background: #2563eb;
+  color: white;
+  border-color: #2563eb;
+}
+.dc .dc-handle:active {
+  cursor: grabbing;
+}
+
+/* Stats variant — handle goes top-right since icon is top-left */
+.dc.dc-stat .dc-handle {
+  left: auto;
+  right: 8px;
+  top: 8px;
+}
+
+/* Drop target highlight while card-dragging */
+.dc.drop-target {
+  outline: 2px dashed #2563eb;
+  outline-offset: 4px;
+  border-radius: 12px;
+}
+
+/* Insight period dropdown */
+.insight-period-menu {
+  min-width: 130px;
+}
+
+/* Filter bar inputs */
+.filter-date {
+  max-width: 130px;
+}
+
+/* Title padding so titles don't sit under the .dc-handle */
+.card-title-pad {
+  padding-left: 30px;
+}
+
+/* ── Period selector (Week / Month / Year on insight cards) ──── */
+.period-btn {
+  padding: 3px 8px;
+  font-size: 11px;
+  font-weight: 500;
+  border: 1px solid #e5e7eb;
+  border-radius: 5px;
+  cursor: pointer;
+  background: white;
+  color: #6b7280;
+  transition: all 0.15s;
+  line-height: 1.5;
+}
+.period-btn.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+.period-btn:hover:not(.active) {
+  background: #f3f4f6;
+  color: #374151;
+}
+
+/* ── Filter bars inside pipeline / running project cards ─────── */
+.card-filter-bar {
+  padding: 8px 16px;
+  border-bottom: 1px solid #f3f4f6;
+  background: #f9fafb;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.card-filter-bar select,
+.card-filter-bar .flt-select {
+  font-size: 11px;
+  font-weight: 500;
+  color: #374151;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  padding: 4px 8px;
+  background: white;
+  cursor: pointer;
+  outline: none;
+}
+.card-filter-bar select:focus,
+.card-filter-bar .flt-select:focus {
+  border-color: #93c5fd;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
+}
+.flt-sort-btn {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 4px 8px;
+  border: 1px solid #e5e7eb;
+  border-radius: 6px;
+  background: white;
+  color: #6b7280;
+  cursor: pointer;
+  transition: all 0.15s;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+.flt-sort-btn:hover {
+  background: #eff6ff;
+  color: #2563eb;
+  border-color: #93c5fd;
+}
+.flt-sort-btn.active {
+  background: #dbeafe;
+  color: #1d4ed8;
+  border-color: #93c5fd;
+}
+
+/* ── Stat card formula tooltip ───────────────────────────────── */
+.stat-tooltip {
+  display: none;
+  position: absolute;
+  bottom: calc(100% + 10px);
+  left: 50%;
+  transform: translateX(-50%);
+  background: #111827;
+  color: #f9fafb;
+  padding: 8px 14px;
+  border-radius: 8px;
+  font-size: 11.5px;
+  font-weight: 500;
+  white-space: nowrap;
+  z-index: 300;
+  pointer-events: none;
+  box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
+  letter-spacing: 0.01em;
+}
+.stat-tooltip::after {
+  content: "";
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  transform: translateX(-50%);
+  border: 6px solid transparent;
+  border-top-color: #111827;
+}
+.stat-card-inner:hover .stat-tooltip {
+  display: block;
+}
+

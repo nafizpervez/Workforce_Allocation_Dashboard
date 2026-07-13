@@ -1,3 +1,3 @@
 @echo off
-cd C:\inetpub\wwwroot\workforce_allocation_dashboard
+cd /d "%~dp0"
 npm start
