@@ -29,6 +29,9 @@ table.matrix th {
   --name-w: 190px;
   --allocation-w: 36px;
   --revenue-w: 50px;
+  --matrix-month-header-h: 37px;
+  --matrix-week-header-h: 92px;
+  --matrix-total-row-h: 46px;
 }
 
 .col-sn {
@@ -120,13 +123,13 @@ table.matrix thead tr.months th {
   position: sticky;
   top: 0;
   z-index: 4;
-  height: 37px;
+  height: var(--matrix-month-header-h);
   background: #f9fafb;
 }
 
 table.matrix thead tr.weeks th {
   position: sticky;
-  top: 37px;
+  top: var(--matrix-month-header-h);
   z-index: 4;
   background: #f9fafb;
 }
@@ -160,6 +163,19 @@ table.matrix thead tr.weeks th[class*="sticky-allocation-"],
 table.matrix thead tr.weeks th[class*="sticky-revenue-"] {
   z-index: 39;
   background-clip: border-box;
+}
+
+/* ── Fixed totals/averages row below the two-row header ─────── */
+table.matrix tbody tr.matrix-total-row > td {
+  position: sticky;
+  top: calc(var(--matrix-month-header-h) + var(--matrix-week-header-h));
+  z-index: 20;
+  height: var(--matrix-total-row-h);
+  background-clip: border-box;
+}
+
+table.matrix tbody tr.matrix-total-row > td.matrix-fixed-cell {
+  z-index: 30;
 }
 
 /* ── Row striping and hover ──────────────────────────────────── */

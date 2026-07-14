@@ -303,9 +303,13 @@ function renderMatrix() {
     RESOURCE_SUMMARY_COLUMNS.revenue.length +
     (months.length * 4);
 
-  table.querySelector('tbody').innerHTML = rows.join('') || `
-    <tr>
-      <td colspan="${columnCount}" class="matrix-empty-state">No resources found.</td>
-    </tr>
-  `;
+  const totalsRow = renderMatrixTotalsRow(employees, months);
+
+  table.querySelector('tbody').innerHTML = employees.length
+    ? totalsRow + rows.join('')
+    : `
+      <tr>
+        <td colspan="${columnCount}" class="matrix-empty-state">No resources found.</td>
+      </tr>
+    `;
 }

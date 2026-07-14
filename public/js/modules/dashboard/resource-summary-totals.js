@@ -1,0 +1,147 @@
+/* Workforce Allocation Dashboard — dashboard/resource-summary-totals.js */
+
+/* Fixed matrix summary row: allocation averages, revenue totals and weekly averages. */
+
+function averageMatrixValues(values) {
+  if (!values.length) return 0;
+
+  return values.reduce((total, value) => total + (Number(value) || 0), 0) /
+    values.length;
+}
+
+function getEmployeeWeekAllocation(employeeId, month, week) {
+  const key = `${month.y}-${month.m}-${week}`;
+  const assignments = S.matrix[employeeId]?.[key] || [];
+
+  return assignments.reduce(
+    (total, assignment) => total + (Number(assignment.percentage) || 0),
+    0,
+  );
+}
+
+function sumCalculatedRevenue(summaries, revenueKey) {
+  const calculatedValues = summaries
+    .map(summary => summary.revenue[revenueKey])
+    .filter(value => value !== null && value !== undefined && Number.isFinite(Number(value)))
+    .map(Number);
+
+  return {
+    value: calculatedValues.length
+      ? calculatedValues.reduce((total, value) => total + value, 0)
+      : null,
+    calculatedResourceCount: calculatedValues.length,
+  };
+}
+
+function getMatrixTotalsViewData(employees, months) {
+  const summaries = employees.map(employee => getResourceSummaryViewData(employee));
+
+  const allocation = Object.fromEntries(
+    RESOURCE_SUMMARY_COLUMNS.allocation.map(column => [
+      column.key,
+      averageMatrixValues(summaries.map(summary => summary.allocation[column.key])),
+    ]),
+  );
+
+  const revenue = Object.fromEntries(
+    RESOURCE_SUMMARY_COLUMNS.revenue.map(column => [
+      column.key,
+      sumCalculatedRevenue(summaries, column.key),
+    ]),
+  );
+
+  const weeklyAllocation = months.flatMap(month =>
+    Array.from({ length: RESOURCE_SUMMARY_WEEKS_PER_MONTH }, (_, index) => {
+      const week = index + 1;
+      const employeeAllocations = employees.map(employee =>
+        getEmployeeWeekAllocation(employee.id, month, week),
+      );
+
+      return {
+        month,
+        week,
+        value: averageMatrixValues(employeeAllocations),
+      };
+    }),
+  );
+
+  return {
+    employeeCount: employees.length,
+    allocation,
+    revenue,
+    weeklyAllocation,
+  };
+}
+
+function renderMatrixTotalsRow(employees, months) {
+  if (!employees.length) return '';
+
+  const totals = getMatrixTotalsViewData(employees, months);
+  const resourceLabel = `${totals.employeeCount} visible resource${totals.employeeCount === 1 ? '' : 's'}`;
+
+  const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation
+    .map((column, index) => {
+      const value = totals.allocation[column.key];
+      const title = `Average ${column.label} allocation across ${resourceLabel}: ${value.toFixed(1)}%. Empty weeks remain part of the full fiscal-year calculation.`;
+
+      return `
+        <td
+          class="matrix-fixed-cell sticky-allocation-${index + 1} col-allocation matrix-total-cell matrix-total-allocation-cell"
+          data-total-group="allocation"
+          data-total-metric="${column.key}"
+          title="${esc(title)}"
+        >${formatAllocationViewValue(value)}</td>
+      `;
+    })
+    .join('');
+
+  const revenueCells = RESOURCE_SUMMARY_COLUMNS.revenue
+    .map((column, index) => {
+      const total = totals.revenue[column.key];
+      const title = total.value === null
+        ? `No ${column.label} revenue can be calculated for the visible resources until supported designations and hourly rates are assigned.`
+        : `Total ${column.label} revenue for ${total.calculatedResourceCount} of ${resourceLabel}: ${formatExactRevenueValue(total.value)}.`;
+
+      return `
+        <td
+          class="matrix-fixed-cell sticky-revenue-${index + 1} col-revenue matrix-total-cell matrix-total-revenue-cell"
+          data-total-group="revenue"
+          data-total-metric="${column.key}"
+          title="${esc(title)}"
+        >${formatRevenueViewValue(total.value)}</td>
+      `;
+    })
+    .join('');
+
+  const weeklyCells = totals.weeklyAllocation
+    .map(item => {
+      const title = `Average total allocation for ${item.month.label} W${item.week} across ${resourceLabel}: ${item.value.toFixed(1)}%. Employees without an assignment in this week contribute 0%.`;
+
+      return `
+        <td
+          class="col-week matrix-total-cell matrix-total-week-cell ${item.week === RESOURCE_SUMMARY_WEEKS_PER_MONTH ? 'month-end' : ''}"
+          data-total-year="${item.month.y}"
+          data-total-month="${item.month.m}"
+          data-total-week="${item.week}"
+          title="${esc(title)}"
+        >${formatAllocationViewValue(item.value)}</td>
+      `;
+    })
+    .join('');
+
+  return `
+    <tr class="matrix-total-row" aria-label="Visible-resource totals and averages">
+      <td
+        class="matrix-fixed-cell sticky-sn col-sn matrix-total-cell matrix-total-symbol-cell"
+        title="Totals and averages for ${esc(resourceLabel)}"
+      >Σ</td>
+      <td class="matrix-fixed-cell sticky-name col-name matrix-total-cell matrix-total-label-cell">
+        <span class="matrix-total-label">Total / Average</span>
+        <span class="matrix-total-note">${esc(resourceLabel)}</span>
+      </td>
+      ${allocationCells}
+      ${revenueCells}
+      ${weeklyCells}
+    </tr>
+  `;
+}

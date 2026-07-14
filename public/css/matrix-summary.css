@@ -39,7 +39,7 @@
 
 .matrix-summary-subheading {
   position: sticky;
-  height: 92px;
+  height: var(--matrix-week-header-h);
   padding: 4px 0;
   border-right: 1px solid #d1d5db;
   border-bottom: 2px solid #d1d5db;
@@ -157,4 +157,73 @@
 .matrix-revenue-cell {
   color: #64748b;
   background-color: #f2f7fc;
+}
+
+/* ── Fixed totals and averages row ───────────────────────────── */
+.matrix-total-row .matrix-total-cell {
+  padding: 7px 4px;
+  border-right: 1px solid #cbd5e1;
+  border-bottom: 2px solid #94a3b8;
+  background: #eef2f7;
+  color: #334155;
+  text-align: center;
+  vertical-align: middle;
+  font-size: 10px;
+  font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  line-height: 1.15;
+}
+
+.matrix-total-row .matrix-total-symbol-cell {
+  background: #e2e8f0;
+  color: #1e293b;
+  font-size: 15px;
+}
+
+.matrix-total-row .matrix-total-label-cell {
+  padding-right: 10px;
+  padding-left: 10px;
+  background: #e2e8f0;
+  text-align: left;
+}
+
+.matrix-total-label,
+.matrix-total-note {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.matrix-total-label {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.matrix-total-note {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.matrix-total-row .matrix-total-allocation-cell {
+  background: #e7edf4;
+  color: #334155;
+}
+
+.matrix-total-row .matrix-total-revenue-cell {
+  background: #dfeaf6;
+  color: #1e3a5f;
+}
+
+.matrix-total-row .matrix-total-week-cell {
+  background: #f1f5f9;
+  color: #475569;
+  cursor: default;
+}
+
+.matrix-total-row .sticky-revenue-2 {
+  box-shadow: 5px 0 7px rgba(15, 23, 42, 0.1);
 }
