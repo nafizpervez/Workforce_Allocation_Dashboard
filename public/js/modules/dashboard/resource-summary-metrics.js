@@ -86,7 +86,7 @@ function classifyAllocationProject(projectName) {
  */
 const RESOURCE_SUMMARY_WEEKS_PER_MONTH = 4;
 const RESOURCE_SUMMARY_HOURS_PER_WEEK = 40;
-const RESOURCE_SERVICE_CATEGORIES = new Set([
+const RESOURCE_SERVICE_CATEGORIES = Object.freeze([
   'intrasourcing',
   'local',
   'training',
@@ -134,8 +134,14 @@ function getResourceSummaryViewData(employee) {
     ]),
   );
 
-  const serviceHours = [...RESOURCE_SERVICE_CATEGORIES].reduce(
-    (total, categoryKey) => total + hourTotals[categoryKey],
+  const serviceCategoryHours = Object.fromEntries(
+    RESOURCE_SERVICE_CATEGORIES.map(categoryKey => [
+      categoryKey,
+      hourTotals[categoryKey],
+    ]),
+  );
+  const serviceHours = Object.values(serviceCategoryHours).reduce(
+    (total, hours) => total + hours,
     0,
   );
   const preSaleHours = hourTotals.preSale;
@@ -146,6 +152,26 @@ function getResourceSummaryViewData(employee) {
     Number.isFinite(professionalServiceRate) &&
     Number.isFinite(preSaleRate);
 
+  /*
+   * Service revenue is intentionally calculated category by category so the
+   * matrix value is the explicit sum of Intrasourcing, Local and Training
+   * Delivery revenue. All three categories use the Professional Service rate.
+   */
+  const serviceCategoryRevenue = Object.fromEntries(
+    RESOURCE_SERVICE_CATEGORIES.map(categoryKey => [
+      categoryKey,
+      hasRevenueRate
+        ? serviceCategoryHours[categoryKey] * professionalServiceRate
+        : null,
+    ]),
+  );
+  const serviceRevenue = hasRevenueRate
+    ? Object.values(serviceCategoryRevenue).reduce(
+      (total, amount) => total + amount,
+      0,
+    )
+    : null;
+
   return {
     allocation,
     allocationMeta: {
@@ -154,13 +180,15 @@ function getResourceSummaryViewData(employee) {
       total: Object.values(allocation).reduce((sum, value) => sum + value, 0),
     },
     revenue: {
-      service: hasRevenueRate ? serviceHours * professionalServiceRate : null,
+      service: serviceRevenue,
       preSale: hasRevenueRate ? preSaleHours * preSaleRate : null,
     },
     revenueMeta: {
       service: {
         hours: serviceHours,
         rate: hasRevenueRate ? professionalServiceRate : null,
+        categoryHours: serviceCategoryHours,
+        categoryRevenue: serviceCategoryRevenue,
       },
       preSale: {
         hours: preSaleHours,

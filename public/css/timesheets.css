@@ -2,7 +2,8 @@
    Resource Assignment Matrix / Yearly Work / Project-wise People tabs
    Restored tab pill styling after assignment backup update
    ================================================================ */
-.resource-matrix-tab-btn {
+.resource-matrix-tab-btn,
+.resource-matrix-action-btn {
   display: inline-flex;
   align-items: center;
   justify-content: center;
@@ -20,13 +21,15 @@
   transition: all 0.15s ease;
 }
 
-.resource-matrix-tab-btn:hover {
+.resource-matrix-tab-btn:hover,
+.resource-matrix-action-btn:hover {
   border-color: #c7d2fe;
   color: #1d4ed8;
   background: #eef2ff;
 }
 
-.resource-matrix-tab-btn.active {
+.resource-matrix-tab-btn.active,
+.resource-matrix-action-btn {
   border-color: #1d4ed8;
   background: #1d4ed8;
   color: #ffffff;

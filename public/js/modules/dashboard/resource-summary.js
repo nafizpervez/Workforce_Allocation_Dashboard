@@ -188,9 +188,19 @@ function renderResourceSummaryCells(employee) {
   const revenueCells = RESOURCE_SUMMARY_COLUMNS.revenue.map((column, index) => {
     const meta = summary.revenueMeta[column.key];
     const revenue = summary.revenue[column.key];
-    const title = summary.revenueMeta.hasRevenueRate
-      ? `${employee.designation}: ${meta.hours.toFixed(1)} hours × ${formatExactRevenueValue(meta.rate)} per hour = ${formatExactRevenueValue(revenue)}.`
-      : 'Assign a supported designation and save its hourly rates in Reserve Revenue to calculate revenue.';
+    let title = 'Assign a supported designation and save its hourly rates in Reserve Revenue to calculate revenue.';
+
+    if (summary.revenueMeta.hasRevenueRate && column.key === 'service') {
+      const categoryHours = meta.categoryHours;
+      const categoryRevenue = meta.categoryRevenue;
+      title = `${employee.designation} Service revenue: ` +
+        `Intrasourcing ${categoryHours.intrasourcing.toFixed(1)}h × ${formatExactRevenueValue(meta.rate)} = ${formatExactRevenueValue(categoryRevenue.intrasourcing)}; ` +
+        `Local ${categoryHours.local.toFixed(1)}h × ${formatExactRevenueValue(meta.rate)} = ${formatExactRevenueValue(categoryRevenue.local)}; ` +
+        `Training Delivery ${categoryHours.training.toFixed(1)}h × ${formatExactRevenueValue(meta.rate)} = ${formatExactRevenueValue(categoryRevenue.training)}. ` +
+        `Total = ${formatExactRevenueValue(revenue)}.`;
+    } else if (summary.revenueMeta.hasRevenueRate) {
+      title = `${employee.designation}: ${meta.hours.toFixed(1)} hours × ${formatExactRevenueValue(meta.rate)} per hour = ${formatExactRevenueValue(revenue)}.`;
+    }
 
     return `
       <td

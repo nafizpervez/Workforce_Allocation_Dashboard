@@ -55,7 +55,7 @@ function openRevenueRatesModal() {
 
     <div class="p-6">
       <div class="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
-        One full assignment week equals 40 working hours. Revenue is recalculated from the selected fiscal year assignments after these rates are saved.
+        One full assignment week equals 40 working hours. The Professional Service rate applies to Intrasourcing, Local and Training Delivery; their revenue values are added together in the Service column. Pre Sale uses its own rate, and General Admin is non-revenue.
       </div>
 
       <div class="overflow-x-auto rounded-xl border border-gray-200">
