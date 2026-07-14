@@ -105,9 +105,13 @@ function renderMatrixTotalsRow(employees, months) {
       return `
         <td
           class="matrix-fixed-cell sticky-revenue-${index + 1} col-revenue matrix-total-cell matrix-total-revenue-cell"
+          data-action="open-revenue-breakdown"
           data-total-group="revenue"
           data-total-metric="${column.key}"
-          title="${esc(title)}"
+          role="button"
+          tabindex="0"
+          aria-label="Open ${esc(column.label)} revenue breakdown"
+          title="${esc(title)} Click to view the detailed breakdown."
         >${formatRevenueViewValue(total.value)}</td>
       `;
     })

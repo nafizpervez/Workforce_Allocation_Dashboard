@@ -62,11 +62,62 @@ function initEvents() {
   document.getElementById('runSortAssignedBtn')?.addEventListener('click', () => { S.runSortAssigned = !S.runSortAssigned; document.getElementById('runSortAssignedBtn').classList.toggle('active', S.runSortAssigned); applyAndRenderRunning(); });
 
   /* Matrix table click */
-  document.getElementById('matrixTable').addEventListener('click', e => {
-    const del = e.target.closest('[data-action="delete-assign"]'); if (del) { e.stopPropagation(); deleteAssignment(+del.dataset.id); return; }
-    const chip = e.target.closest('[data-action="edit-assign"]'); if (chip) { e.stopPropagation(); openAssignmentModal({ id: +chip.dataset.id }); return; }
-    const emp = e.target.closest('[data-action="edit-emp"]'); if (emp) { e.stopPropagation(); openEmployeeModal({ id: +emp.dataset.emp }); return; }
-    const cell = e.target.closest('td.cell'); if (cell) openAssignmentModal({ employee_id: +cell.dataset.emp, year: +cell.dataset.year, month: +cell.dataset.month, week: +cell.dataset.week });
+  const matrixTable = document.getElementById('matrixTable');
+  matrixTable.addEventListener('click', e => {
+    const revenueTotal = e.target.closest('[data-action="open-revenue-breakdown"]');
+    if (revenueTotal) {
+      e.stopPropagation();
+      openRevenueBreakdownModal(revenueTotal.dataset.totalMetric);
+      return;
+    }
+
+    const del = e.target.closest('[data-action="delete-assign"]');
+    if (del) {
+      e.stopPropagation();
+      deleteAssignment(Number(del.dataset.id));
+      return;
+    }
+
+    const chip = e.target.closest('[data-action="edit-assign"]');
+    if (chip) {
+      e.stopPropagation();
+      openAssignmentModal({
+        id: Number(chip.dataset.id),
+        year: Number(chip.dataset.year),
+        month: Number(chip.dataset.month),
+        week: Number(chip.dataset.week),
+        start_date: chip.dataset.start,
+        end_date: chip.dataset.end,
+      });
+      return;
+    }
+
+    const employee = e.target.closest('[data-action="edit-emp"]');
+    if (employee) {
+      e.stopPropagation();
+      openEmployeeModal({ id: Number(employee.dataset.emp) });
+      return;
+    }
+
+    const cell = e.target.closest('td.cell');
+    if (cell) {
+      openAssignmentModal({
+        employee_id: Number(cell.dataset.emp),
+        year: Number(cell.dataset.year),
+        month: Number(cell.dataset.month),
+        week: Number(cell.dataset.week),
+        start_date: cell.dataset.start,
+        end_date: cell.dataset.end,
+      });
+    }
+  });
+
+  matrixTable.addEventListener('keydown', e => {
+    if (!['Enter', ' '].includes(e.key)) return;
+    const revenueTotal = e.target.closest('[data-action="open-revenue-breakdown"]');
+    if (!revenueTotal) return;
+    e.preventDefault();
+    openRevenueBreakdownModal(revenueTotal.dataset.totalMetric);
   });
 
   /* Body delegation */

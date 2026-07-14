@@ -66,6 +66,8 @@ function ensureTimesheetTable(db) {
 function runMigrations(db) {
   addColumn(db, 'ALTER TABLE employees ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
   addColumn(db, "ALTER TABLE employees ADD COLUMN designation TEXT DEFAULT ''");
+  addColumn(db, "ALTER TABLE assignments ADD COLUMN customer_name TEXT DEFAULT ''");
+  addColumn(db, "ALTER TABLE assignments ADD COLUMN product_name TEXT DEFAULT ''");
   addColumn(db, 'ALTER TABLE projects ADD COLUMN fiscal_period TEXT');
   addColumn(db, 'ALTER TABLE projects ADD COLUMN import_row_no INTEGER');
   db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_fiscal_period ON projects(fiscal_period)').run();

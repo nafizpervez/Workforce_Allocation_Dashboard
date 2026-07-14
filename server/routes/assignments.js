@@ -3,48 +3,145 @@ const { getAppDb } = require('../database');
 const { buildAssignmentImportResolvers, normalizeAssignmentImportRows } = require('../services/assignment-import');
 const { FISCAL_WHERE, fiscalParams } = require('../services/fiscal');
 const { assignUniqueProjectColors } = require('../services/project-colors');
+const {
+  getAssignmentProject,
+  resolveAssignmentMetadata,
+} = require('../services/assignment-metadata');
 const { safeNum } = require('../services/values');
+
 const router = express.Router();
 const db = getAppDb();
+
+const ASSIGNMENT_SELECT = `
+  SELECT
+    a.id,
+    a.employee_id,
+    a.project_id,
+    a.year,
+    a.month,
+    a.week,
+    a.percentage,
+    a.customer_name AS assignment_customer_name,
+    a.product_name AS assignment_product_name,
+    p.code AS project_code,
+    p.name AS project_name,
+    p.color AS project_color,
+    COALESCE(
+      NULLIF(a.customer_name, ''),
+      NULLIF(p.account_name, ''),
+      NULLIF(p.client, ''),
+      p.name
+    ) AS account_name,
+    COALESCE(
+      NULLIF(a.product_name, ''),
+      NULLIF(p.product_name, ''),
+      ''
+    ) AS product_name
+  FROM assignments a
+  JOIN projects p ON p.id = a.project_id
+`;
+
+function getAssignmentById(id) {
+  return db.prepare(`${ASSIGNMENT_SELECT} WHERE a.id = ?`).get(Number(id));
+}
+
+function validateSlot(year, month, week) {
+  return Boolean(year) && month >= 1 && month <= 12 && week >= 1 && week <= 4;
+}
+
+function resolveProjectMetadata(projectId, body, fallback = {}) {
+  const project = getAssignmentProject(db, projectId);
+  if (!project) return { project: null, customerName: null, productName: null };
+
+  return {
+    project,
+    ...resolveAssignmentMetadata(project, body, fallback),
+  };
+}
 
 router.get('/api/assignments', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
   res.json(db.prepare(`
-    SELECT a.id, a.employee_id, a.project_id, a.year, a.month, a.week, a.percentage,
-           p.code AS project_code, p.name AS project_name, p.color AS project_color,
-           COALESCE(p.account_name, p.client, p.name) AS account_name
-      FROM assignments a JOIN projects p ON p.id=a.project_id
-     WHERE ${FISCAL_WHERE}
+    ${ASSIGNMENT_SELECT}
+    WHERE ${FISCAL_WHERE}
   `).all(...fiscalParams(fy)));
 });
 
 router.post('/api/assignments', (req, res) => {
   const { employee_id, project_id, year, month, week, percentage } = req.body || {};
-  if (!employee_id || !project_id || !year || !month || !week) return res.status(400).json({ error: 'missing fields' });
-  if (month < 1 || month > 12 || week < 1 || week > 4) return res.status(400).json({ error: 'invalid month/week' });
-  const info = db.prepare('INSERT INTO assignments(employee_id,project_id,year,month,week,percentage) VALUES(?,?,?,?,?,?)')
-    .run(employee_id, project_id, year, month, week, safeNum(percentage, 0));
-  const row = db.prepare('SELECT a.*, p.code AS project_code, p.name AS project_name, p.color AS project_color FROM assignments a JOIN projects p ON p.id=a.project_id WHERE a.id=?').get(info.lastInsertRowid);
-  res.status(201).json(row);
+  if (!employee_id || !project_id || !year || !month || !week) {
+    return res.status(400).json({ error: 'missing fields' });
+  }
+  if (!validateSlot(year, month, week)) {
+    return res.status(400).json({ error: 'invalid month/week' });
+  }
+
+  const metadata = resolveProjectMetadata(project_id, req.body);
+  if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+
+  const info = db.prepare(`
+    INSERT INTO assignments(
+      employee_id, project_id, year, month, week, percentage,
+      customer_name, product_name
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `).run(
+    employee_id,
+    project_id,
+    year,
+    month,
+    week,
+    safeNum(percentage, 0),
+    metadata.customerName,
+    metadata.productName,
+  );
+
+  res.status(201).json(getAssignmentById(info.lastInsertRowid));
 });
 
 router.post('/api/assignments/bulk', (req, res) => {
   const { employee_id, project_id, percentage, slots } = req.body || {};
-  if (!employee_id || !project_id || !Array.isArray(slots) || !slots.length) return res.status(400).json({ error: 'missing fields' });
-  const pct = safeNum(percentage, 0);
-  const ins = db.prepare('INSERT INTO assignments(employee_id,project_id,year,month,week,percentage) VALUES(?,?,?,?,?,?)');
-  const txn = db.transaction(arr => {
-    let n = 0;
-    for (const s of arr) {
-      const y = safeNum(s.year, 0), m = safeNum(s.month, 0), w = safeNum(s.week, 0);
-      if (!y || m < 1 || m > 12 || w < 1 || w > 4) continue;
-      ins.run(employee_id, project_id, y, m, w, pct); n++;
-    }
-    return n;
-  });
-  res.status(201).json({ created: txn(slots) });
-});
+  if (!employee_id || !project_id || !Array.isArray(slots) || !slots.length) {
+    return res.status(400).json({ error: 'missing fields' });
+  }
 
+  const metadata = resolveProjectMetadata(project_id, req.body);
+  if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+
+  const pct = safeNum(percentage, 0);
+  const insert = db.prepare(`
+    INSERT INTO assignments(
+      employee_id, project_id, year, month, week, percentage,
+      customer_name, product_name
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  const transaction = db.transaction(items => {
+    let created = 0;
+
+    for (const slot of items) {
+      const year = safeNum(slot.year, 0);
+      const month = safeNum(slot.month, 0);
+      const week = safeNum(slot.week, 0);
+      if (!validateSlot(year, month, week)) continue;
+
+      insert.run(
+        employee_id,
+        project_id,
+        year,
+        month,
+        week,
+        pct,
+        metadata.customerName,
+        metadata.productName,
+      );
+      created += 1;
+    }
+
+    return created;
+  });
+
+  res.status(201).json({ created: transaction(slots) });
+});
 
 router.post('/api/assignments/import', (req, res) => {
   const body = req.body || {};
@@ -57,7 +154,6 @@ router.post('/api/assignments/import', (req, res) => {
   }
 
   const { resolveEmployee, resolveProject } = buildAssignmentImportResolvers();
-
   const toInsert = [];
   const skipped = [];
 
@@ -66,42 +162,39 @@ router.post('/api/assignments/import', (req, res) => {
       skipped.push({ ...row, reason: 'Missing Resource ID/Resource Name.' });
       continue;
     }
-
     if (!row.project_code && !row.project_name) {
       skipped.push({ ...row, reason: 'Missing Opportunity Number/Project Name.' });
       continue;
     }
-
-    if (!row.year || row.month < 1 || row.month > 12 || row.week < 1 || row.week > 4) {
+    if (!validateSlot(row.year, row.month, row.week)) {
       skipped.push({ ...row, reason: 'Invalid Year, Month Number, or Week.' });
       continue;
     }
-
     if (row.percentage < 0) {
       skipped.push({ ...row, reason: 'Allocation percentage cannot be negative.' });
       continue;
     }
 
-    const empResolved = resolveEmployee(row);
-    if (!empResolved.employee) {
-      skipped.push({ ...row, reason: empResolved.reason || 'Employee could not be resolved.' });
+    const employeeResult = resolveEmployee(row);
+    if (!employeeResult.employee) {
+      skipped.push({ ...row, reason: employeeResult.reason || 'Employee could not be resolved.' });
       continue;
     }
 
-    const projectResolved = resolveProject(row);
-    if (!projectResolved.project) {
-      skipped.push({ ...row, reason: projectResolved.reason || 'Project could not be resolved.' });
+    const projectResult = resolveProject(row);
+    if (!projectResult.project) {
+      skipped.push({ ...row, reason: projectResult.reason || 'Project could not be resolved.' });
       continue;
     }
 
     toInsert.push({
       ...row,
-      employee_id: empResolved.employee.id,
-      project_id: projectResolved.project.id,
-      employee_code: empResolved.employee.employee_code || row.employee_code,
-      employee_name: empResolved.employee.name || row.employee_name,
-      project_code: projectResolved.project.code || row.project_code,
-      project_name: projectResolved.project.name || row.project_name,
+      employee_id: employeeResult.employee.id,
+      project_id: projectResult.project.id,
+      employee_code: employeeResult.employee.employee_code || row.employee_code,
+      employee_name: employeeResult.employee.name || row.employee_name,
+      project_code: projectResult.project.code || row.project_code,
+      project_name: projectResult.project.name || row.project_name,
     });
   }
 
@@ -114,13 +207,13 @@ router.post('/api/assignments/import', (req, res) => {
     VALUES (?, ?, ?, ?, ?, ?)
   `);
 
-  const txn = db.transaction(() => {
+  const transaction = db.transaction(() => {
     if (replaceFiscalYear) {
-      const del = db.prepare(`
+      const deleted = db.prepare(`
         DELETE FROM assignments
         WHERE ((year = ? AND month >= 4) OR (year = ? AND month <= 3))
       `).run(fiscalYear, fiscalYear + 1);
-      deletedCount = del.changes || 0;
+      deletedCount = deleted.changes || 0;
     }
 
     for (const row of toInsert) {
@@ -131,7 +224,7 @@ router.post('/api/assignments/import', (req, res) => {
           row.year,
           row.month,
           row.week,
-          safeNum(row.percentage, 0)
+          safeNum(row.percentage, 0),
         );
 
         imported.push({
@@ -147,20 +240,20 @@ router.post('/api/assignments/import', (req, res) => {
           week: row.week,
           percentage: row.percentage,
         });
-      } catch (e) {
+      } catch (error) {
         failed.push({
           ...row,
-          error: e.message,
+          error: error.message,
           reason: 'Database insert failed.',
         });
       }
     }
   });
 
-  txn();
+  transaction();
 
   const recoloredProjectCount = assignUniqueProjectColors(
-    [...new Set(imported.map(row => row.project_id).filter(Boolean))]
+    [...new Set(imported.map(row => row.project_id).filter(Boolean))],
   );
 
   res.status(201).json({
@@ -183,23 +276,37 @@ router.post('/api/assignments/import', (req, res) => {
   });
 });
 
-
 router.put('/api/assignments/:id', (req, res) => {
   const id = Number(req.params.id);
-  if (!db.prepare('SELECT id FROM assignments WHERE id=?').get(id)) return res.status(404).json({ error: 'not found' });
-  const fields = ['employee_id', 'project_id', 'year', 'month', 'week', 'percentage'];
-  const updates = [], params = [];
-  for (const f of fields) if (req.body && Object.prototype.hasOwnProperty.call(req.body, f)) { updates.push(`${f}=?`); params.push(req.body[f]); }
-  if (updates.length) { params.push(id); db.prepare(`UPDATE assignments SET ${updates.join(',')} WHERE id=?`).run(...params); }
-  const row = db.prepare('SELECT a.*, p.code AS project_code, p.name AS project_name, p.color AS project_color FROM assignments a JOIN projects p ON p.id=a.project_id WHERE a.id=?').get(id);
-  res.json(row);
-});
+  const existing = db.prepare('SELECT * FROM assignments WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
 
+  const projectId = req.body?.project_id ?? existing.project_id;
+  const metadata = resolveProjectMetadata(projectId, req.body, existing);
+  if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+
+  const fields = ['employee_id', 'project_id', 'year', 'month', 'week', 'percentage'];
+  const updates = [];
+  const params = [];
+
+  for (const field of fields) {
+    if (req.body && Object.prototype.hasOwnProperty.call(req.body, field)) {
+      updates.push(`${field} = ?`);
+      params.push(req.body[field]);
+    }
+  }
+
+  updates.push('customer_name = ?', 'product_name = ?');
+  params.push(metadata.customerName, metadata.productName, id);
+  db.prepare(`UPDATE assignments SET ${updates.join(', ')} WHERE id = ?`).run(...params);
+
+  res.json(getAssignmentById(id));
+});
 
 router.post('/api/assignments/:id/reschedule', (req, res) => {
   const id = Number(req.params.id);
-  const old = db.prepare('SELECT id FROM assignments WHERE id=?').get(id);
-  if (!old) return res.status(404).json({ error: 'not found' });
+  const existing = db.prepare('SELECT * FROM assignments WHERE id = ?').get(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
 
   const { employee_id, project_id, percentage, slots } = req.body || {};
   if (!employee_id || !project_id || !Array.isArray(slots) || !slots.length) {
@@ -207,31 +314,52 @@ router.post('/api/assignments/:id/reschedule', (req, res) => {
   }
 
   const validSlots = slots
-    .map(s => ({ year: safeNum(s.year, 0), month: safeNum(s.month, 0), week: safeNum(s.week, 0) }))
-    .filter(s => s.year && s.month >= 1 && s.month <= 12 && s.week >= 1 && s.week <= 4);
+    .map(slot => ({
+      year: safeNum(slot.year, 0),
+      month: safeNum(slot.month, 0),
+      week: safeNum(slot.week, 0),
+    }))
+    .filter(slot => validateSlot(slot.year, slot.month, slot.week));
 
   if (!validSlots.length) return res.status(400).json({ error: 'invalid date range' });
 
+  const metadata = resolveProjectMetadata(project_id, req.body, existing);
+  if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+
   const pct = safeNum(percentage, 0);
-  const txn = db.transaction(() => {
-    db.prepare('DELETE FROM assignments WHERE id=?').run(id);
-    const ins = db.prepare('INSERT INTO assignments(employee_id,project_id,year,month,week,percentage) VALUES(?,?,?,?,?,?)');
+  const transaction = db.transaction(() => {
+    db.prepare('DELETE FROM assignments WHERE id = ?').run(id);
+    const insert = db.prepare(`
+      INSERT INTO assignments(
+        employee_id, project_id, year, month, week, percentage,
+        customer_name, product_name
+      ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
     let created = 0;
-    for (const s of validSlots) {
-      ins.run(employee_id, project_id, s.year, s.month, s.week, pct);
-      created++;
+    for (const slot of validSlots) {
+      insert.run(
+        employee_id,
+        project_id,
+        slot.year,
+        slot.month,
+        slot.week,
+        pct,
+        metadata.customerName,
+        metadata.productName,
+      );
+      created += 1;
     }
     return created;
   });
 
-  res.json({ ok: true, deleted: id, created: txn() });
+  res.json({ ok: true, deleted: id, created: transaction() });
 });
 
 router.delete('/api/assignments/:id', (req, res) => {
-  const info = db.prepare('DELETE FROM assignments WHERE id=?').run(Number(req.params.id));
+  const info = db.prepare('DELETE FROM assignments WHERE id = ?').run(Number(req.params.id));
   if (!info.changes) return res.status(404).json({ error: 'not found' });
   res.json({ ok: true });
 });
-
 
 module.exports = router;

@@ -227,3 +227,16 @@
 .matrix-total-row .sticky-revenue-2 {
   box-shadow: 5px 0 7px rgba(15, 23, 42, 0.1);
 }
+
+.matrix-total-row .matrix-total-revenue-cell[data-action="open-revenue-breakdown"] {
+  cursor: pointer;
+  transition: background-color 120ms ease, box-shadow 120ms ease, color 120ms ease;
+}
+
+.matrix-total-row .matrix-total-revenue-cell[data-action="open-revenue-breakdown"]:hover,
+.matrix-total-row .matrix-total-revenue-cell[data-action="open-revenue-breakdown"]:focus-visible {
+  background: #cfe0f2;
+  color: #0f2f55;
+  box-shadow: inset 0 0 0 2px #60a5fa;
+  outline: none;
+}

@@ -223,6 +223,7 @@ function renderAssignmentCells(employee, months) {
     for (let week = 1; week <= 4; week += 1) {
       const key = `${month.y}-${month.m}-${week}`;
       const assignments = (S.matrix[employee.id] && S.matrix[employee.id][key]) || [];
+      const slotRange = weekDateRange(month.y, month.m, week);
 
       cells += `
         <td
@@ -231,6 +232,8 @@ function renderAssignmentCells(employee, months) {
           data-year="${month.y}"
           data-month="${month.m}"
           data-week="${week}"
+          data-start="${slotRange.start}"
+          data-end="${slotRange.end}"
         >
       `;
 
@@ -246,6 +249,11 @@ function renderAssignmentCells(employee, months) {
             class="chip"
             data-action="edit-assign"
             data-id="${assignment.id}"
+            data-year="${month.y}"
+            data-month="${month.m}"
+            data-week="${week}"
+            data-start="${slotRange.start}"
+            data-end="${slotRange.end}"
             style="background:${assignment.project_color}20;border-left:3px solid ${assignment.project_color};min-width:0;width:100%;box-sizing:border-box;"
             title="${esc(title)}"
           >

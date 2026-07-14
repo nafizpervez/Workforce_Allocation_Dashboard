@@ -235,3 +235,121 @@ function formatExactRevenueValue(value) {
     maximumFractionDigits: 2,
   })}`;
 }
+
+function getRevenueBreakdownCustomerName(assignment, project) {
+  return String(
+    assignment.account_name ||
+    assignment.assignment_customer_name ||
+    project?.account_name ||
+    project?.client ||
+    project?.name ||
+    'Unspecified Customer',
+  ).trim() || 'Unspecified Customer';
+}
+
+function getRevenueBreakdownProductName(assignment, project) {
+  return String(
+    assignment.product_name ||
+    assignment.assignment_product_name ||
+    project?.product_name ||
+    getRevenueBreakdownCustomerName(assignment, project) ||
+    'Unspecified Product',
+  ).trim() || 'Unspecified Product';
+}
+
+function getMatrixRevenueBreakdown(employees, revenueKey) {
+  const employeeMap = new Map(
+    (employees || []).map(employee => [Number(employee.id), employee]),
+  );
+  const groups = new Map();
+  let totalHours = 0;
+  let totalRevenue = 0;
+  let pricedAssignmentCount = 0;
+  let unpricedHours = 0;
+
+  S.assignments.forEach(assignment => {
+    const employee = employeeMap.get(Number(assignment.employee_id));
+    if (!employee) return;
+
+    const project = S.projects.find(item =>
+      Number(item.id) === Number(assignment.project_id),
+    ) || {};
+    const categoryKey = classifyAllocationProject(
+      assignment.project_name || project.name,
+    );
+    const included = revenueKey === 'service'
+      ? RESOURCE_SERVICE_CATEGORIES.includes(categoryKey)
+      : categoryKey === 'preSale';
+    if (!included) return;
+
+    const percentage = Number(assignment.percentage);
+    if (!Number.isFinite(percentage)) return;
+
+    const hours = RESOURCE_SUMMARY_HOURS_PER_WEEK * (percentage / 100);
+    const rateRecord = getRevenueRateForDesignation(employee.designation);
+    const professionalServiceRate = Number(rateRecord?.professional_service_rate);
+    const preSaleRate = Number(rateRecord?.pre_sale_rate);
+    const hasRevenueRate = Boolean(rateRecord) &&
+      Number.isFinite(professionalServiceRate) &&
+      Number.isFinite(preSaleRate);
+    const hourlyRate = revenueKey === 'service'
+      ? professionalServiceRate
+      : preSaleRate;
+    const revenue = hasRevenueRate ? hours * hourlyRate : null;
+    const label = revenueKey === 'service'
+      ? getRevenueBreakdownCustomerName(assignment, project)
+      : getRevenueBreakdownProductName(assignment, project);
+    const groupKey = label.toLocaleLowerCase();
+
+    if (!groups.has(groupKey)) {
+      groups.set(groupKey, {
+        label,
+        hours: 0,
+        revenue: 0,
+        unpricedHours: 0,
+        assignmentCount: 0,
+        resources: new Set(),
+      });
+    }
+
+    const group = groups.get(groupKey);
+    group.hours += hours;
+    group.assignmentCount += 1;
+    group.resources.add(employee.name);
+    totalHours += hours;
+
+    if (revenue === null) {
+      group.unpricedHours += hours;
+      unpricedHours += hours;
+      return;
+    }
+
+    group.revenue += revenue;
+    totalRevenue += revenue;
+    pricedAssignmentCount += 1;
+  });
+
+  const rows = [...groups.values()]
+    .map(group => ({
+      ...group,
+      resources: [...group.resources].sort((a, b) => a.localeCompare(b)),
+      hasCalculatedRevenue: group.hours > group.unpricedHours,
+    }))
+    .sort((a, b) => {
+      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
+      return a.label.localeCompare(b.label);
+    });
+
+  return {
+    revenueKey,
+    labelHeading: revenueKey === 'service'
+      ? 'Customer Name'
+      : 'Product Name / Customer Name',
+    rows,
+    totalHours,
+    totalRevenue: pricedAssignmentCount ? totalRevenue : null,
+    pricedAssignmentCount,
+    unpricedHours,
+    employeeCount: employeeMap.size,
+  };
+}
