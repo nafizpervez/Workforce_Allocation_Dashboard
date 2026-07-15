@@ -1,52 +1,142 @@
 const express = require('express');
 const { getAppDb } = require('../database');
 const { calcDealStatuses } = require('../services/project-analytics');
-const { FISCAL_WHERE, fiscalMonths, fiscalParams, getRunningProjectCutoffDate } = require('../services/fiscal');
+const { fiscalMonths, getRunningProjectCutoffDate } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
+const {
+  assignmentSlotKey,
+  filterEffectiveAssignments,
+  getUnavailableSlotSet,
+  isUnavailableProjectName,
+} = require('../services/availability');
 const router = express.Router();
 const db = getAppDb();
 
+const FY_WEEK_COUNT = 48;
+const MONTH_WEEK_COUNT = 4;
+
+function getActiveEmployeeRows() {
+  return db.prepare(`
+    SELECT id, name, dept
+    FROM employees
+    WHERE COALESCE(active, 1) = 1
+    ORDER BY id
+  `).all();
+}
+
+function getAssignmentRows() {
+  return db.prepare(`
+    SELECT a.*, p.name AS project_name
+    FROM assignments a
+    JOIN projects p ON p.id = a.project_id
+  `).all();
+}
+
+function isFiscalAssignment(assignment, fiscalYear) {
+  return (
+    (Number(assignment.year) === Number(fiscalYear) && Number(assignment.month) >= 4) ||
+    (Number(assignment.year) === Number(fiscalYear) + 1 && Number(assignment.month) <= 3)
+  );
+}
+
+function periodMetrics(rawAssignments, employees, totalWeeks) {
+  const unavailableSlots = getUnavailableSlotSet(rawAssignments);
+  const effectiveAssignments = filterEffectiveAssignments(rawAssignments);
+  const weightedByEmployee = new Map();
+  const unavailableCountByEmployee = new Map();
+
+  for (const slot of unavailableSlots) {
+    const employeeId = Number(String(slot).split('|')[0]);
+    unavailableCountByEmployee.set(
+      employeeId,
+      (unavailableCountByEmployee.get(employeeId) || 0) + 1,
+    );
+  }
+
+  for (const assignment of effectiveAssignments) {
+    const employeeId = Number(assignment.employee_id);
+    weightedByEmployee.set(
+      employeeId,
+      (weightedByEmployee.get(employeeId) || 0) +
+        ((Number(assignment.percentage) || 0) / 100),
+    );
+  }
+
+  const utilizationRows = employees.map(employee => {
+    const unavailableWeeks = unavailableCountByEmployee.get(Number(employee.id)) || 0;
+    const availableWeeks = Math.max(0, totalWeeks - unavailableWeeks);
+    const weightedSlots = weightedByEmployee.get(Number(employee.id)) || 0;
+
+    return {
+      ...employee,
+      availableWeeks,
+      utilization: availableWeeks
+        ? +Math.min((weightedSlots / availableWeeks) * 100, 100).toFixed(1)
+        : null,
+    };
+  });
+
+  const availableRows = utilizationRows.filter(row => row.availableWeeks > 0);
+  const avgUtilization = availableRows.length
+    ? availableRows.reduce((sum, row) => sum + row.utilization, 0) / availableRows.length
+    : 0;
+
+  return {
+    unavailableSlots,
+    effectiveAssignments,
+    utilizationRows,
+    availableRows,
+    avgUtilization,
+  };
+}
+
 router.get('/api/dashboard/stats', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
+  const employees = getActiveEmployeeRows();
+  const assignments = getAssignmentRows();
+  const fiscalRaw = assignments.filter(assignment => isFiscalAssignment(assignment, fy));
+  const fiscalMetrics = periodMetrics(fiscalRaw, employees, FY_WEEK_COUNT);
 
-  const activeEmployees = db.prepare('SELECT COUNT(*) AS c FROM employees WHERE COALESCE(active,1)=1').get().c;
-  const activeProjects = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE stage != 'Closed Won'`).get().c;
-  const assignedProjects = db.prepare(`SELECT COUNT(DISTINCT project_id) AS c FROM assignments WHERE ${FISCAL_WHERE}`).get(...fiscalParams(fy)).c;
+  const activeEmployees = employees.length;
+  const analyticProjects = db.prepare(`SELECT id, name, stage, progress FROM projects`).all()
+    .filter(project => !isUnavailableProjectName(project.name));
+  const activeProjects = analyticProjects.filter(project => project.stage !== 'Closed Won').length;
+  const assignedProjects = new Set(
+    fiscalMetrics.effectiveAssignments.map(assignment => Number(assignment.project_id)),
+  ).size;
+  const avgUtil = fiscalMetrics.avgUtilization;
 
-  // Avg utilization = average across active employees of (their weighted slots / 48 FY weeks * 100)
-  const TOTAL_FY_WEEKS = 48;
-  const utilRows = db.prepare(`
-    SELECT COALESCE(SUM(a.percentage / 100.0), 0) AS weighted_slots
-      FROM employees e
-      LEFT JOIN assignments a ON a.employee_id = e.id
-        AND ((a.year = ? AND a.month >= 4) OR (a.year = ? AND a.month <= 3))
-     WHERE COALESCE(e.active,1)=1
-     GROUP BY e.id
-  `).all(...fiscalParams(fy));
-  const activeCount = utilRows.length || 1;
-  const avgUtil = utilRows.reduce((s, r) => s + Math.min(r.weighted_slots / TOTAL_FY_WEEKS * 100, 100), 0) / activeCount;
-
-  const psCount = db.prepare(`SELECT COUNT(*) AS c FROM employees WHERE dept='Professional Services' AND COALESCE(active,1)=1`).get().c || 1;
+  const psRows = fiscalMetrics.availableRows.filter(row => row.dept === 'Professional Services');
+  const psCount = psRows.length || 1;
   const productivity = psCount > 0 ? +(avgUtil / psCount).toFixed(2) : 0;
-  const onTime = db.prepare(`SELECT ROUND(100.0*SUM(CASE WHEN progress>=80 THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) AS v FROM projects`).get().v || 0;
+  const onTime = analyticProjects.length
+    ? +(100 * analyticProjects.filter(project => Number(project.progress) >= 80).length / analyticProjects.length).toFixed(1)
+    : 0;
 
-  const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1;
-  const prevM = curM === 1 ? 12 : curM - 1, prevY = curM === 1 ? curY - 1 : curY;
+  const now = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  const prevM = curM === 1 ? 12 : curM - 1;
+  const prevY = curM === 1 ? curY - 1 : curY;
   const curMStr = String(curM).padStart(2, '0');
 
-  const asgCur = db.prepare('SELECT COUNT(DISTINCT project_id) AS c FROM assignments WHERE year=? AND month=?').get(curY, curM).c;
-  const asgPrev = db.prepare('SELECT COUNT(DISTINCT project_id) AS c FROM assignments WHERE year=? AND month=?').get(prevY, prevM).c;
-  const asgDelta = asgCur - asgPrev;
+  const currentRaw = assignments.filter(a => Number(a.year) === curY && Number(a.month) === curM);
+  const previousRaw = assignments.filter(a => Number(a.year) === prevY && Number(a.month) === prevM);
+  const currentMetrics = periodMetrics(currentRaw, employees, MONTH_WEEK_COUNT);
+  const previousMetrics = periodMetrics(previousRaw, employees, MONTH_WEEK_COUNT);
 
-  const utilCur = db.prepare('SELECT AVG(wt) AS u FROM (SELECT SUM(percentage) AS wt FROM assignments WHERE year=? AND month=? GROUP BY employee_id,week)').get(curY, curM).u || 0;
-  const utilPrev = db.prepare('SELECT AVG(wt) AS u FROM (SELECT SUM(percentage) AS wt FROM assignments WHERE year=? AND month=? GROUP BY employee_id,week)').get(prevY, prevM).u || 0;
-  const utilDelta = +(utilCur - utilPrev).toFixed(1);
+  const asgCur = new Set(currentMetrics.effectiveAssignments.map(a => Number(a.project_id))).size;
+  const asgPrev = new Set(previousMetrics.effectiveAssignments.map(a => Number(a.project_id))).size;
+  const asgDelta = asgCur - asgPrev;
+  const utilDelta = +(currentMetrics.avgUtilization - previousMetrics.avgUtilization).toFixed(1);
 
   const newEmps = db.prepare(`SELECT COUNT(*) AS c FROM employees WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
-  const newProjs = db.prepare(`SELECT COUNT(*) AS c FROM projects  WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
-
+  const newProjs = db.prepare(`SELECT COUNT(*) AS c FROM projects WHERE strftime('%Y',created_at)=? AND strftime('%m',created_at)=?`).get(String(curY), curMStr).c;
   const prodDelta = psCount > 0 ? +(utilDelta / psCount).toFixed(2) : 0;
-  const onTimeDelta = +(onTime - (db.prepare('SELECT ROUND(100.0*SUM(CASE WHEN progress>=75 THEN 1 ELSE 0 END)/NULLIF(COUNT(*),0),1) AS v FROM projects').get().v || 0)).toFixed(1);
+  const priorOnTime = analyticProjects.length
+    ? +(100 * analyticProjects.filter(project => Number(project.progress) >= 75).length / analyticProjects.length).toFixed(1)
+    : 0;
+  const onTimeDelta = +(onTime - priorOnTime).toFixed(1);
 
   const sign = n => n >= 0 ? `+${n}` : `${n}`;
   const signF = n => n >= 0 ? `+${n}%` : `${n}%`;
@@ -72,46 +162,67 @@ router.get('/api/dashboard/stats', (req, res) => {
 
 router.get('/api/dashboard/trends', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
-  const months = fiscalMonths(fy);
-  const data = months.map(({ year, month }) => {
-    const count = db.prepare('SELECT COUNT(*) AS c FROM assignments WHERE year=? AND month=?').get(year, month).c;
-    const util = db.prepare('SELECT AVG(w) AS u FROM (SELECT SUM(percentage) AS w FROM assignments WHERE year=? AND month=? GROUP BY employee_id,week)').get(year, month).u || 0;
+  const employees = getActiveEmployeeRows();
+  const assignments = getAssignmentRows();
+  const data = fiscalMonths(fy).map(({ year, month }) => {
+    const raw = assignments.filter(assignment =>
+      Number(assignment.year) === Number(year) &&
+      Number(assignment.month) === Number(month),
+    );
+    const metrics = periodMetrics(raw, employees, MONTH_WEEK_COUNT);
     const label = new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'short' });
-    return { label, year, month, assignments: count, utilization: +util.toFixed(1) };
+
+    return {
+      label,
+      year,
+      month,
+      assignments: metrics.effectiveAssignments.length,
+      utilization: +metrics.avgUtilization.toFixed(1),
+    };
   });
+
   res.json(data);
 });
 
 router.get('/api/dashboard/workload', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
-  res.json(db.prepare(`
-    SELECT e.dept, COUNT(a.id) AS assignment_count
-      FROM employees e
-      LEFT JOIN assignments a ON a.employee_id=e.id
-        AND ((a.year=? AND a.month>=4) OR (a.year=? AND a.month<=3))
-     WHERE COALESCE(e.active,1)=1 GROUP BY e.dept ORDER BY assignment_count DESC
-  `).all(...fiscalParams(fy)));
+  const employees = getActiveEmployeeRows();
+  const employeeById = new Map(employees.map(employee => [Number(employee.id), employee]));
+  const fiscalRaw = getAssignmentRows().filter(assignment => isFiscalAssignment(assignment, fy));
+  const effectiveAssignments = filterEffectiveAssignments(fiscalRaw);
+  const counts = new Map();
+
+  for (const assignment of effectiveAssignments) {
+    const employee = employeeById.get(Number(assignment.employee_id));
+    if (!employee) continue;
+    counts.set(employee.dept, (counts.get(employee.dept) || 0) + 1);
+  }
+
+  const departments = [...new Set(employees.map(employee => employee.dept))];
+  res.json(departments
+    .map(dept => ({ dept, assignment_count: counts.get(dept) || 0 }))
+    .sort((a, b) => b.assignment_count - a.assignment_count));
 });
 
 router.get('/api/dashboard/utilization', (req, res) => {
   const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
-  // Utilization = sum(percentage/100 per slot) / TOTAL_FY_WEEKS * 100
-  // TOTAL_FY_WEEKS = 48 (12 months × 4 weeks per month)
-  const TOTAL_FY_WEEKS = 48;
-  const rows = db.prepare(`
-    SELECT e.id, e.name, e.dept,
-           COALESCE(SUM(a.percentage / 100.0), 0) AS weighted_slots
-      FROM employees e
-      LEFT JOIN assignments a ON a.employee_id = e.id
-        AND ((a.year = ? AND a.month >= 4) OR (a.year = ? AND a.month <= 3))
-     WHERE COALESCE(e.active,1)=1
-     GROUP BY e.id ORDER BY weighted_slots ASC
-  `).all(...fiscalParams(fy));
-  const cleaned = rows.map(r => ({
-    id: r.id, name: r.name, dept: r.dept,
-    utilization: +Math.min((r.weighted_slots / TOTAL_FY_WEEKS * 100), 100).toFixed(1)
-  }));
-  res.json({ all: cleaned, top_available: cleaned.slice(0, 5), high_workload: [...cleaned].reverse().slice(0, 5) });
+  const employees = getActiveEmployeeRows();
+  const fiscalRaw = getAssignmentRows().filter(assignment => isFiscalAssignment(assignment, fy));
+  const metrics = periodMetrics(fiscalRaw, employees, FY_WEEK_COUNT);
+  const cleaned = metrics.availableRows
+    .map(row => ({
+      id: row.id,
+      name: row.name,
+      dept: row.dept,
+      utilization: row.utilization,
+    }))
+    .sort((a, b) => a.utilization - b.utilization);
+
+  res.json({
+    all: cleaned,
+    top_available: cleaned.slice(0, 5),
+    high_workload: [...cleaned].reverse().slice(0, 5),
+  });
 });
 
 router.get('/api/dashboard/pipeline', (_, res) => {

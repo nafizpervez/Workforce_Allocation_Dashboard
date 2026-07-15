@@ -3,24 +3,36 @@
 /* Fixed matrix summary row: allocation averages, revenue totals and weekly averages. */
 
 function averageMatrixValues(values) {
-  if (!values.length) return 0;
+  const numericValues = (values || [])
+    .filter(value => value !== null && value !== undefined)
+    .map(Number)
+    .filter(Number.isFinite);
 
-  return values.reduce((total, value) => total + (Number(value) || 0), 0) /
-    values.length;
+  if (!numericValues.length) return 0;
+
+  return numericValues.reduce((total, value) => total + value, 0) /
+    numericValues.length;
 }
 
 function getEmployeeWeekAllocation(employeeId, month, week) {
+  if (isEmployeeUnavailableForSlot(employeeId, month.y, month.m, week)) {
+    return null;
+  }
+
   const key = `${month.y}-${month.m}-${week}`;
   const assignments = S.matrix[employeeId]?.[key] || [];
 
-  return assignments.reduce(
-    (total, assignment) => total + (Number(assignment.percentage) || 0),
-    0,
-  );
+  return assignments
+    .filter(assignment => !isUnavailableAssignment(assignment))
+    .reduce(
+      (total, assignment) => total + (Number(assignment.percentage) || 0),
+      0,
+    );
 }
 
 function sumCalculatedRevenue(summaries, revenueKey) {
   const calculatedValues = summaries
+    .filter(summary => summary.allocationMeta.fiscalWeekCount > 0)
     .map(summary => summary.revenue[revenueKey])
     .filter(value => value !== null && value !== undefined && Number.isFinite(Number(value)))
     .map(Number);
@@ -35,25 +47,36 @@ function sumCalculatedRevenue(summaries, revenueKey) {
 
 function getMatrixTotalsViewData(employees, months) {
   const summaries = employees.map(employee => getResourceSummaryViewData(employee));
+  const availableSummaries = summaries.filter(
+    summary => summary.allocationMeta.fiscalWeekCount > 0,
+  );
 
   const allocation = Object.fromEntries(
     RESOURCE_SUMMARY_COLUMNS.allocation.map(column => [
       column.key,
-      averageMatrixValues(summaries.map(summary => summary.allocation[column.key])),
+      averageMatrixValues(
+        availableSummaries.map(summary => summary.allocation[column.key]),
+      ),
     ]),
   );
 
   const revenue = Object.fromEntries(
     RESOURCE_SUMMARY_COLUMNS.revenue.map(column => [
       column.key,
-      sumCalculatedRevenue(summaries, column.key),
+      sumCalculatedRevenue(availableSummaries, column.key),
     ]),
   );
 
   const weeklyAllocation = months.flatMap(month =>
     Array.from({ length: RESOURCE_SUMMARY_WEEKS_PER_MONTH }, (_, index) => {
       const week = index + 1;
-      const employeeAllocations = employees.map(employee =>
+      const availableEmployees = getAvailableEmployeesForSlot(
+        employees,
+        month.y,
+        month.m,
+        week,
+      );
+      const employeeAllocations = availableEmployees.map(employee =>
         getEmployeeWeekAllocation(employee.id, month, week),
       );
 
@@ -61,12 +84,14 @@ function getMatrixTotalsViewData(employees, months) {
         month,
         week,
         value: averageMatrixValues(employeeAllocations),
+        availableResourceCount: availableEmployees.length,
       };
     }),
   );
 
   return {
     employeeCount: employees.length,
+    availableFiscalResourceCount: availableSummaries.length,
     allocation,
     revenue,
     weeklyAllocation,
@@ -78,11 +103,12 @@ function renderMatrixTotalsRow(employees, months) {
 
   const totals = getMatrixTotalsViewData(employees, months);
   const resourceLabel = `${totals.employeeCount} visible resource${totals.employeeCount === 1 ? '' : 's'}`;
+  const fiscalResourceLabel = `${totals.availableFiscalResourceCount} available resource${totals.availableFiscalResourceCount === 1 ? '' : 's'}`;
 
   const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation
     .map((column, index) => {
       const value = totals.allocation[column.key];
-      const title = `Average ${column.label} allocation across ${resourceLabel}: ${value.toFixed(1)}%. Empty weeks remain part of the full fiscal-year calculation.`;
+      const title = `Average ${column.label} allocation across ${fiscalResourceLabel}. N/A availability weeks are removed from each employee’s fiscal-year denominator: ${value.toFixed(1)}%.`;
 
       return `
         <td
@@ -99,8 +125,8 @@ function renderMatrixTotalsRow(employees, months) {
     .map((column, index) => {
       const total = totals.revenue[column.key];
       const title = total.value === null
-        ? `No ${column.label} revenue can be calculated for the visible resources until supported designations and hourly rates are assigned.`
-        : `Total ${column.label} revenue for ${total.calculatedResourceCount} of ${resourceLabel}: ${formatExactRevenueValue(total.value)}.`;
+        ? `No ${column.label} revenue can be calculated for the available visible resources until supported designations and hourly rates are assigned.`
+        : `Total ${column.label} revenue for ${total.calculatedResourceCount} available resource${total.calculatedResourceCount === 1 ? '' : 's'}: ${formatExactRevenueValue(total.value)}. N/A weeks are excluded.`;
 
       return `
         <td
@@ -108,6 +134,7 @@ function renderMatrixTotalsRow(employees, months) {
           data-action="open-revenue-breakdown"
           data-total-group="revenue"
           data-total-metric="${column.key}"
+          data-revenue-key="${column.key}"
           role="button"
           tabindex="0"
           aria-label="Open ${esc(column.label)} revenue breakdown"
@@ -119,7 +146,8 @@ function renderMatrixTotalsRow(employees, months) {
 
   const weeklyCells = totals.weeklyAllocation
     .map(item => {
-      const title = `Average total allocation for ${item.month.label} W${item.week} across ${resourceLabel}: ${item.value.toFixed(1)}%. Employees without an assignment in this week contribute 0%.`;
+      const availableLabel = `${item.availableResourceCount} available resource${item.availableResourceCount === 1 ? '' : 's'}`;
+      const title = `Average total allocation for ${item.month.label} W${item.week} across ${availableLabel}: ${item.value.toFixed(1)}%. Resources assigned to N/A in this week are excluded from both the numerator and denominator.`;
 
       return `
         <td

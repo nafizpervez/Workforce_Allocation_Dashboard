@@ -2,40 +2,78 @@
 
 /* ── local utilization (for period selector) ─────────────────── */
 function calcLocalUtil(period) {
-  // Utilization = sum(percentage/100 per slot) / TOTAL_PERIOD_WEEKS * 100
-  // Full day slot = 100%, half day = 50% → weight 1.0 or 0.5
-  const TOTAL_FY_WEEKS = 48; // 12 months × 4 weeks
-  const now = new Date(), curY = now.getFullYear(), curM = now.getMonth() + 1, curD = now.getDate();
+  const now = new Date();
+  const curY = now.getFullYear();
+  const curM = now.getMonth() + 1;
+  const curD = now.getDate();
   const curW = curD <= 7 ? 1 : curD <= 14 ? 2 : curD <= 21 ? 3 : 4;
   const fy = S.fiscalYear;
-  let rel, totalWeeks;
+  const effectiveAssignments = getEffectiveAssignments();
+  let relevantAssignments;
 
   if (period === 'week') {
-    rel = S.assignments.filter(a => a.year === curY && a.month === curM && a.week === curW);
-    totalWeeks = 1;
-  } else if (period === 'month') {
-    rel = S.assignments.filter(a => a.year === curY && a.month === curM);
-    totalWeeks = 4;
-  } else {
-    rel = S.assignments.filter(a =>
-      (a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3)
+    relevantAssignments = effectiveAssignments.filter(assignment =>
+      Number(assignment.year) === curY &&
+      Number(assignment.month) === curM &&
+      Number(assignment.week) === curW,
     );
-    totalWeeks = TOTAL_FY_WEEKS;
+  } else if (period === 'month') {
+    relevantAssignments = effectiveAssignments.filter(assignment =>
+      Number(assignment.year) === curY &&
+      Number(assignment.month) === curM,
+    );
+  } else {
+    relevantAssignments = getEffectiveFiscalAssignments(fy);
   }
 
-  // Sum weighted slots per employee (percentage/100 per slot)
-  const empWeighted = {};
-  for (const a of rel) {
-    empWeighted[a.employee_id] = (empWeighted[a.employee_id] || 0) + (a.percentage / 100);
+  const employeeWeightedSlots = {};
+  for (const assignment of relevantAssignments) {
+    employeeWeightedSlots[assignment.employee_id] =
+      (employeeWeightedSlots[assignment.employee_id] || 0) +
+      ((Number(assignment.percentage) || 0) / 100);
   }
 
-  const active = getActiveEmployees();
-  const all = active.map(e => ({
-    id: e.id, name: e.name, dept: e.dept,
-    utilization: +Math.min(((empWeighted[e.id] || 0) / totalWeeks * 100), 100).toFixed(1)
-  })).sort((a, b) => a.utilization - b.utilization);
+  const all = getActiveEmployees()
+    .map(employee => {
+      let availableWeeks;
 
-  return { all, top_available: all.slice(0, 5), high_workload: [...all].reverse().slice(0, 5) };
+      if (period === 'week') {
+        availableWeeks = isEmployeeUnavailableForSlot(
+          employee.id,
+          curY,
+          curM,
+          curW,
+        ) ? 0 : 1;
+      } else if (period === 'month') {
+        availableWeeks = getEmployeeAvailableMonthWeekCount(
+          employee.id,
+          curY,
+          curM,
+        );
+      } else {
+        availableWeeks = getEmployeeAvailableFiscalWeekCount(employee.id, fy);
+      }
+
+      if (!availableWeeks) return null;
+
+      return {
+        id: employee.id,
+        name: employee.name,
+        dept: employee.dept,
+        utilization: +Math.min(
+          ((employeeWeightedSlots[employee.id] || 0) / availableWeeks) * 100,
+          100,
+        ).toFixed(1),
+      };
+    })
+    .filter(Boolean)
+    .sort((a, b) => a.utilization - b.utilization);
+
+  return {
+    all,
+    top_available: all.slice(0, 5),
+    high_workload: [...all].reverse().slice(0, 5),
+  };
 }
 
 function setInsightsPeriod(card, period) {
@@ -59,9 +97,9 @@ function openEmployeeDetailModal(empId) {
   if (!emp) return;
   const fy = S.fiscalYear;
   // All assignments for this employee in the fiscal year
-  const empAsgs = S.assignments.filter(a => a.employee_id === empId &&
-    ((a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3))
-  ).sort((a, b) => a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.week - b.week);
+  const empAsgs = getEffectiveFiscalAssignments(fy)
+    .filter(a => Number(a.employee_id) === Number(empId))
+    .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.week - b.week);
 
   // Build per-project totals
   const projMap = {};
@@ -81,9 +119,11 @@ function openEmployeeDetailModal(empId) {
 
   // Overall utilization for FY
   // Utilization = weighted slots / 48 FY weeks * 100
-  const TOTAL_FY_WEEKS = 48;
+  const TOTAL_FY_WEEKS = getEmployeeAvailableFiscalWeekCount(empId, fy);
   const weightedTotal = empAsgs.reduce((s, a) => s + a.percentage / 100, 0);
-  const avgUtil = +Math.min((weightedTotal / TOTAL_FY_WEEKS * 100), 100).toFixed(1);
+  const avgUtil = TOTAL_FY_WEEKS
+    ? +Math.min((weightedTotal / TOTAL_FY_WEEKS * 100), 100).toFixed(1)
+    : 0;
   // Peak week = highest single week's combined percentage
   const wMap = {};
   for (const a of empAsgs) { const k = `${a.year}|${a.month}|${a.week}`; wMap[k] = (wMap[k] || 0) + a.percentage; }
@@ -145,7 +185,7 @@ function openEmployeeDetailModal(empId) {
           </div>
         </div>
         <div class="text-xs text-gray-400 mb-3 px-1">
-          FY Utilization = weeks assigned (weighted by %) ÷ 48 FY weeks × 100 &nbsp;·&nbsp; Half-day slot = 0.5 weeks
+          FY Utilization = weighted assignments ÷ available FY weeks × 100; N/A weeks are excluded &nbsp;·&nbsp; Half-day slot = 0.5 weeks
         </div>
         <!-- Per-project breakdown -->
         <div class="text-sm font-semibold text-gray-700 mb-2">Project Assignments</div>

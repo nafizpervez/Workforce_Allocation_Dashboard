@@ -73,9 +73,10 @@ const MONTHLY_PLANNED_WORK_MODES = Object.freeze({
 });
 
 const MONTHLY_REVENUE_CATEGORY_RATE_FIELDS = Object.freeze({
-  serviceDeliveryIntrasourcing: 'professional_service_rate',
-  serviceDeliveryLocalPs: 'pre_sale_rate',
-  preSales: 'pre_sale_rate',
+  trainingDelivery: 'local_rate',
+  serviceDeliveryLocalPs: 'local_rate',
+  serviceDeliveryIntrasourcing: 'intrasourcing_rate',
+  preSales: 'local_rate',
 });
 
 function createMonthlyWorkCategoryTotals() {
@@ -217,6 +218,8 @@ function parseMonthlyWorkMonth(value) {
 }
 
 function classifyMonthlyPlannedWorkType(projectName) {
+  if (isUnavailableProjectName(projectName)) return null;
+
   const normalizedName = String(projectName || '')
     .toLowerCase()
     .replace(/[_–—-]+/g, ' ')
@@ -260,7 +263,7 @@ function classifyMonthlyActualWorkType(workType) {
 function getMonthlyRevenueRate(categoryKey, employee) {
   const field = MONTHLY_REVENUE_CATEGORY_RATE_FIELDS[categoryKey];
 
-  // Training Delivery, Skill Development and General Admin are non-revenue.
+  // Skill Development and General Admin are non-revenue.
   if (!field) {
     return {
       eligible: false,
@@ -350,7 +353,7 @@ function getMonthlyPlannedWorkSeries() {
     actual: createMonthlyWorkSource(),
   }));
 
-  for (const assignment of S.assignments || []) {
+  for (const assignment of getEffectiveFiscalAssignments(S.fiscalYear)) {
     const employeeId = Number(assignment.employee_id);
     if (!activeEmployeeIds.has(employeeId)) continue;
 
@@ -365,6 +368,8 @@ function getMonthlyPlannedWorkSeries() {
     const categoryKey = classifyMonthlyPlannedWorkType(
       getSummaryAssignmentProjectName(assignment),
     );
+    if (!categoryKey) continue;
+
     const plannedHours = WORK_HOURS_PER_WEEK * (percentage / 100);
     const source = rows[index].planned;
     const employee = employeeLookup.byId.get(employeeId) || null;
@@ -418,6 +423,15 @@ function getMonthlyPlannedWorkSeries() {
     const source = rows[index].actual;
     const worker = timesheetRow.worker ?? timesheetRow.employee ?? timesheetRow.resource;
     const projectName = timesheetRow.projectName ?? timesheetRow.project_name ?? timesheetRow.project;
+
+    if (isTimesheetWorkerUnavailableForMonth(
+      worker,
+      parsedMonth.year,
+      parsedMonth.month,
+    )) {
+      continue;
+    }
+
     const employee = findMonthlyWorkEmployeeByName(worker, employeeLookup);
 
     source.hours[categoryKey] += hours;
@@ -686,7 +700,7 @@ function updateMonthlyPlannedWorkNote(mode) {
   if (!note) return;
 
   note.textContent = mode === 'revenue'
-    ? 'Revenue uses each resource’s saved designation rate: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS and Pre - Sales use the Local + Pre Sale rate. Training Delivery, Skill Development and General Admin are non-revenue.'
+    ? 'Revenue uses each resource’s saved designation rates: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre Sale / Training rate. Skill Development and General Admin are non-revenue.'
     : 'Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.';
 }
 

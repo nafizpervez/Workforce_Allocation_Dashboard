@@ -2,6 +2,7 @@ const express = require('express');
 const { getAppDb } = require('../database');
 const {
   REVENUE_DESIGNATIONS,
+  REVENUE_RATE_FIELDS,
   listRevenueRates,
   saveRevenueRates,
 } = require('../services/revenue-rates');
@@ -20,26 +21,28 @@ router.put('/api/revenue-rates', (req, res) => {
 
   const rates = REVENUE_DESIGNATIONS.map(designation => {
     const submitted = submittedMap.get(designation);
-    return {
-      designation,
-      professional_service_rate: Number(submitted?.professional_service_rate),
-      pre_sale_rate: Number(submitted?.pre_sale_rate),
-    };
+    return REVENUE_RATE_FIELDS.reduce((rate, field) => {
+      rate[field] = Number(submitted?.[field]);
+      return rate;
+    }, { designation });
   });
 
   const hasUnknownDesignation = submittedRates.some(rate =>
     !allowedDesignations.has(rate?.designation),
   );
   const hasInvalidRate = rates.some(rate =>
-    !Number.isFinite(rate.professional_service_rate) ||
-    rate.professional_service_rate < 0 ||
-    !Number.isFinite(rate.pre_sale_rate) ||
-    rate.pre_sale_rate < 0,
+    REVENUE_RATE_FIELDS.some(field =>
+      !Number.isFinite(rate[field]) || rate[field] < 0,
+    ),
   );
 
-  if (hasUnknownDesignation || hasInvalidRate || submittedRates.length !== REVENUE_DESIGNATIONS.length) {
+  if (
+    hasUnknownDesignation ||
+    hasInvalidRate ||
+    submittedRates.length !== REVENUE_DESIGNATIONS.length
+  ) {
     return res.status(400).json({
-      error: 'Submit one non-negative Intrasourcing and Local + Pre Sale hourly rate for every supported designation.',
+      error: 'Submit one non-negative Intrasourcing rate and one non-negative shared Local / Pre Sale / Training rate for every supported designation.',
     });
   }
 

@@ -76,9 +76,10 @@ function getFilteredMatrixEmployees() {
   }
 
   if (S.matrixSortAssigned) {
+    const effectiveAssignments = getEffectiveFiscalAssignments(S.fiscalYear);
     employees = [...employees].sort((a, b) =>
-      S.assignments.filter(item => item.employee_id === b.id).length -
-      S.assignments.filter(item => item.employee_id === a.id).length,
+      effectiveAssignments.filter(item => item.employee_id === b.id).length -
+      effectiveAssignments.filter(item => item.employee_id === a.id).length,
     );
   } else if (S.matrixSortHigh) {
     employees = [...employees].sort((a, b) =>
@@ -172,7 +173,7 @@ function renderResourceSummaryCells(employee) {
     const description = rule?.description ||
       'All projects not classified as Intrasourcing, Pre Sale, Training, or General Admin.';
     const percentageTotal = summary.allocationMeta.percentageTotals[column.key];
-    const title = `${description} ${percentageTotal.toFixed(1)} total weekly percentage points ÷ ${summary.allocationMeta.fiscalWeekCount} FY weeks = ${summary.allocation[column.key].toFixed(1)}%.`;
+    const title = `${description} ${percentageTotal.toFixed(1)} total weekly percentage points ÷ ${summary.allocationMeta.fiscalWeekCount} available FY weeks = ${summary.allocation[column.key].toFixed(1)}%.`;
 
     return `
       <td
@@ -188,26 +189,21 @@ function renderResourceSummaryCells(employee) {
   const revenueCells = RESOURCE_SUMMARY_COLUMNS.revenue.map((column, index) => {
     const meta = summary.revenueMeta[column.key];
     const revenue = summary.revenue[column.key];
-    let title = 'Assign a supported designation and save its hourly rates in Reserve Revenue to calculate revenue.';
-
-    if (summary.revenueMeta.hasRevenueRate && column.key === 'service') {
-      title = `${employee.designation} Intrasourcing revenue: ` +
-        `${meta.hours.toFixed(1)} Intrasourcing hours × ${formatExactRevenueValue(meta.rate)} per hour = ${formatExactRevenueValue(revenue)}.`;
-    } else if (summary.revenueMeta.hasRevenueRate) {
-      const categoryHours = meta.categoryHours;
-      const categoryRevenue = meta.categoryRevenue;
-      title = `${employee.designation} Local + Pre Sale revenue: ` +
-        `Local ${categoryHours.local.toFixed(1)}h × ${formatExactRevenueValue(meta.rate)} = ${formatExactRevenueValue(categoryRevenue.local)}; ` +
-        `Pre Sale ${categoryHours.preSale.toFixed(1)}h × ${formatExactRevenueValue(meta.rate)} = ${formatExactRevenueValue(categoryRevenue.preSale)}. ` +
-        `Total = ${formatExactRevenueValue(revenue)}.`;
-    }
+    const title = meta.hasRevenueRate
+      ? `${employee.name} · ${column.label}: ${meta.hours.toFixed(1)}h × ${formatHourlyRateValue(meta.rate)} = ${formatExactRevenueValue(revenue)}. Click for the project-level breakdown.`
+      : `${employee.name} · ${column.label}: assign a supported designation and save the ${column.label} hourly rate in Reserve Revenue. Click for the assignment breakdown.`;
 
     return `
       <td
         class="matrix-fixed-cell sticky-revenue-${index + 1} col-revenue matrix-summary-cell matrix-revenue-cell"
+        data-action="open-revenue-breakdown"
         data-employee-id="${employee.id}"
+        data-revenue-key="${column.key}"
         data-summary-group="revenue"
         data-summary-metric="${column.key}"
+        role="button"
+        tabindex="0"
+        aria-label="Open ${esc(employee.name)} ${esc(column.label)} revenue breakdown"
         title="${esc(title)}"
       >${formatRevenueViewValue(revenue)}</td>
     `;

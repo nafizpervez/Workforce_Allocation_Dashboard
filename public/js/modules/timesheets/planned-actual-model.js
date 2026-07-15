@@ -226,8 +226,7 @@ function buildPlannedActualEffortData() {
     if (key && !employeeByName.has(key)) employeeByName.set(key, employee);
   }
 
-  for (const assignment of S.assignments || []) {
-    if (!assignmentIsInFiscalYear(assignment, fiscalYear)) continue;
+  for (const assignment of getEffectiveFiscalAssignments(fiscalYear)) {
 
     const project = projectsById.get(Number(assignment.project_id));
     const employee = employeesById.get(Number(assignment.employee_id));
@@ -259,6 +258,12 @@ function buildPlannedActualEffortData() {
   for (const row of getVisibleTimesheetRows()) {
     const parsedMonth = parseTimesheetFiscalMonth(row.month, fiscalYear);
     if (!parsedMonth || !isPlannedActualFiscalMonth(row.month, fiscalYear)) continue;
+    if (isUnavailableProjectName(row.projectName)) continue;
+    if (isTimesheetWorkerUnavailableForMonth(
+      row.worker,
+      parsedMonth.year,
+      parsedMonth.month,
+    )) continue;
 
     const hours = Math.max(0, Number(row.qty) || 0);
     if (hours <= 0) continue;

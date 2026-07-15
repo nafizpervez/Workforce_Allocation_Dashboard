@@ -33,6 +33,42 @@
 .modal-enter {
   animation: mi 0.2s ease;
 }
+
+.modal-panel {
+  display: flex;
+  max-height: min(860px, calc(100dvh - 2rem));
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden;
+}
+.modal-header,
+.modal-footer {
+  flex: 0 0 auto;
+}
+.modal-scroll-body {
+  min-height: 0;
+  flex: 1 1 auto;
+  overflow-x: hidden;
+  overflow-y: auto;
+  overscroll-behavior: contain;
+}
+
+@media (max-height: 760px), (max-width: 1024px) {
+  .modal-bd {
+    align-items: center;
+    padding: 8px;
+  }
+  .modal-panel {
+    max-height: calc(100dvh - 16px);
+  }
+  .modal-header,
+  .modal-footer {
+    padding: 14px 18px !important;
+  }
+  .modal-scroll-body > .p-6 {
+    padding: 16px !important;
+  }
+}
 @keyframes mi {
   from {
     opacity: 0;

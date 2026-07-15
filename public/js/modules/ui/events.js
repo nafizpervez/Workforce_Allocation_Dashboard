@@ -64,10 +64,16 @@ function initEvents() {
   /* Matrix table click */
   const matrixTable = document.getElementById('matrixTable');
   matrixTable.addEventListener('click', e => {
-    const revenueTotal = e.target.closest('[data-action="open-revenue-breakdown"]');
-    if (revenueTotal) {
+    const revenueCell = e.target.closest('[data-action="open-revenue-breakdown"]');
+    if (revenueCell) {
       e.stopPropagation();
-      openRevenueBreakdownModal(revenueTotal.dataset.totalMetric);
+      const employeeId = revenueCell.dataset.employeeId
+        ? Number(revenueCell.dataset.employeeId)
+        : null;
+      const revenueKey = revenueCell.dataset.revenueKey ||
+        revenueCell.dataset.totalMetric ||
+        revenueCell.dataset.summaryMetric;
+      openRevenueBreakdownModal(revenueKey, employeeId);
       return;
     }
 
@@ -114,10 +120,16 @@ function initEvents() {
 
   matrixTable.addEventListener('keydown', e => {
     if (!['Enter', ' '].includes(e.key)) return;
-    const revenueTotal = e.target.closest('[data-action="open-revenue-breakdown"]');
-    if (!revenueTotal) return;
+    const revenueCell = e.target.closest('[data-action="open-revenue-breakdown"]');
+    if (!revenueCell) return;
     e.preventDefault();
-    openRevenueBreakdownModal(revenueTotal.dataset.totalMetric);
+    const employeeId = revenueCell.dataset.employeeId
+      ? Number(revenueCell.dataset.employeeId)
+      : null;
+    const revenueKey = revenueCell.dataset.revenueKey ||
+      revenueCell.dataset.totalMetric ||
+      revenueCell.dataset.summaryMetric;
+    openRevenueBreakdownModal(revenueKey, employeeId);
   });
 
   /* Body delegation */

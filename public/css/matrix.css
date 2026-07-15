@@ -23,8 +23,8 @@ table.matrix th {
   white-space: nowrap;
 }
 
-/* The new fixed summary block occupies the same 522px as the former
-   SN + Res ID + Resource + Department columns. */
+/* Fixed summary block: SN + Resource + five allocation columns +
+   four independently calculated revenue columns. */
 :root {
   --name-w: 190px;
   --allocation-w: 36px;
@@ -95,6 +95,24 @@ table.matrix th {
     52px + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--allocation-w) + var(--allocation-w) + var(--revenue-w)
+  );
+}
+
+.sticky-revenue-3 {
+  left: calc(
+    52px + var(--name-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w) +
+    var(--revenue-w) + var(--revenue-w)
+  );
+}
+
+.sticky-revenue-4 {
+  left: calc(
+    52px + var(--name-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w) +
+    var(--revenue-w) + var(--revenue-w) + var(--revenue-w)
   );
   box-shadow: 5px 0 7px rgba(15, 23, 42, 0.08);
 }

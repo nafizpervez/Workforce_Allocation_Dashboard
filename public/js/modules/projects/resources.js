@@ -115,7 +115,7 @@ function downloadAllProjectsExcel() {
     }
 
     const projectRows = (S.projects || []).map((p, idx) => {
-      const asgs = (S.assignments || []).filter(a => a.project_id === p.id);
+      const asgs = getEffectiveFiscalAssignments(S.fiscalYear).filter(a => a.project_id === p.id);
       const employeeIds = [...new Set(asgs.map(a => a.employee_id).filter(Boolean))];
       const resourceNames = employeeIds
         .map(id => (S.employees || []).find(e => e.id === id)?.name)
@@ -165,7 +165,7 @@ function downloadAllProjectsExcel() {
     const summaryRows = [
       { 'Metric': 'Export Date', 'Value': new Date().toLocaleString() },
       { 'Metric': 'Total Projects', 'Value': (S.projects || []).length },
-      { 'Metric': 'Total Assignment Slots', 'Value': (S.assignments || []).length },
+      { 'Metric': 'Total Effective Assignment Slots', 'Value': getEffectiveFiscalAssignments(S.fiscalYear).length },
       { 'Metric': 'Project Import Behavior', 'Value': 'No de-duplication. Duplicate project rows are kept exactly as imported.' },
     ];
 

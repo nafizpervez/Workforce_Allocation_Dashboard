@@ -48,8 +48,9 @@ function getAssignmentModalDateRange(opts, assignment, editing) {
 
   if (year && month && week) return weekDateRange(year, month, week);
 
-  const today = formatDateInputLocal(new Date());
-  return { start: today, end: today };
+  const today = new Date();
+  const slot = getMatrixSlotFromDate(today);
+  return weekDateRange(slot.year, slot.month, slot.week);
 }
 
 function assignmentProjectCombo(selectedId) {
@@ -208,11 +209,27 @@ function openAssignmentModal(opts = {}) {
     <div class="grid grid-cols-2 gap-4">
       <div>
         <label class="field-label">Start Date</label>
-        <input id="fa_start" type="date" class="field-input" value="${dateRange.start}" ${editing ? '' : 'oninput="updateSlotPreview()"'}>
+        <input
+          id="fa_start"
+          type="date"
+          class="field-input"
+          value="${dateRange.start}"
+          data-anchor-start="${dateRange.start}"
+          data-anchor-end="${dateRange.end}"
+          ${editing ? '' : 'oninput="updateSlotPreview()"'}
+        >
       </div>
       <div>
         <label class="field-label">End Date</label>
-        <input id="fa_end" type="date" class="field-input" value="${dateRange.end}" ${editing ? '' : 'oninput="updateSlotPreview()"'}>
+        <input
+          id="fa_end"
+          type="date"
+          class="field-input"
+          value="${dateRange.end}"
+          data-anchor-start="${dateRange.start}"
+          data-anchor-end="${dateRange.end}"
+          ${editing ? '' : 'oninput="updateSlotPreview()"'}
+        >
       </div>
     </div>
   `;
@@ -409,26 +426,39 @@ function wireAssignmentProjectCombobox({ editing, assignment }) {
 }
 
 function setDateRange(preset) {
-  const today = new Date();
+  const startInput = document.getElementById('fa_start');
+  const endInput = document.getElementById('fa_end');
+  if (!startInput || !endInput) return;
+
+  const displayedStart = parseDateInputLocal(startInput.value);
+  if (!displayedStart) return;
+
+  const originalStart = parseDateInputLocal(startInput.dataset.anchorStart);
+  const originalEnd = parseDateInputLocal(startInput.dataset.anchorEnd);
+  const isOriginalClickedWeek = originalStart &&
+    displayedStart.getTime() === originalStart.getTime();
+
   let start;
   let end;
 
   if (preset === 'week') {
-    start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    end = addDaysLocal(start, 6);
+    start = displayedStart;
+    end = isOriginalClickedWeek && originalEnd && originalEnd >= originalStart
+      ? originalEnd
+      : addDaysLocal(displayedStart, 6);
   } else if (preset === 'month') {
-    start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    end = new Date(today.getFullYear(), today.getMonth() + 1, today.getDate());
+    start = new Date(displayedStart.getFullYear(), displayedStart.getMonth(), 1);
+    end = new Date(displayedStart.getFullYear(), displayedStart.getMonth() + 1, 0);
   } else if (preset === '3months') {
-    start = new Date(today.getFullYear(), today.getMonth(), today.getDate());
-    end = new Date(today.getFullYear(), today.getMonth() + 3, today.getDate());
+    start = new Date(displayedStart.getFullYear(), displayedStart.getMonth(), 1);
+    end = new Date(displayedStart.getFullYear(), displayedStart.getMonth() + 3, 0);
   } else {
     start = new Date(S.fiscalYear, 3, 1);
     end = new Date(S.fiscalYear + 1, 2, 31);
   }
 
-  document.getElementById('fa_start').value = formatDateInputLocal(start);
-  document.getElementById('fa_end').value = formatDateInputLocal(end);
+  startInput.value = formatDateInputLocal(start);
+  endInput.value = formatDateInputLocal(end);
   updateSlotPreview();
 }
 

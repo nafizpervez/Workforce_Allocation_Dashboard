@@ -2,7 +2,7 @@
 
 function openYearlyWorkProjectModal(empId) {
   const emp = S.employees.find(e => e.id === empId); if (!emp) return;
-  const TOTAL_FY_WEEKS = 48, empAssignments = S.assignments.filter(a => a.employee_id === empId), projectMap = {};
+  const TOTAL_FY_WEEKS = getEmployeeAvailableFiscalWeekCount(empId, S.fiscalYear), empAssignments = getEffectiveFiscalAssignments(S.fiscalYear).filter(a => a.employee_id === empId), projectMap = {};
   for (const a of empAssignments) { const project = S.projects.find(p => p.id === a.project_id); if (!project) continue; if (!projectMap[a.project_id]) projectMap[a.project_id] = { project_id: a.project_id, code: project.code || a.project_code || '', name: project.name || a.project_name || '', account_name: project.account_name || project.client || a.account_name || '—', product_name: project.product_name || a.product_name || '—', product_family: project.product_family || '—', stage: project.stage || '—', color: project.color || a.project_color || '#8B5CF6', weightedWeeks: 0, slotCount: 0, totalPct: 0 }; projectMap[a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100; projectMap[a.project_id].slotCount += 1; projectMap[a.project_id].totalPct += Number(a.percentage) || 0; }
   const projects = Object.values(projectMap).map(p => ({ ...p, contribution: +((p.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1), avgPct: p.slotCount ? +(p.totalPct / p.slotCount).toFixed(1) : 0 })).sort((a, b) => b.contribution - a.contribution);
   const totalContribution = projects.reduce((sum, p) => sum + p.contribution, 0);
@@ -11,14 +11,15 @@ function openYearlyWorkProjectModal(empId) {
 }
 function renderYearlyWorkByProjectChart() {
   const canvas = document.getElementById('yearlyWorkChart'); if (!canvas) return; if (S.charts.yearlyWork) S.charts.yearlyWork.destroy();
-  const ctx = canvas.getContext('2d'), TOTAL_FY_WEEKS = 48, employees = getActiveEmployees(), empProjectMap = {};
+  const ctx = canvas.getContext('2d'), employees = getActiveEmployees(), empProjectMap = {};
+  const effectiveAssignments = getEffectiveFiscalAssignments(S.fiscalYear);
   for (const e of employees) empProjectMap[e.id] = {};
-  for (const a of S.assignments) { if (!empProjectMap[a.employee_id]) continue; const project = S.projects.find(p => p.id === a.project_id); if (!project) continue; empProjectMap[a.employee_id][a.project_id] ||= { weightedWeeks: 0 }; empProjectMap[a.employee_id][a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100; }
-  const assignedProjectIds = [...new Set(S.assignments.filter(a => employees.some(e => e.id === a.employee_id)).map(a => a.project_id))];
+  for (const a of effectiveAssignments) { if (!empProjectMap[a.employee_id]) continue; const project = S.projects.find(p => p.id === a.project_id); if (!project) continue; empProjectMap[a.employee_id][a.project_id] ||= { weightedWeeks: 0 }; empProjectMap[a.employee_id][a.project_id].weightedWeeks += (Number(a.percentage) || 0) / 100; }
+  const assignedProjectIds = [...new Set(effectiveAssignments.filter(a => employees.some(e => e.id === a.employee_id)).map(a => a.project_id))];
   const assignedProjects = assignedProjectIds.map(pid => S.projects.find(p => p.id === pid)).filter(Boolean).sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
   const labels = employees.map(e => e.name);
-  const datasets = assignedProjects.map(project => ({ label: `${project.code || ''} — ${project.name || ''}`, projectCode: project.code || '', projectName: project.name || '', data: employees.map(e => { const item = empProjectMap[e.id]?.[project.id]; return item ? +((item.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2) : 0; }), backgroundColor: project.color || '#8B5CF6', borderWidth: 0, borderRadius: 2, barPercentage: 0.75, categoryPercentage: 0.78 }));
-  const totalUtilByEmployee = employees.map(e => { const weightedWeeks = Object.values(empProjectMap[e.id] || {}).reduce((sum, item) => sum + item.weightedWeeks, 0); return +((weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(1); });
+  const datasets = assignedProjects.map(project => ({ label: `${project.code || ''} — ${project.name || ''}`, projectCode: project.code || '', projectName: project.name || '', data: employees.map(e => { const item = empProjectMap[e.id]?.[project.id]; const availableWeeks = getEmployeeAvailableFiscalWeekCount(e.id, S.fiscalYear); return item && availableWeeks ? +((item.weightedWeeks / availableWeeks) * 100).toFixed(2) : 0; }), backgroundColor: project.color || '#8B5CF6', borderWidth: 0, borderRadius: 2, barPercentage: 0.75, categoryPercentage: 0.78 }));
+  const totalUtilByEmployee = employees.map(e => { const weightedWeeks = Object.values(empProjectMap[e.id] || {}).reduce((sum, item) => sum + item.weightedWeeks, 0); const availableWeeks = getEmployeeAvailableFiscalWeekCount(e.id, S.fiscalYear); return availableWeeks ? +((weightedWeeks / availableWeeks) * 100).toFixed(1) : 0; });
   S.charts.yearlyWork = new Chart(ctx, { type: 'bar', data: { labels, datasets }, options: { responsive: true, maintainAspectRatio: false, onClick: (event, elements) => { if (!elements.length) return; const emp = employees[elements[0].index]; if (emp) openYearlyWorkProjectModal(emp.id); }, onHover: (event, elements) => { const target = event.native?.target; if (target) target.style.cursor = elements.length ? 'pointer' : 'default'; }, interaction: { mode: 'nearest', intersect: true }, plugins: { legend: { display: true, position: 'right', labels: { boxWidth: 10, boxHeight: 10, font: { size: 10 }, padding: 8, generateLabels: chart => { const shortText = (txt, max = 32) => { const t = String(txt || '').trim(); return t.length > max ? t.slice(0, max - 1) + '…' : t; }; return chart.data.datasets.map((ds, i) => ({ text: shortText(ds.projectName || ds.label), fillStyle: ds.backgroundColor, strokeStyle: ds.backgroundColor, lineWidth: 0, hidden: !chart.isDatasetVisible(i), datasetIndex: i })); } } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 12, weight: '600' }, padding: 10, callbacks: { title: items => `${employees[items[0].dataIndex].name} · Total ${totalUtilByEmployee[items[0].dataIndex]}%`, label: c => { const val = c.parsed.y || 0; if (!val) return ''; return [` ${c.dataset.projectCode}: ${val}%`, ` ${c.dataset.projectName}`]; } } } }, scales: { x: { stacked: true, ticks: { font: { size: 11 }, color: '#374151', maxRotation: 45, minRotation: 35 }, grid: { display: false } }, y: { stacked: true, beginAtZero: true, ticks: { font: { size: 11 }, color: '#6B7280', callback: v => `${v}%` }, grid: { color: '#F3F4F6' }, title: { display: true, text: 'FY workload contribution (%)', font: { size: 11 }, color: '#9CA3AF' } } } } });
 }
 
@@ -29,7 +30,7 @@ function getProjectWisePeopleBreakdown() {
   const employeeMap = new Map(activeEmployees.map(e => [e.id, e]));
   const projectMap = new Map();
 
-  for (const a of S.assignments || []) {
+  for (const a of getEffectiveFiscalAssignments(S.fiscalYear)) {
     const emp = employeeMap.get(a.employee_id);
     if (!emp) continue;
 
@@ -82,7 +83,7 @@ function getProjectWisePeopleBreakdown() {
       peopleList: [...item.people.values()]
         .map(p => ({
           ...p,
-          contribution: +((p.weightedWeeks / TOTAL_FY_WEEKS) * 100).toFixed(2),
+          contribution: +((p.weightedWeeks / Math.max(getEmployeeAvailableFiscalWeekCount(p.employee.id, S.fiscalYear), 1)) * 100).toFixed(2),
           avgPct: p.slotCount ? +(p.totalPct / p.slotCount).toFixed(1) : 0,
           assignedDays: p.assignedDays || 0,
         }))

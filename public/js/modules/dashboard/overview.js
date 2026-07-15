@@ -6,7 +6,7 @@ function renderStats(s) {
   const cards = [
     { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', action: 'view-employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Active team members · click to manage active\/inactive status`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
     { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', action: 'view-projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
-    { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: `Sum of all weekly allocation % ÷ Total assignment slots`, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
+    { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: `Available weekly allocation only; N/A resource-weeks are excluded from numerator and denominator`, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
     { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
     { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Active PS Resources: ${s.ps_count} · Avg Utilization: ${s.avg_utilization}% · Score = avg util ÷ PS count`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
     { v: s.on_time_pct + '%', label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: `On-track projects ÷ Total projects × 100`, icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
@@ -35,7 +35,7 @@ function getAssignmentBurnSeries() {
   const monthIndex = new Map(months.map((m, i) => [`${m.y}-${m.m}`, i]));
   const planned = months.map(() => 0);
 
-  for (const a of S.assignments || []) {
+  for (const a of getEffectiveFiscalAssignments(S.fiscalYear)) {
     if (!activeEmployeeIds.has(a.employee_id)) continue;
     const idx = monthIndex.get(`${a.year}-${a.month}`);
     if (idx === undefined) continue;

@@ -239,11 +239,11 @@ function uniqueNormalizedProductTypes(list) {
   return [...m.values()].sort((a, b) => a.localeCompare(b));
 }
 
-function getFteCount(projId) { return new Set(S.assignments.filter(a => a.project_id === projId).map(a => a.employee_id)).size; }
+function getFteCount(projId) { return new Set(getEffectiveFiscalAssignments(S.fiscalYear).filter(a => a.project_id === projId).map(a => a.employee_id)).size; }
 
 function getAssignedTaskCount(projId) {
   const fy = S.fiscalYear;
-  return S.assignments.filter(a => a.project_id === projId && ((a.year === fy && a.month >= 4) || (a.year === fy + 1 && a.month <= 3))).length;
+  return getEffectiveFiscalAssignments(fy).filter(a => a.project_id === projId).length;
 }
 
 function getRunningSortDate(row) {

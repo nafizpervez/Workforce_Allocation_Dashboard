@@ -192,8 +192,23 @@ function isInactiveTimesheetWorker(workerName) {
 function getVisibleTimesheetRows() {
   // Time Sheet names may not always exactly match the employee master list.
   // Therefore, do NOT require every Time Sheet worker to exist in active employees.
-  // Only remove workers whose names explicitly match inactive employees.
-  return (S.timesheetRows || []).filter(r => !isInactiveTimesheetWorker(r.worker));
+  // Remove explicit inactive employees and employees marked N/A for the entire
+  // Time Sheet month. Partial-month N/A weeks cannot be split from a monthly row.
+  return (S.timesheetRows || []).filter(row => {
+    if (isInactiveTimesheetWorker(row.worker)) return false;
+
+    const parsedMonth = typeof parseMonthlyWorkMonth === 'function'
+      ? parseMonthlyWorkMonth(row.month)
+      : null;
+
+    if (!parsedMonth) return true;
+
+    return !isTimesheetWorkerUnavailableForMonth(
+      row.worker,
+      parsedMonth.year,
+      parsedMonth.month,
+    );
+  });
 }
 
 function getTimesheetMonthOptions() {

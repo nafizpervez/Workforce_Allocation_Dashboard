@@ -1,19 +1,21 @@
-/* Workforce Allocation Dashboard — dashboard/resource-summary.js */
+/* Workforce Allocation Dashboard — dashboard/resource-summary-metrics.js */
 
 /* Allocation classification, fiscal-year utilization and revenue metrics. */
-const RESOURCE_SUMMARY_COLUMNS = {
-  allocation: [
-    { key: 'intrasourcing', label: 'Intrasourcing' },
-    { key: 'local', label: 'Local' },
-    { key: 'preSale', label: 'Pre Sale' },
-    { key: 'training', label: 'Training' },
-    { key: 'generalAdmin', label: 'General Admin' },
-  ],
-  revenue: [
-    { key: 'service', label: 'Intrasourcing' },
-    { key: 'preSale', label: 'Local + Pre Sale' },
-  ],
-};
+const RESOURCE_SUMMARY_COLUMNS = Object.freeze({
+  allocation: Object.freeze([
+    Object.freeze({ key: 'intrasourcing', label: 'Intrasourcing' }),
+    Object.freeze({ key: 'local', label: 'Local' }),
+    Object.freeze({ key: 'preSale', label: 'Pre Sale' }),
+    Object.freeze({ key: 'training', label: 'Training' }),
+    Object.freeze({ key: 'generalAdmin', label: 'General Admin' }),
+  ]),
+  revenue: Object.freeze([
+    Object.freeze({ key: 'intrasourcing', label: 'Intrasourcing' }),
+    Object.freeze({ key: 'local', label: 'Local' }),
+    Object.freeze({ key: 'preSale', label: 'Pre Sale' }),
+    Object.freeze({ key: 'training', label: 'Training' }),
+  ]),
+});
 
 const RESOURCE_ALLOCATION_RULES = Object.freeze([
   Object.freeze({
@@ -46,6 +48,21 @@ const RESOURCE_ALLOCATION_RULE_BY_KEY = Object.freeze(
   Object.fromEntries(RESOURCE_ALLOCATION_RULES.map(rule => [rule.key, rule])),
 );
 
+/* The matrix keeps four separate revenue result columns. Intrasourcing uses
+ * its own hourly rate; Local, Pre Sale and Training share the Local rate. */
+const RESOURCE_REVENUE_RATE_FIELDS = Object.freeze({
+  intrasourcing: 'intrasourcing_rate',
+  local: 'local_rate',
+  preSale: 'local_rate',
+  training: 'local_rate',
+});
+
+const RESOURCE_REVENUE_LABEL_BY_KEY = Object.freeze(
+  Object.fromEntries(
+    RESOURCE_SUMMARY_COLUMNS.revenue.map(column => [column.key, column.label]),
+  ),
+);
+
 function getSummaryAssignmentProjectName(assignment) {
   if (assignment.project_name) return String(assignment.project_name).trim();
 
@@ -56,11 +73,6 @@ function getSummaryAssignmentProjectName(assignment) {
   return String(project?.name || '').trim();
 }
 
-/*
- * Category matching is case-insensitive and searches the complete project name.
- * The flexible separators allow both spaces and hyphens, including repeated
- * combinations such as "Pre - Sale" after normalization.
- */
 function normalizeAllocationProjectName(value) {
   return String(value || '')
     .replace(/[‐‑‒–—−_]+/g, '-')
@@ -71,6 +83,8 @@ function normalizeAllocationProjectName(value) {
 
 function classifyAllocationProject(projectName) {
   const normalizedName = normalizeAllocationProjectName(projectName);
+  if (isUnavailableProjectName(normalizedName)) return 'unavailable';
+
   const matchingRule = RESOURCE_ALLOCATION_RULES.find(rule =>
     rule.pattern.test(normalizedName),
   );
@@ -78,20 +92,7 @@ function classifyAllocationProject(projectName) {
   return matchingRule?.key || 'local';
 }
 
-/*
- * The matrix stores four assignment slots for each of the twelve fiscal-year
- * months. A category's FY allocation is its sum of weekly percentages divided
- * by all 48 FY slots, including empty weeks. Therefore, 100% allocation for
- * 24 weeks contributes 50% to the annual allocation summary.
- */
 const RESOURCE_SUMMARY_WEEKS_PER_MONTH = 4;
-const RESOURCE_INTRASOURCING_REVENUE_CATEGORIES = Object.freeze([
-  'intrasourcing',
-]);
-const RESOURCE_LOCAL_PRESALE_REVENUE_CATEGORIES = Object.freeze([
-  'local',
-  'preSale',
-]);
 
 function getResourceSummaryFiscalWeekCount() {
   return fiscalMonths(S.fiscalYear).length * RESOURCE_SUMMARY_WEEKS_PER_MONTH;
@@ -103,11 +104,17 @@ function createEmptyAllocationTotals() {
   );
 }
 
+function createEmptyRevenueTotals() {
+  return Object.fromEntries(
+    RESOURCE_SUMMARY_COLUMNS.revenue.map(column => [column.key, 0]),
+  );
+}
+
 function getEmployeeFiscalAssignmentTotals(employeeId) {
   const percentageTotals = createEmptyAllocationTotals();
   const hourTotals = createEmptyAllocationTotals();
 
-  S.assignments.forEach(assignment => {
+  getEffectiveFiscalAssignments(S.fiscalYear).forEach(assignment => {
     if (Number(assignment.employee_id) !== Number(employeeId)) return;
 
     const percentage = Number(assignment.percentage);
@@ -116,18 +123,29 @@ function getEmployeeFiscalAssignmentTotals(employeeId) {
     const categoryKey = classifyAllocationProject(
       getSummaryAssignmentProjectName(assignment),
     );
-    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
+    if (!Object.prototype.hasOwnProperty.call(percentageTotals, categoryKey)) return;
 
     percentageTotals[categoryKey] += percentage;
-    hourTotals[categoryKey] += hours;
+    hourTotals[categoryKey] += WORK_HOURS_PER_WEEK * (percentage / 100);
   });
 
   return { percentageTotals, hourTotals };
 }
 
+function getRevenueRateValue(rateRecord, revenueKey) {
+  const field = RESOURCE_REVENUE_RATE_FIELDS[revenueKey];
+  const value = Number(rateRecord?.[field]);
+
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
 function getResourceSummaryViewData(employee) {
-  const fiscalWeekCount = getResourceSummaryFiscalWeekCount();
+  const fiscalWeekCount = getEmployeeAvailableFiscalWeekCount(
+    employee.id,
+    S.fiscalYear,
+  );
   const { percentageTotals, hourTotals } = getEmployeeFiscalAssignmentTotals(employee.id);
+
   const allocation = Object.fromEntries(
     RESOURCE_SUMMARY_COLUMNS.allocation.map(column => [
       column.key,
@@ -135,31 +153,27 @@ function getResourceSummaryViewData(employee) {
     ]),
   );
 
-  const intrasourcingHours = hourTotals.intrasourcing;
-  const localPreSaleCategoryHours = {
-    local: hourTotals.local,
-    preSale: hourTotals.preSale,
+  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const revenue = createEmptyRevenueTotals();
+  const revenueMeta = {
+    designation: employee.designation || '',
+    hasRevenueRateRecord: Boolean(rateRecord),
   };
-  const localPreSaleHours = Object.values(localPreSaleCategoryHours).reduce(
-    (total, hours) => total + hours,
-    0,
-  );
 
-  const rate = getRevenueRateForDesignation(employee.designation);
-  const intrasourcingRate = Number(rate?.professional_service_rate);
-  const localPreSaleRate = Number(rate?.pre_sale_rate);
-  const hasRevenueRate = Boolean(rate) &&
-    Number.isFinite(intrasourcingRate) &&
-    Number.isFinite(localPreSaleRate);
+  RESOURCE_SUMMARY_COLUMNS.revenue.forEach(column => {
+    const hours = Number(hourTotals[column.key]) || 0;
+    const rate = getRevenueRateValue(rateRecord, column.key);
+    const amount = rate === null ? null : hours * rate;
 
-  const localPreSaleCategoryRevenue = Object.fromEntries(
-    RESOURCE_LOCAL_PRESALE_REVENUE_CATEGORIES.map(categoryKey => [
-      categoryKey,
-      hasRevenueRate
-        ? localPreSaleCategoryHours[categoryKey] * localPreSaleRate
-        : null,
-    ]),
-  );
+    revenue[column.key] = amount;
+    revenueMeta[column.key] = {
+      hours,
+      rate,
+      revenue: amount,
+      rateField: RESOURCE_REVENUE_RATE_FIELDS[column.key],
+      hasRevenueRate: rate !== null,
+    };
+  });
 
   return {
     allocation,
@@ -168,35 +182,8 @@ function getResourceSummaryViewData(employee) {
       fiscalWeekCount,
       total: Object.values(allocation).reduce((sum, value) => sum + value, 0),
     },
-    revenue: {
-      service: hasRevenueRate ? intrasourcingHours * intrasourcingRate : null,
-      preSale: hasRevenueRate
-        ? Object.values(localPreSaleCategoryRevenue).reduce(
-          (total, amount) => total + amount,
-          0,
-        )
-        : null,
-    },
-    revenueMeta: {
-      service: {
-        hours: intrasourcingHours,
-        rate: hasRevenueRate ? intrasourcingRate : null,
-        categoryHours: { intrasourcing: intrasourcingHours },
-        categoryRevenue: {
-          intrasourcing: hasRevenueRate
-            ? intrasourcingHours * intrasourcingRate
-            : null,
-        },
-      },
-      preSale: {
-        hours: localPreSaleHours,
-        rate: hasRevenueRate ? localPreSaleRate : null,
-        categoryHours: localPreSaleCategoryHours,
-        categoryRevenue: localPreSaleCategoryRevenue,
-      },
-      designation: employee.designation || '',
-      hasRevenueRate,
-    },
+    revenue,
+    revenueMeta,
   };
 }
 
@@ -236,10 +223,19 @@ function formatExactRevenueValue(value) {
   })}`;
 }
 
+function formatHourlyRateValue(value) {
+  if (value === null || value === undefined || !Number.isFinite(Number(value))) {
+    return '—';
+  }
+
+  return `${formatExactRevenueValue(value)}/h`;
+}
+
 function getRevenueBreakdownCustomerName(assignment, project) {
   return String(
     assignment.account_name ||
     assignment.assignment_customer_name ||
+    assignment.customer_name ||
     project?.account_name ||
     project?.client ||
     project?.name ||
@@ -257,7 +253,27 @@ function getRevenueBreakdownProductName(assignment, project) {
   ).trim() || 'Unspecified Product';
 }
 
+function getRevenueBreakdownDetail(revenueKey, assignment, project) {
+  if (revenueKey === 'preSale') {
+    return getRevenueBreakdownProductName(assignment, project);
+  }
+
+  return getRevenueBreakdownCustomerName(assignment, project);
+}
+
+function getRevenueBreakdownProjectLabel(assignment, project) {
+  const code = String(assignment.project_code || project?.code || '').trim();
+  const name = String(assignment.project_name || project?.name || '').trim();
+
+  if (code && name) return `${code} — ${name}`;
+  return code || name || 'Unspecified Project';
+}
+
 function getMatrixRevenueBreakdown(employees, revenueKey) {
+  if (!Object.prototype.hasOwnProperty.call(RESOURCE_REVENUE_RATE_FIELDS, revenueKey)) {
+    return null;
+  }
+
   const employeeMap = new Map(
     (employees || []).map(employee => [Number(employee.id), employee]),
   );
@@ -267,7 +283,7 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
   let pricedAssignmentCount = 0;
   let unpricedHours = 0;
 
-  S.assignments.forEach(assignment => {
+  getEffectiveFiscalAssignments(S.fiscalYear).forEach(assignment => {
     const employee = employeeMap.get(Number(assignment.employee_id));
     if (!employee) return;
 
@@ -277,43 +293,35 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
     const categoryKey = classifyAllocationProject(
       assignment.project_name || project.name,
     );
-    const included = revenueKey === 'service'
-      ? RESOURCE_INTRASOURCING_REVENUE_CATEGORIES.includes(categoryKey)
-      : RESOURCE_LOCAL_PRESALE_REVENUE_CATEGORIES.includes(categoryKey);
-    if (!included) return;
+    if (categoryKey !== revenueKey) return;
 
     const percentage = Number(assignment.percentage);
-    if (!Number.isFinite(percentage)) return;
+    if (!Number.isFinite(percentage) || percentage <= 0) return;
 
     const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     const rateRecord = getRevenueRateForDesignation(employee.designation);
-    const intrasourcingRate = Number(rateRecord?.professional_service_rate);
-    const localPreSaleRate = Number(rateRecord?.pre_sale_rate);
-    const hasRevenueRate = Boolean(rateRecord) &&
-      Number.isFinite(intrasourcingRate) &&
-      Number.isFinite(localPreSaleRate);
-    const hourlyRate = revenueKey === 'service'
-      ? intrasourcingRate
-      : localPreSaleRate;
-    const revenue = hasRevenueRate ? hours * hourlyRate : null;
-
-    const customerName = getRevenueBreakdownCustomerName(assignment, project);
-    const productName = getRevenueBreakdownProductName(assignment, project);
-    const label = revenueKey === 'service'
-      ? customerName
-      : categoryKey === 'preSale'
-        ? `Pre Sale · ${productName}`
-        : `Local · ${customerName}`;
-    const groupKey = label.toLocaleLowerCase();
+    const hourlyRate = getRevenueRateValue(rateRecord, revenueKey);
+    const revenue = hourlyRate === null ? null : hours * hourlyRate;
+    const projectLabel = getRevenueBreakdownProjectLabel(assignment, project);
+    const detail = getRevenueBreakdownDetail(revenueKey, assignment, project);
+    const rateKey = hourlyRate === null ? 'unpriced' : hourlyRate.toFixed(6);
+    const groupKey = [
+      String(project.id || assignment.project_id || projectLabel).toLowerCase(),
+      detail.toLowerCase(),
+      rateKey,
+    ].join('|');
 
     if (!groups.has(groupKey)) {
       groups.set(groupKey, {
-        label,
+        projectLabel,
+        detail,
+        hourlyRate,
         hours: 0,
         revenue: 0,
         unpricedHours: 0,
         assignmentCount: 0,
         resources: new Set(),
+        designations: new Set(),
       });
     }
 
@@ -321,6 +329,7 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
     group.hours += hours;
     group.assignmentCount += 1;
     group.resources.add(employee.name);
+    if (employee.designation) group.designations.add(employee.designation);
     totalHours += hours;
 
     if (revenue === null) {
@@ -338,18 +347,21 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
     .map(group => ({
       ...group,
       resources: [...group.resources].sort((a, b) => a.localeCompare(b)),
+      designations: [...group.designations].sort((a, b) => a.localeCompare(b)),
       hasCalculatedRevenue: group.hours > group.unpricedHours,
     }))
     .sort((a, b) => {
-      if (b.revenue !== a.revenue) return b.revenue - a.revenue;
-      return a.label.localeCompare(b.label);
+      if (a.projectLabel !== b.projectLabel) {
+        return a.projectLabel.localeCompare(b.projectLabel);
+      }
+      if (a.detail !== b.detail) return a.detail.localeCompare(b.detail);
+      return (a.hourlyRate ?? Infinity) - (b.hourlyRate ?? Infinity);
     });
 
   return {
     revenueKey,
-    labelHeading: revenueKey === 'service'
-      ? 'Customer Name'
-      : 'Category / Customer or Product',
+    revenueLabel: RESOURCE_REVENUE_LABEL_BY_KEY[revenueKey],
+    detailHeading: revenueKey === 'preSale' ? 'Product Name' : 'Customer Name',
     rows,
     totalHours,
     totalRevenue: pricedAssignmentCount ? totalRevenue : null,

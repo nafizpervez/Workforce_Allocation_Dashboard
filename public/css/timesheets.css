@@ -28,8 +28,7 @@
   background: #eef2ff;
 }
 
-.resource-matrix-tab-btn.active,
-.resource-matrix-action-btn {
+.resource-matrix-tab-btn.active {
   border-color: #1d4ed8;
   background: #1d4ed8;
   color: #ffffff;
