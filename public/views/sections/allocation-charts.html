@@ -161,4 +161,122 @@
               </div>
             </div>
           </div>
+
+          <div class="dc monthly-planned-work-card mt-6">
+            <div class="dc-handle" title="Drag card">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                <circle cx="4" cy="3" r="1" />
+                <circle cx="8" cy="3" r="1" />
+                <circle cx="4" cy="6" r="1" />
+                <circle cx="8" cy="6" r="1" />
+                <circle cx="4" cy="9" r="1" />
+                <circle cx="8" cy="9" r="1" />
+              </svg>
+            </div>
+            <div class="bg-white rounded-xl p-6 monthly-planned-work-surface">
+              <div class="monthly-planned-work-header card-title-pad">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-sky-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg class="w-4 h-4 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 20V10" />
+                      <path d="M10 20V4" />
+                      <path d="M16 20v-7" />
+                      <path d="M22 20H2" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">Monthly Preplanned Work Mix</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Resource Assignment plan with Work Summary Time Sheet comparison</p>
+                  </div>
+                </div>
+                <div class="monthly-planned-work-side-meta">
+                  <div id="monthlyPlannedWorkMeta" class="monthly-planned-work-meta"></div>
+                  <div class="monthly-planned-work-source-key" aria-label="Bar position key">
+                    <span class="monthly-planned-work-source-item">
+                      <span class="monthly-planned-work-source-marker planned" aria-hidden="true"></span>
+                      Planned (left bar)
+                    </span>
+                    <span class="monthly-planned-work-source-item">
+                      <span class="monthly-planned-work-source-marker actual" aria-hidden="true"></span>
+                      Actual (right bar)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="monthly-planned-work-chart">
+                <canvas id="monthlyPlannedWorkChart"></canvas>
+              </div>
+
+              <p class="monthly-planned-work-note">
+                Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.
+              </p>
+            </div>
+          </div>
+
+          <div class="dc planned-actual-card mt-6">
+            <div class="dc-handle" title="Drag card">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                <circle cx="4" cy="3" r="1" />
+                <circle cx="8" cy="3" r="1" />
+                <circle cx="4" cy="6" r="1" />
+                <circle cx="8" cy="6" r="1" />
+                <circle cx="4" cy="9" r="1" />
+                <circle cx="8" cy="9" r="1" />
+              </svg>
+            </div>
+            <div class="bg-white rounded-xl p-6 planned-actual-surface">
+              <div class="planned-actual-header card-title-pad">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg class="w-4 h-4 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 6h5" />
+                      <path d="M15 6h5" />
+                      <path d="M8 6l4 6 4-6" />
+                      <path d="M4 18h5" />
+                      <path d="M15 18h5" />
+                      <path d="M8 18l4-6 4 6" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">Plan-to-Execution Map</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">How planned assignments changed into recorded delivery effort</p>
+                  </div>
+                </div>
+                <label class="planned-actual-filter">
+                  <span>Project</span>
+                  <select id="plannedActualProjectFilter" class="field-input">
+                    <option value="">Select a project</option>
+                  </select>
+                </label>
+              </div>
+
+              <div id="plannedActualSummary" class="planned-actual-summary" aria-live="polite"></div>
+
+              <div id="plannedActualContent">
+                <div id="plannedActualFlow" class="planned-actual-flow" aria-live="polite"></div>
+
+                <section class="planned-actual-trend-panel">
+                  <div class="planned-actual-trend-header">
+                    <div>
+                      <h4>Monthly effort progression</h4>
+                      <p>Planned assignment hours compared with actual Time Sheet hours across the fiscal year.</p>
+                    </div>
+                    <div class="planned-actual-trend-key" aria-label="Trend chart legend">
+                      <span><i class="is-planned"></i> Planned</span>
+                      <span><i class="is-actual"></i> Actual</span>
+                    </div>
+                  </div>
+                  <div class="planned-actual-trend-chart">
+                    <canvas id="plannedActualMonthlyChart"></canvas>
+                  </div>
+                </section>
+              </div>
+
+              <div id="plannedActualEmpty" class="planned-actual-empty hidden">
+                No planned assignments or Work Summary Time Sheet hours are available for this fiscal year.
+              </div>
+              <p id="plannedActualProjectNote" class="planned-actual-note"></p>
+            </div>
+          </div>
         </div>

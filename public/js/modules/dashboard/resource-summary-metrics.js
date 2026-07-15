@@ -10,8 +10,8 @@ const RESOURCE_SUMMARY_COLUMNS = {
     { key: 'generalAdmin', label: 'General Admin' },
   ],
   revenue: [
-    { key: 'service', label: 'Service' },
-    { key: 'preSale', label: 'Pre Sale' },
+    { key: 'service', label: 'Intrasourcing' },
+    { key: 'preSale', label: 'Local + Pre Sale' },
   ],
 };
 
@@ -86,10 +86,12 @@ function classifyAllocationProject(projectName) {
  */
 const RESOURCE_SUMMARY_WEEKS_PER_MONTH = 4;
 const RESOURCE_SUMMARY_HOURS_PER_WEEK = 40;
-const RESOURCE_SERVICE_CATEGORIES = Object.freeze([
+const RESOURCE_INTRASOURCING_REVENUE_CATEGORIES = Object.freeze([
   'intrasourcing',
+]);
+const RESOURCE_LOCAL_PRESALE_REVENUE_CATEGORIES = Object.freeze([
   'local',
-  'training',
+  'preSale',
 ]);
 
 function getResourceSummaryFiscalWeekCount() {
@@ -134,43 +136,31 @@ function getResourceSummaryViewData(employee) {
     ]),
   );
 
-  const serviceCategoryHours = Object.fromEntries(
-    RESOURCE_SERVICE_CATEGORIES.map(categoryKey => [
-      categoryKey,
-      hourTotals[categoryKey],
-    ]),
-  );
-  const serviceHours = Object.values(serviceCategoryHours).reduce(
+  const intrasourcingHours = hourTotals.intrasourcing;
+  const localPreSaleCategoryHours = {
+    local: hourTotals.local,
+    preSale: hourTotals.preSale,
+  };
+  const localPreSaleHours = Object.values(localPreSaleCategoryHours).reduce(
     (total, hours) => total + hours,
     0,
   );
-  const preSaleHours = hourTotals.preSale;
-  const rate = getRevenueRateForDesignation(employee.designation);
-  const professionalServiceRate = Number(rate?.professional_service_rate);
-  const preSaleRate = Number(rate?.pre_sale_rate);
-  const hasRevenueRate = Boolean(rate) &&
-    Number.isFinite(professionalServiceRate) &&
-    Number.isFinite(preSaleRate);
 
-  /*
-   * Service revenue is intentionally calculated category by category so the
-   * matrix value is the explicit sum of Intrasourcing, Local and Training
-   * Delivery revenue. All three categories use the Professional Service rate.
-   */
-  const serviceCategoryRevenue = Object.fromEntries(
-    RESOURCE_SERVICE_CATEGORIES.map(categoryKey => [
+  const rate = getRevenueRateForDesignation(employee.designation);
+  const intrasourcingRate = Number(rate?.professional_service_rate);
+  const localPreSaleRate = Number(rate?.pre_sale_rate);
+  const hasRevenueRate = Boolean(rate) &&
+    Number.isFinite(intrasourcingRate) &&
+    Number.isFinite(localPreSaleRate);
+
+  const localPreSaleCategoryRevenue = Object.fromEntries(
+    RESOURCE_LOCAL_PRESALE_REVENUE_CATEGORIES.map(categoryKey => [
       categoryKey,
       hasRevenueRate
-        ? serviceCategoryHours[categoryKey] * professionalServiceRate
+        ? localPreSaleCategoryHours[categoryKey] * localPreSaleRate
         : null,
     ]),
   );
-  const serviceRevenue = hasRevenueRate
-    ? Object.values(serviceCategoryRevenue).reduce(
-      (total, amount) => total + amount,
-      0,
-    )
-    : null;
 
   return {
     allocation,
@@ -180,19 +170,30 @@ function getResourceSummaryViewData(employee) {
       total: Object.values(allocation).reduce((sum, value) => sum + value, 0),
     },
     revenue: {
-      service: serviceRevenue,
-      preSale: hasRevenueRate ? preSaleHours * preSaleRate : null,
+      service: hasRevenueRate ? intrasourcingHours * intrasourcingRate : null,
+      preSale: hasRevenueRate
+        ? Object.values(localPreSaleCategoryRevenue).reduce(
+          (total, amount) => total + amount,
+          0,
+        )
+        : null,
     },
     revenueMeta: {
       service: {
-        hours: serviceHours,
-        rate: hasRevenueRate ? professionalServiceRate : null,
-        categoryHours: serviceCategoryHours,
-        categoryRevenue: serviceCategoryRevenue,
+        hours: intrasourcingHours,
+        rate: hasRevenueRate ? intrasourcingRate : null,
+        categoryHours: { intrasourcing: intrasourcingHours },
+        categoryRevenue: {
+          intrasourcing: hasRevenueRate
+            ? intrasourcingHours * intrasourcingRate
+            : null,
+        },
       },
       preSale: {
-        hours: preSaleHours,
-        rate: hasRevenueRate ? preSaleRate : null,
+        hours: localPreSaleHours,
+        rate: hasRevenueRate ? localPreSaleRate : null,
+        categoryHours: localPreSaleCategoryHours,
+        categoryRevenue: localPreSaleCategoryRevenue,
       },
       designation: employee.designation || '',
       hasRevenueRate,
@@ -278,8 +279,8 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
       assignment.project_name || project.name,
     );
     const included = revenueKey === 'service'
-      ? RESOURCE_SERVICE_CATEGORIES.includes(categoryKey)
-      : categoryKey === 'preSale';
+      ? RESOURCE_INTRASOURCING_REVENUE_CATEGORIES.includes(categoryKey)
+      : RESOURCE_LOCAL_PRESALE_REVENUE_CATEGORIES.includes(categoryKey);
     if (!included) return;
 
     const percentage = Number(assignment.percentage);
@@ -287,18 +288,23 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
 
     const hours = RESOURCE_SUMMARY_HOURS_PER_WEEK * (percentage / 100);
     const rateRecord = getRevenueRateForDesignation(employee.designation);
-    const professionalServiceRate = Number(rateRecord?.professional_service_rate);
-    const preSaleRate = Number(rateRecord?.pre_sale_rate);
+    const intrasourcingRate = Number(rateRecord?.professional_service_rate);
+    const localPreSaleRate = Number(rateRecord?.pre_sale_rate);
     const hasRevenueRate = Boolean(rateRecord) &&
-      Number.isFinite(professionalServiceRate) &&
-      Number.isFinite(preSaleRate);
+      Number.isFinite(intrasourcingRate) &&
+      Number.isFinite(localPreSaleRate);
     const hourlyRate = revenueKey === 'service'
-      ? professionalServiceRate
-      : preSaleRate;
+      ? intrasourcingRate
+      : localPreSaleRate;
     const revenue = hasRevenueRate ? hours * hourlyRate : null;
+
+    const customerName = getRevenueBreakdownCustomerName(assignment, project);
+    const productName = getRevenueBreakdownProductName(assignment, project);
     const label = revenueKey === 'service'
-      ? getRevenueBreakdownCustomerName(assignment, project)
-      : getRevenueBreakdownProductName(assignment, project);
+      ? customerName
+      : categoryKey === 'preSale'
+        ? `Pre Sale · ${productName}`
+        : `Local · ${customerName}`;
     const groupKey = label.toLocaleLowerCase();
 
     if (!groups.has(groupKey)) {
@@ -344,7 +350,7 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
     revenueKey,
     labelHeading: revenueKey === 'service'
       ? 'Customer Name'
-      : 'Product Name / Customer Name',
+      : 'Category / Customer or Product',
     rows,
     totalHours,
     totalRevenue: pricedAssignmentCount ? totalRevenue : null,

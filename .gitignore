@@ -1,8 +1,11 @@
 node_modules/
 .env
 .env.*
+*.db-shm
+*.db-wal
 *.log
 *.pid
 .DS_Store
+Thumbs.db
 .vscode/
 .idea/

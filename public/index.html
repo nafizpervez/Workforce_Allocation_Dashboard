@@ -9,16 +9,16 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=assignment-detail-v1" />
+    <link rel="stylesheet" href="/css/style.css?v=work-summary-restored-v1" />
   </head>
   <body>
     <div data-fragment="/views/header.html"></div>
     <main class="p-8 max-w-[1920px] mx-auto">
       <div id="dashboard-canvas" class="space-y-6">
         <div data-fragment="/views/sections/stats.html"></div>
-        <div data-fragment="/views/sections/resource-matrix.html?v=service-revenue-v2"></div>
-        <div data-fragment="/views/sections/allocation-charts.html"></div>
-        <div data-fragment="/views/sections/work-summary.html"></div>
+        <div data-fragment="/views/sections/resource-matrix.html?v=revenue-remap-v3"></div>
+        <div data-fragment="/views/sections/allocation-charts.html?v=monthly-paired-indicator-v1"></div>
+        <div data-fragment="/views/sections/work-summary.html?v=work-summary-original-v2"></div>
         <div data-fragment="/views/sections/sales-charts.html"></div>
         <div data-fragment="/views/sections/insights.html"></div>
         <div data-fragment="/views/sections/projects.html"></div>
@@ -37,12 +37,15 @@
     <script src="/js/modules/dashboard/insights.js"></script>
     <script src="/js/modules/core/api.js"></script>
     <script src="/js/modules/core/data.js"></script>
-    <script src="/js/modules/dashboard/resource-summary-metrics.js?v=assignment-detail-v1"></script>
-    <script src="/js/modules/dashboard/resource-summary-totals.js?v=assignment-detail-v1"></script>
-    <script src="/js/modules/dashboard/resource-summary.js?v=assignment-detail-v1"></script>
+    <script src="/js/modules/dashboard/resource-summary-metrics.js?v=revenue-remap-v3"></script>
+    <script src="/js/modules/dashboard/resource-summary-totals.js?v=revenue-remap-v3"></script>
+    <script src="/js/modules/dashboard/resource-summary.js?v=revenue-remap-v3"></script>
     <script src="/js/modules/dashboard/overview.js"></script>
-    <script src="/js/modules/timesheets/model.js"></script>
-    <script src="/js/modules/timesheets/charts.js"></script>
+    <script src="/js/modules/dashboard/monthly-planned-work.js?v=monthly-paired-indicator-v1"></script>
+    <script src="/js/modules/timesheets/model.js?v=work-summary-original-v2"></script>
+    <script src="/js/modules/timesheets/planned-actual-model.js?v=plan-execution-v2"></script>
+    <script src="/js/modules/timesheets/planned-actual-chart.js?v=plan-execution-v2"></script>
+    <script src="/js/modules/timesheets/charts.js?v=work-summary-original-v2"></script>
     <script src="/js/modules/timesheets/ui.js"></script>
     <script src="/js/modules/imports/projects.js"></script>
     <script src="/js/modules/imports/assignments.js"></script>
@@ -54,12 +57,12 @@
     <script src="/js/modules/dashboard/sales-ps-type.js"></script>
     <script src="/js/modules/projects/lists.js"></script>
     <script src="/js/modules/ui/modal-shell.js"></script>
-    <script src="/js/modules/ui/assignment-modal.js?v=assignment-detail-v1"></script>
-    <script src="/js/modules/ui/revenue-breakdown-modal.js?v=assignment-detail-v1"></script>
-    <script src="/js/modules/ui/revenue-rates-modal.js?v=service-revenue-v2"></script>
+    <script src="/js/modules/ui/assignment-modal.js?v=revenue-remap-v3"></script>
+    <script src="/js/modules/ui/revenue-breakdown-modal.js?v=revenue-remap-v3"></script>
+    <script src="/js/modules/ui/revenue-rates-modal.js?v=revenue-remap-v3"></script>
     <script src="/js/modules/ui/resource-project-modals.js"></script>
-    <script src="/js/modules/ui/events.js?v=assignment-detail-v1"></script>
+    <script src="/js/modules/ui/events.js?v=revenue-remap-v3"></script>
     <script src="/js/modules/projects/resources.js"></script>
-    <script src="/js/app.js?v=assignment-detail-v1"></script>
+    <script src="/js/app.js?v=revenue-remap-v3"></script>
   </body>
 </html>

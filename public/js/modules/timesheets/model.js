@@ -252,9 +252,15 @@ async function loadSavedTimesheetFromDb() {
 
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
+    renderMonthlyPlannedWorkChart();
+    initPlannedActualEffortEvents();
+    renderPlannedActualEffortChart();
   } catch (e) {
     console.error(e);
     toast('Failed to load saved Time Sheet data from DB', 'error');
+    renderMonthlyPlannedWorkChart();
+    initPlannedActualEffortEvents();
+    renderPlannedActualEffortChart();
   }
 }
 

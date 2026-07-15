@@ -49,10 +49,10 @@ function openRevenueBreakdownModal(revenueKey) {
 
   const employees = getFilteredMatrixEmployees();
   const breakdown = getMatrixRevenueBreakdown(employees, revenueKey);
-  const revenueLabel = revenueKey === 'service' ? 'Service' : 'Pre Sale';
+  const revenueLabel = revenueKey === 'service' ? 'Intrasourcing' : 'Local + Pre Sale';
   const subtitle = revenueKey === 'service'
-    ? 'Revenue grouped by Customer Name for Intrasourcing, Local, and Training Delivery assignments.'
-    : 'Revenue grouped by Product Name, with Customer Name used when Product Name is unavailable.';
+    ? 'Revenue from Intrasourcing assignments only, grouped by Customer Name.'
+    : 'Revenue from Local and Pre Sale assignments. Local is grouped by Customer Name; Pre Sale is grouped by Product Name with Customer Name as fallback.';
   const totalValue = formatRevenueViewValue(breakdown.totalRevenue);
   const exactTotal = breakdown.totalRevenue === null
     ? '—'

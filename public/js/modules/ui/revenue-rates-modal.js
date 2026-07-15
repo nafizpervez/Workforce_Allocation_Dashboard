@@ -24,7 +24,7 @@ function openRevenueRatesModal() {
             data-revenue-designation="${esc(designation)}"
             data-revenue-field="professional_service_rate"
             value="${getRevenueRateModalValue(designation, 'professional_service_rate')}"
-            aria-label="${esc(designation)} Professional Service hourly rate"
+            aria-label="${esc(designation)} Intrasourcing hourly rate"
           >
         </div>
       </td>
@@ -50,12 +50,12 @@ function openRevenueRatesModal() {
   openModal(`
     ${mHdr(
       'Reserve Revenue',
-      'Set the hourly Professional Service and Pre Sale rates for each designation.',
+      'Set hourly rates for Intrasourcing and for Local plus Pre Sale work.',
     )}
 
     <div class="p-6">
       <div class="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
-        One full assignment week equals 40 working hours. The Professional Service rate applies to Intrasourcing, Local and Training Delivery; their revenue values are added together in the Service column. Pre Sale uses its own rate, and General Admin is non-revenue.
+        One full assignment week equals 40 working hours. The Intrasourcing rate applies only to assignments whose project name is classified as Intrasourcing. The Local + Pre Sale rate applies to both Local and Pre Sale assignments. Training and General Admin are non-revenue.
       </div>
 
       <div class="overflow-x-auto rounded-xl border border-gray-200">
@@ -64,10 +64,10 @@ function openRevenueRatesModal() {
             <tr class="border-b border-gray-200">
               <th class="px-4 py-3 text-left text-xs font-semibold text-gray-500">Designation</th>
               <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">
-                Professional Service ($ / hour)
+                Intrasourcing ($ / hour)
               </th>
               <th class="px-4 py-3 text-right text-xs font-semibold text-gray-500">
-                Pre Sale ($ / hour)
+                Local + Pre Sale ($ / hour)
               </th>
             </tr>
           </thead>

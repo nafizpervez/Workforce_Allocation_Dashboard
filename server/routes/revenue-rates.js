@@ -39,7 +39,7 @@ router.put('/api/revenue-rates', (req, res) => {
 
   if (hasUnknownDesignation || hasInvalidRate || submittedRates.length !== REVENUE_DESIGNATIONS.length) {
     return res.status(400).json({
-      error: 'Submit one non-negative Professional Service and Pre Sale hourly rate for every supported designation.',
+      error: 'Submit one non-negative Intrasourcing and Local + Pre Sale hourly rate for every supported designation.',
     });
   }
 

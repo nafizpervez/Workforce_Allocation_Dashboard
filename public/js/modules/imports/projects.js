@@ -196,6 +196,7 @@ async function handleProjectExcelUpload(file) {
     renderProjectWisePeopleChart();
     renderBurndownChart();
     renderBurnupChart();
+    renderMonthlyPlannedWorkChart();
     renderInsights();
     renderNewLogoChart(nlChart, S.newLogoFilter, S.nlProductFilter);
     renderServicePipeline(projs);

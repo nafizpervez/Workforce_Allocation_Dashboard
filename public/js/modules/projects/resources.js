@@ -88,6 +88,7 @@ async function toggleEmployeeActive(empId) {
     renderProjectWisePeopleChart();
     renderBurndownChart();
     renderBurnupChart();
+    renderMonthlyPlannedWorkChart();
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
     renderInsights();

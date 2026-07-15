@@ -26,6 +26,7 @@ async function loadAll() {
     renderTrends(trends);
     renderBurndownChart();
     renderBurnupChart();
+    renderMonthlyPlannedWorkChart();
     renderNewLogoChart(nlChart);
     // Sync initial category button states
     document.querySelectorAll('.nl-prod-btn').forEach(b => {
