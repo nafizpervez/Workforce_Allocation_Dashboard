@@ -190,6 +190,35 @@
                   </div>
                 </div>
                 <div class="monthly-planned-work-side-meta">
+                  <div
+                    class="monthly-planned-work-tabs"
+                    role="tablist"
+                    aria-label="Monthly work mix metric"
+                  >
+                    <button
+                      id="monthlyPlannedPercentTab"
+                      type="button"
+                      class="monthly-planned-work-tab is-active"
+                      data-monthly-work-mode="percent"
+                      role="tab"
+                      aria-selected="true"
+                      onclick="setMonthlyPlannedWorkMode('percent')"
+                    >
+                      Percent Wise
+                    </button>
+                    <button
+                      id="monthlyPlannedRevenueTab"
+                      type="button"
+                      class="monthly-planned-work-tab"
+                      data-monthly-work-mode="revenue"
+                      role="tab"
+                      aria-selected="false"
+                      tabindex="-1"
+                      onclick="setMonthlyPlannedWorkMode('revenue')"
+                    >
+                      Revenue Wise
+                    </button>
+                  </div>
                   <div id="monthlyPlannedWorkMeta" class="monthly-planned-work-meta"></div>
                   <div class="monthly-planned-work-source-key" aria-label="Bar position key">
                     <span class="monthly-planned-work-source-item">
@@ -208,7 +237,7 @@
                 <canvas id="monthlyPlannedWorkChart"></canvas>
               </div>
 
-              <p class="monthly-planned-work-note">
+              <p id="monthlyPlannedWorkNote" class="monthly-planned-work-note">
                 Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.
               </p>
             </div>

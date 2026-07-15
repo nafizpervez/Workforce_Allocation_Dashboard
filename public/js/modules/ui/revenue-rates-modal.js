@@ -119,6 +119,7 @@ async function saveRevenueRates() {
     S.revenueRates = await api('PUT', '/api/revenue-rates', { rates });
     closeModal();
     renderMatrix();
+    renderMonthlyPlannedWorkChart();
     toast('Revenue rates saved');
   } catch (error) {
     toast(error.message, 'error');

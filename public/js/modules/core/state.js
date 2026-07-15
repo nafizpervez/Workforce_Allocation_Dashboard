@@ -37,6 +37,7 @@ const S = {
   individualSummaryMonthFilter: '',
   workSummaryTab: 'team',
   resourceMatrixTab: 'matrix',
+  monthlyPlannedWorkMode: 'percent',
 };
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];

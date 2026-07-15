@@ -18,14 +18,55 @@
   flex-shrink: 0;
 }
 
+.monthly-planned-work-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  padding: 0.2rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 999px;
+  background: #f8fafc;
+}
+
+.monthly-planned-work-tab {
+  min-height: 1.85rem;
+  padding: 0.35rem 0.8rem;
+  border: 0;
+  border-radius: 999px;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 600;
+  line-height: 1;
+  cursor: pointer;
+  transition:
+    background-color 150ms ease,
+    color 150ms ease,
+    box-shadow 150ms ease;
+}
+
+.monthly-planned-work-tab:hover {
+  color: #1d4ed8;
+}
+
+.monthly-planned-work-tab:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.monthly-planned-work-tab.is-active {
+  background: #2563eb;
+  color: #fff;
+  box-shadow: 0 1px 2px rgba(37, 99, 235, 0.24);
+}
+
 .monthly-planned-work-meta {
-  padding-top: 0.15rem;
+  padding-top: 0.05rem;
   color: #94a3b8;
   font-size: 0.75rem;
   font-weight: 500;
   text-align: right;
 }
-
 
 .monthly-planned-work-source-key {
   display: flex;
@@ -80,6 +121,7 @@
 
   .monthly-planned-work-side-meta {
     align-items: flex-start;
+    width: 100%;
   }
 
   .monthly-planned-work-meta {
@@ -87,43 +129,11 @@
     text-align: left;
   }
 
+  .monthly-planned-work-source-key {
+    justify-content: flex-start;
+  }
 
-  
-.monthly-planned-work-source-key {
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  flex-wrap: wrap;
-  gap: 0.45rem 0.9rem;
-  color: #64748b;
-  font-size: 0.72rem;
-  font-weight: 600;
-}
-
-.monthly-planned-work-source-item {
-  display: inline-flex;
-  align-items: center;
-  gap: 0.35rem;
-  white-space: nowrap;
-}
-
-.monthly-planned-work-source-marker {
-  display: inline-block;
-  width: 0.72rem;
-  height: 0.72rem;
-  border-radius: 0.18rem;
-  background: #cbd5e1;
-}
-
-.monthly-planned-work-source-marker.planned {
-  opacity: 0.6;
-}
-
-.monthly-planned-work-source-marker.actual {
-  opacity: 1;
-}
-
-.monthly-planned-work-chart {
+  .monthly-planned-work-chart {
     height: 440px;
   }
 }
