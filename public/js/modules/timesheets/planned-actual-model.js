@@ -234,7 +234,7 @@ function buildPlannedActualEffortData() {
     if (!project || !employee || employee.active === 0 || isNonAssignablePerson(employee.name)) continue;
 
     const percentage = Math.max(0, Number(assignment.percentage) || 0);
-    const hours = 40 * (percentage / 100);
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     if (hours <= 0) continue;
 
     const projectKey = `project:${project.id}`;

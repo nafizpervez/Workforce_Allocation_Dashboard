@@ -188,7 +188,7 @@ function finalizeMonthlyWorkSource(source) {
     (total, hours) => total + hours,
     0,
   );
-  source.totalFteWeeks = source.totalHours / RESOURCE_SUMMARY_HOURS_PER_WEEK;
+  source.totalFteWeeks = source.totalHours / WORK_HOURS_PER_WEEK;
 
   MONTHLY_PLANNED_WORK_CATEGORIES.forEach(category => {
     source.hours[category.key] = +source.hours[category.key].toFixed(2);
@@ -231,7 +231,7 @@ function getMonthlyPlannedWorkSeries() {
     const categoryKey = classifyMonthlyPlannedWorkType(
       getSummaryAssignmentProjectName(assignment),
     );
-    const plannedHours = RESOURCE_SUMMARY_HOURS_PER_WEEK * (percentage / 100);
+    const plannedHours = WORK_HOURS_PER_WEEK * (percentage / 100);
     const source = rows[index].planned;
 
     source.hours[categoryKey] += plannedHours;

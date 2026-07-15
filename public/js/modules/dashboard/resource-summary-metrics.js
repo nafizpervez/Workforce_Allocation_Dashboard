@@ -85,7 +85,6 @@ function classifyAllocationProject(projectName) {
  * 24 weeks contributes 50% to the annual allocation summary.
  */
 const RESOURCE_SUMMARY_WEEKS_PER_MONTH = 4;
-const RESOURCE_SUMMARY_HOURS_PER_WEEK = 40;
 const RESOURCE_INTRASOURCING_REVENUE_CATEGORIES = Object.freeze([
   'intrasourcing',
 ]);
@@ -117,7 +116,7 @@ function getEmployeeFiscalAssignmentTotals(employeeId) {
     const categoryKey = classifyAllocationProject(
       getSummaryAssignmentProjectName(assignment),
     );
-    const hours = RESOURCE_SUMMARY_HOURS_PER_WEEK * (percentage / 100);
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
 
     percentageTotals[categoryKey] += percentage;
     hourTotals[categoryKey] += hours;
@@ -286,7 +285,7 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
     const percentage = Number(assignment.percentage);
     if (!Number.isFinite(percentage)) return;
 
-    const hours = RESOURCE_SUMMARY_HOURS_PER_WEEK * (percentage / 100);
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     const rateRecord = getRevenueRateForDesignation(employee.designation);
     const intrasourcingRate = Number(rateRecord?.professional_service_rate);
     const localPreSaleRate = Number(rateRecord?.pre_sale_rate);
