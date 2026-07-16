@@ -5,11 +5,39 @@
    ================================================================ */
 
 /* ================================================================ STATE */
+const FISCAL_YEAR_START_MONTH = 4;
+
+function getCurrentFiscalYearStart(date = new Date()) {
+  const year = date.getFullYear();
+  return (date.getMonth() + 1) >= FISCAL_YEAR_START_MONTH ? year : year - 1;
+}
+
+function normalizeFiscalYearStart(value, fallback = getCurrentFiscalYearStart()) {
+  const year = Math.trunc(Number(value));
+  return Number.isFinite(year) && year >= 1900 && year <= 9998 ? year : fallback;
+}
+
+function getFiscalYearEnd(fiscalYear) {
+  return normalizeFiscalYearStart(fiscalYear, 2026) + 1;
+}
+
+function fiscalYearDisplayLabel(fiscalYear) {
+  return `FY ${getFiscalYearEnd(fiscalYear)}`;
+}
+
+function fiscalYearRangeLabel(fiscalYear) {
+  const start = normalizeFiscalYearStart(fiscalYear, 2026);
+  return `Apr ${start} – Mar ${start + 1}`;
+}
+
 const S = {
   psTypeData: [],
+  // Existing dashboards remain fixed to FY27 (Apr 2026–Mar 2027).
   fiscalYear: 2026,
-  employees: [], projects: [], assignments: [], revenueRates: [],
-  matrix: {}, employeeUtil: new Map(), charts: {},
+  // Only the Resource Assignment Matrix may move across fiscal years.
+  matrixFiscalYear: getCurrentFiscalYearStart(),
+  employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [],
+  matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},
   searchQuery: '',
   insightsPeriodHigh: 'fiscal',
   insightsPeriodLow: 'fiscal',
@@ -38,6 +66,9 @@ const S = {
   workSummaryTab: 'team',
   resourceMatrixTab: 'matrix',
   monthlyPlannedWorkMode: 'percent',
+  // Blank means the card's default "All" option, which preserves the
+  // established FY27 view. A numeric value is a fiscal-year start year.
+  monthlyPlannedWorkFiscalYear: '',
 };
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
@@ -74,7 +105,7 @@ const NON_ASSIGNABLE_PERSON_KEYS = new Set([
 ]);
 
 /* ── helpers ─────────────────────────────────────────────────── */
-function fiscalMonths(fy) { return [{ y: fy, m: 4 }, { y: fy, m: 5 }, { y: fy, m: 6 }, { y: fy, m: 7 }, { y: fy, m: 8 }, { y: fy, m: 9 }, { y: fy, m: 10 }, { y: fy, m: 11 }, { y: fy, m: 12 }, { y: fy + 1, m: 1 }, { y: fy + 1, m: 2 }, { y: fy + 1, m: 3 }].map(x => ({ ...x, label: `${MN[x.m - 1]} ${x.y}` })); }
+function fiscalMonths(fy = S.fiscalYear) { const start = normalizeFiscalYearStart(fy, S.fiscalYear); return [{ y: start, m: 4 }, { y: start, m: 5 }, { y: start, m: 6 }, { y: start, m: 7 }, { y: start, m: 8 }, { y: start, m: 9 }, { y: start, m: 10 }, { y: start, m: 11 }, { y: start, m: 12 }, { y: start + 1, m: 1 }, { y: start + 1, m: 2 }, { y: start + 1, m: 3 }].map(x => ({ ...x, label: `${MN[x.m - 1]} ${x.y}` })); }
 function esc(s) { return String(s ?? '').replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c])); }
 function uc(u) { return u > 100 ? '#DC2626' : u > 85 ? '#D97706' : u > 50 ? '#2563EB' : '#059669'; }
 function ub(u) { return u > 100 ? 'bg-red-100 text-red-700' : u > 85 ? 'bg-orange-100 text-orange-700' : 'bg-green-100 text-green-700'; }

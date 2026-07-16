@@ -14,7 +14,7 @@ function downloadAssignmentExcel() {
     }
 
     const activeEmployeeIds = getActiveEmployeeIdSet();
-    const rows = (S.assignments || [])
+    const rows = (S.matrixAssignments || [])
       .filter(a => activeEmployeeIds.has(Number(a.employee_id)))
       .sort((a, b) => {
         const ea = (S.employees || []).find(e => e.id === a.employee_id)?.name || '';
@@ -36,7 +36,7 @@ function downloadAssignmentExcel() {
 
         return {
           'SL': idx + 1,
-          'Fiscal Year': `FY ${S.fiscalYear + 1}`,
+          'Fiscal Year': `FY ${S.matrixFiscalYear + 1}`,
           'Assignment ID': a.id || '',
           'Old Employee ID': a.employee_id || '',
           'Resource ID': emp.employee_code || '',
@@ -70,7 +70,7 @@ function downloadAssignmentExcel() {
 
     const summaryRows = [
       { 'Metric': 'Export Date', 'Value': new Date().toLocaleString() },
-      { 'Metric': 'Fiscal Year', 'Value': `FY ${S.fiscalYear + 1}` },
+      { 'Metric': 'Fiscal Year', 'Value': `FY ${S.matrixFiscalYear + 1}` },
       { 'Metric': 'Assignment Rows', 'Value': rows.length },
       { 'Metric': 'Restore Key - Employee', 'Value': 'Resource ID, then Resource Name' },
       { 'Metric': 'Restore Key - Project', 'Value': 'Project Import Row No / Old Project ID first, then Opportunity Number, Project Name, Product Name, and Product Amount fallback. Duplicates are allowed.' },
@@ -295,13 +295,13 @@ async function handleAssignmentExcelUpload(file) {
     }
 
     const ok = confirm(
-      `Bulk Assign Assignment will replace all current FY ${S.fiscalYear + 1} assignment rows, then import ${rows.length} row${rows.length === 1 ? '' : 's'} from this Excel. Continue?`
+      `Bulk Assign Assignment will replace all current FY ${S.matrixFiscalYear + 1} assignment rows, then import ${rows.length} row${rows.length === 1 ? '' : 's'} from this Excel. Continue?`
     );
 
     if (!ok) return;
 
     const result = await api('POST', '/api/assignments/import', {
-      fiscalYear: S.fiscalYear,
+      fiscalYear: S.matrixFiscalYear,
       replaceFiscalYear: true,
       rows,
     });

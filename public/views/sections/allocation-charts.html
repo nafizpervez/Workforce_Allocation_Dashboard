@@ -190,34 +190,47 @@
                   </div>
                 </div>
                 <div class="monthly-planned-work-side-meta">
-                  <div
-                    class="monthly-planned-work-tabs"
-                    role="tablist"
-                    aria-label="Monthly work mix metric"
-                  >
-                    <button
-                      id="monthlyPlannedPercentTab"
-                      type="button"
-                      class="monthly-planned-work-tab is-active"
-                      data-monthly-work-mode="percent"
-                      role="tab"
-                      aria-selected="true"
-                      onclick="setMonthlyPlannedWorkMode('percent')"
+                  <div class="monthly-planned-work-controls">
+                    <label class="monthly-planned-work-fy-filter" for="monthlyPlannedWorkFiscalYearFilter">
+                      <span>FY</span>
+                      <select
+                        id="monthlyPlannedWorkFiscalYearFilter"
+                        class="field-input"
+                        aria-label="Monthly Preplanned Work Mix fiscal year"
+                        onchange="setMonthlyPlannedWorkFiscalYear(this.value)"
+                      >
+                        <option value="">All</option>
+                      </select>
+                    </label>
+                    <div
+                      class="monthly-planned-work-tabs"
+                      role="tablist"
+                      aria-label="Monthly work mix metric"
                     >
-                      Percent Wise
-                    </button>
-                    <button
-                      id="monthlyPlannedRevenueTab"
-                      type="button"
-                      class="monthly-planned-work-tab"
-                      data-monthly-work-mode="revenue"
-                      role="tab"
-                      aria-selected="false"
-                      tabindex="-1"
-                      onclick="setMonthlyPlannedWorkMode('revenue')"
-                    >
-                      Revenue Wise
-                    </button>
+                      <button
+                        id="monthlyPlannedPercentTab"
+                        type="button"
+                        class="monthly-planned-work-tab is-active"
+                        data-monthly-work-mode="percent"
+                        role="tab"
+                        aria-selected="true"
+                        onclick="setMonthlyPlannedWorkMode('percent')"
+                      >
+                        Percent Wise
+                      </button>
+                      <button
+                        id="monthlyPlannedRevenueTab"
+                        type="button"
+                        class="monthly-planned-work-tab"
+                        data-monthly-work-mode="revenue"
+                        role="tab"
+                        aria-selected="false"
+                        tabindex="-1"
+                        onclick="setMonthlyPlannedWorkMode('revenue')"
+                      >
+                        Revenue Wise
+                      </button>
+                    </div>
                   </div>
                   <div id="monthlyPlannedWorkMeta" class="monthly-planned-work-meta"></div>
                   <div class="monthly-planned-work-source-key" aria-label="Bar position key">
@@ -272,12 +285,20 @@
                     <p class="text-xs text-gray-500 mt-0.5">How planned assignments changed into recorded delivery effort</p>
                   </div>
                 </div>
-                <label class="planned-actual-filter">
-                  <span>Project</span>
-                  <select id="plannedActualProjectFilter" class="field-input">
-                    <option value="">Select a project</option>
-                  </select>
-                </label>
+                <div class="planned-actual-filter-group">
+                  <label class="planned-actual-filter is-project">
+                    <span>Project</span>
+                    <select id="plannedActualProjectFilter" class="field-input">
+                      <option value="">Select a project</option>
+                    </select>
+                  </label>
+                  <label class="planned-actual-filter is-month">
+                    <span>Month</span>
+                    <select id="plannedActualMonthFilter" class="field-input">
+                      <option value="">All Months</option>
+                    </select>
+                  </label>
+                </div>
               </div>
 
               <div id="plannedActualSummary" class="planned-actual-summary" aria-live="polite"></div>
@@ -285,7 +306,7 @@
               <div id="plannedActualContent">
                 <div id="plannedActualFlow" class="planned-actual-flow" aria-live="polite"></div>
 
-                <section class="planned-actual-trend-panel">
+                <section id="plannedActualTrendPanel" class="planned-actual-trend-panel">
                   <div class="planned-actual-trend-header">
                     <div>
                       <h4>Monthly effort progression</h4>

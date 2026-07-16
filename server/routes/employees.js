@@ -1,5 +1,6 @@
 const express = require('express');
 const { getAppDb } = require('../database');
+const { canonicalPersonName } = require('../services/person-identity');
 
 const router = express.Router();
 const db = getAppDb();
@@ -31,7 +32,9 @@ router.post('/api/employees', (req, res) => {
     email,
   } = req.body || {};
 
-  if (!name || !dept) {
+  const canonicalName = canonicalPersonName(name);
+
+  if (!canonicalName || !dept) {
     return res.status(400).json({ error: 'name and dept are required' });
   }
 
@@ -45,7 +48,7 @@ router.post('/api/employees', (req, res) => {
     ) VALUES (?, ?, ?, ?, ?)
   `).run(
     employee_code || '',
-    name,
+    canonicalName,
     dept,
     designation || '',
     email || null,
@@ -82,7 +85,7 @@ router.put('/api/employees/:id', (req, res) => {
     WHERE id = ?
   `).run(
     employee_code ?? null,
-    name ?? null,
+    name === undefined || name === null ? null : canonicalPersonName(name),
     dept ?? null,
     designation ?? null,
     email ?? null,

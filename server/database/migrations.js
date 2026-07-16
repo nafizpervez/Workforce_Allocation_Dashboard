@@ -1,4 +1,9 @@
 const { ensureRevenueRatesTable } = require('../services/revenue-rates');
+const {
+  PERSON_IDENTITY_ALIASES,
+  canonicalPersonName,
+  personIdentityKey,
+} = require('../services/person-identity');
 
 function quoteIdent(name) {
   return `"${String(name).replace(/"/g, '""')}"`;
@@ -63,6 +68,107 @@ function ensureTimesheetTable(db) {
   db.prepare('CREATE INDEX IF NOT EXISTS idx_timesheet_entries_work_type ON timesheet_entries(work_type)').run();
 }
 
+
+function canonicalizeKnownPeople(db) {
+  const employeeRows = db.prepare('SELECT id, name FROM employees').all();
+  const updateEmployee = db.prepare('UPDATE employees SET name = ? WHERE id = ?');
+
+  for (const employee of employeeRows) {
+    const canonicalName = canonicalPersonName(employee.name);
+    if (canonicalName && canonicalName !== employee.name) {
+      updateEmployee.run(canonicalName, employee.id);
+    }
+  }
+
+  const canonicalNameByKey = new Map(
+    PERSON_IDENTITY_ALIASES.map(identity => [
+      personIdentityKey(identity.canonicalName),
+      identity.canonicalName,
+    ]),
+  );
+  const timeRows = db.prepare(`
+    SELECT
+      id,
+      month,
+      worker,
+      work_type,
+      project_name,
+      qty,
+      source_file,
+      sheet_name,
+      uploaded_at,
+      updated_at
+    FROM timesheet_entries
+  `).all();
+  const groups = new Map();
+
+  for (const row of timeRows) {
+    const identityKey = personIdentityKey(row.worker);
+    const canonicalName = canonicalNameByKey.get(identityKey);
+    if (!canonicalName) continue;
+
+    const groupKey = [row.month, identityKey, row.work_type, row.project_name].join('\u001F');
+    if (!groups.has(groupKey)) groups.set(groupKey, { canonicalName, rows: [] });
+    groups.get(groupKey).rows.push(row);
+  }
+
+  const updateTimeWorker = db.prepare('UPDATE timesheet_entries SET worker = ? WHERE id = ?');
+  const deleteRow = db.prepare('DELETE FROM timesheet_entries WHERE id = ?');
+  const insertRow = db.prepare(`
+    INSERT INTO timesheet_entries (
+      month,
+      worker,
+      work_type,
+      project_name,
+      qty,
+      source_file,
+      sheet_name,
+      uploaded_at,
+      updated_at
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+  `);
+
+  db.transaction(() => {
+    for (const group of groups.values()) {
+      const needsRewrite = group.rows.length > 1 || group.rows.some(row => (
+        row.worker !== group.canonicalName
+      ));
+      if (!needsRewrite) continue;
+
+      if (group.rows.length === 1) {
+        updateTimeWorker.run(group.canonicalName, group.rows[0].id);
+        continue;
+      }
+
+      const rowsByMostRecent = [...group.rows].sort((a, b) => (
+        String(b.updated_at || '').localeCompare(String(a.updated_at || '')) ||
+        Number(b.id) - Number(a.id)
+      ));
+      const source = rowsByMostRecent[0];
+      const quantity = group.rows.reduce((sum, row) => sum + (Number(row.qty) || 0), 0);
+      const uploadedAt = group.rows
+        .map(row => row.uploaded_at)
+        .filter(Boolean)
+        .sort()[0] || source.updated_at || new Date().toISOString();
+      const updatedAt = source.updated_at || uploadedAt;
+
+      for (const row of group.rows) deleteRow.run(row.id);
+
+      insertRow.run(
+        source.month,
+        group.canonicalName,
+        source.work_type,
+        source.project_name,
+        +quantity.toFixed(4),
+        source.source_file || null,
+        source.sheet_name || null,
+        uploadedAt,
+        updatedAt,
+      );
+    }
+  })();
+}
+
 function runMigrations(db) {
   addColumn(db, 'ALTER TABLE employees ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
   addColumn(db, "ALTER TABLE employees ADD COLUMN designation TEXT DEFAULT ''");
@@ -79,6 +185,8 @@ function runMigrations(db) {
   catch (error) { console.error('Time Sheet table migration failed:', error); }
   try { ensureRevenueRatesTable(db); }
   catch (error) { console.error('Revenue rate table migration failed:', error); }
+  try { canonicalizeKnownPeople(db); }
+  catch (error) { console.error('Person identity canonicalization migration failed:', error); }
 }
 
 module.exports = { runMigrations };

@@ -175,38 +175,7 @@ async function handleProjectExcelUpload(file) {
 
     const result = await api('POST', '/api/projects/import', { rows });
 
-    const [projs, asgs, nlChart, psRevChart, psTypeChart, dl] = await Promise.all([
-      api('GET', '/api/projects'),
-      api('GET', `/api/assignments?fiscalYear=${S.fiscalYear}`),
-      api('GET', '/api/dashboard/new-logo-chart'),
-      api('GET', '/api/dashboard/ps-revenue-chart'),
-      api('GET', '/api/dashboard/ps-type-chart'),
-      api('GET', '/api/dashboard/deadlines'),
-    ]);
-
-    S.projects = projs;
-    S.assignments = asgs;
-    S.psRevenueData = psRevChart;
-    S.psTypeData = psTypeChart;
-    S.lastRunningData = dl;
-
-    buildMatrix();
-    renderMatrix();
-    renderYearlyWorkByProjectChart();
-    renderProjectWisePeopleChart();
-    renderBurndownChart();
-    renderBurnupChart();
-    renderMonthlyPlannedWorkChart();
-    renderInsights();
-    renderNewLogoChart(nlChart, S.newLogoFilter, S.nlProductFilter);
-    renderServicePipeline(projs);
-    applyAndRenderRunning();
-    populateMatrixFilter();
-    populatePipelineStageFilter();
-    populateProductFamilyDropdowns();
-
-    const stats = await api('GET', `/api/dashboard/stats?fiscalYear=${S.fiscalYear}`);
-    renderStats(stats);
+    await loadAll();
 
     toast(`Replaced project list with ${result.inserted_count || 0} project${(result.inserted_count || 0) === 1 ? '' : 's'}`);
     openProjectImportResultModal(result, file.name);

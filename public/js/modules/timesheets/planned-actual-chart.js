@@ -26,6 +26,39 @@ function populatePlannedActualProjectFilter(data) {
   }
 }
 
+function populatePlannedActualMonthFilter(data) {
+  const select = document.getElementById('plannedActualMonthFilter');
+  if (!select) return;
+
+  const current = select.value;
+  select.innerHTML = '<option value="">All Months</option>' +
+    (data.months || []).map(month => (
+      `<option value="${esc(month.key)}">${esc(month.label)}</option>`
+    )).join('');
+
+  select.value = (data.months || []).some(month => month.key === current) ? current : '';
+}
+
+function getPlannedActualScope(project) {
+  if (!project) return null;
+  const monthKey = document.getElementById('plannedActualMonthFilter')?.value || '';
+  if (!monthKey) {
+    return { ...project, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
+  }
+
+  const month = project.monthly.find(item => item.key === monthKey);
+  if (!month) return { ...project, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
+
+  return {
+    ...project,
+    ...month,
+    label: project.label,
+    monthly: [month],
+    selectedMonthKey: month.key,
+    selectedMonthLabel: month.label,
+  };
+}
+
 function renderPlannedActualSummary(data, project) {
   const summary = document.getElementById('plannedActualSummary');
   const note = document.getElementById('plannedActualProjectNote');
@@ -45,6 +78,14 @@ function renderPlannedActualSummary(data, project) {
 
   summary.innerHTML = `
     <div class="planned-actual-metric">
+      <span>Planned resources</span>
+      <strong>${project.plannedResources.length}</strong>
+    </div>
+    <div class="planned-actual-metric">
+      <span>Actual resources</span>
+      <strong>${project.actualResources.length}</strong>
+    </div>
+    <div class="planned-actual-metric">
       <span>Planned effort</span>
       <strong>${esc(formatPlannedActualHours(project.plannedHours))}</strong>
     </div>
@@ -63,7 +104,8 @@ function renderPlannedActualSummary(data, project) {
   `;
 
   if (note) {
-    note.textContent = `FY${data.fiscalYear}: planned hours come from weekly Resource Assignments; actual hours come from Work Summary Time Sheet entries.`;
+    const monthText = project.selectedMonthKey ? ` · ${project.selectedMonthLabel}` : ' · All Months';
+    note.textContent = `FY${data.fiscalYear + 1}${monthText}: planned hours come from weekly Resource Assignments; actual hours come from Work Summary Time Sheet entries.`;
   }
 }
 
@@ -403,13 +445,26 @@ function renderPlannedActualMonthlyChart(project) {
 function renderPlannedActualEffortChart() {
   const empty = document.getElementById('plannedActualEmpty');
   const content = document.getElementById('plannedActualContent');
+  const trendPanel = document.getElementById('plannedActualTrendPanel');
   const data = buildPlannedActualEffortData();
 
   populatePlannedActualProjectFilter(data);
-  const project = getPlannedActualSelection(data);
+  populatePlannedActualMonthFilter(data);
+  const selectedProject = getPlannedActualSelection(data);
+  const project = getPlannedActualScope(selectedProject);
   const hasData = Boolean(project && (project.plannedHours > 0 || project.actualHours > 0));
+  const showMonthlyProgression = Boolean(hasData && !project?.selectedMonthKey);
 
-  if (empty) empty.classList.toggle('hidden', hasData);
+  if (trendPanel) trendPanel.classList.toggle('hidden', !showMonthlyProgression);
+
+  if (empty) {
+    empty.classList.toggle('hidden', hasData);
+    if (!hasData) {
+      const monthText = project?.selectedMonthKey ? ` in ${project.selectedMonthLabel}` : '';
+      const projectText = selectedProject?.label ? ` for ${selectedProject.label}` : '';
+      empty.textContent = `No planned assignments or Work Summary Time Sheet hours are available${projectText}${monthText}.`;
+    }
+  }
   if (content) content.classList.toggle('hidden', !hasData);
 
   renderPlannedActualSummary(data, project);
@@ -423,7 +478,13 @@ function renderPlannedActualEffortChart() {
   }
 
   renderPlannedActualFlow(project);
-  renderPlannedActualMonthlyChart(project);
+
+  if (showMonthlyProgression) {
+    renderPlannedActualMonthlyChart(project);
+  } else if (S.charts.plannedActualEffort) {
+    S.charts.plannedActualEffort.destroy();
+    S.charts.plannedActualEffort = null;
+  }
 }
 
 function initPlannedActualEffortEvents() {
@@ -431,6 +492,12 @@ function initPlannedActualEffortEvents() {
   if (select && select.dataset.bound !== '1') {
     select.dataset.bound = '1';
     select.addEventListener('change', renderPlannedActualEffortChart);
+  }
+
+  const monthSelect = document.getElementById('plannedActualMonthFilter');
+  if (monthSelect && monthSelect.dataset.bound !== '1') {
+    monthSelect.dataset.bound = '1';
+    monthSelect.addEventListener('change', renderPlannedActualEffortChart);
   }
 
   if (document.documentElement.dataset.plannedActualResizeBound !== '1') {

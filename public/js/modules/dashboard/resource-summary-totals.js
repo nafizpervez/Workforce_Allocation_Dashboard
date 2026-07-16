@@ -14,8 +14,8 @@ function averageMatrixValues(values) {
     numericValues.length;
 }
 
-function getEmployeeWeekAllocation(employeeId, month, week) {
-  if (isEmployeeUnavailableForSlot(employeeId, month.y, month.m, week)) {
+function getEmployeeWeekAllocation(employeeId, month, week, unavailableSlots) {
+  if (isEmployeeUnavailableForSlot(employeeId, month.y, month.m, week, unavailableSlots)) {
     return null;
   }
 
@@ -46,6 +46,7 @@ function sumCalculatedRevenue(summaries, revenueKey) {
 }
 
 function getMatrixTotalsViewData(employees, months) {
+  const unavailableSlots = getUnavailableAssignmentSlotSet(S.matrixAssignments);
   const summaries = employees.map(employee => getResourceSummaryViewData(employee));
   const availableSummaries = summaries.filter(
     summary => summary.allocationMeta.fiscalWeekCount > 0,
@@ -75,9 +76,10 @@ function getMatrixTotalsViewData(employees, months) {
         month.y,
         month.m,
         week,
+        S.matrixAssignments,
       );
       const employeeAllocations = availableEmployees.map(employee =>
-        getEmployeeWeekAllocation(employee.id, month, week),
+        getEmployeeWeekAllocation(employee.id, month, week, unavailableSlots),
       );
 
       return {

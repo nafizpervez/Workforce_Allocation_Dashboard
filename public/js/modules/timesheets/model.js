@@ -104,7 +104,9 @@ function normalizeTimesheetRows(rows) {
     const month = String(getRowValue(row, ['Month', 'Months (Date)', 'Month (Date)']) || '').trim();
     const rawWorkType = String(getRowValue(row, ['Work Type', 'WorkType']) || '').trim();
     const workType = normalizeTimesheetWorkType(rawWorkType);
-    const worker = String(getRowValue(row, ['Worker', 'Employee', 'Resource']) || '').trim();
+    const worker = canonicalPersonName(
+      getRowValue(row, ['Worker', 'Employee', 'Resource']),
+    );
     const projectName = String(getRowValue(row, ['Project Name', 'Project']) || '').trim();
     const qtyRaw = getRowValue(row, ['Qty (Hrs)', 'Qty Hrs', 'Quantity', 'Hours', 'Hrs']);
     const qty = Number(String(qtyRaw).replace(/,/g, '')) || 0;
@@ -117,7 +119,7 @@ function aggregateTimesheetRows(rows) {
 
   for (const r of rows || []) {
     const month = String(r.month || '').trim();
-    const worker = String(r.worker || '').trim();
+    const worker = canonicalPersonName(r.worker);
     const workType = String(r.workType || '').trim();
     const projectName = String(r.projectName || '(No project name)').trim();
     const qty = Number(r.qty) || 0;
@@ -146,12 +148,7 @@ function aggregateTimesheetRows(rows) {
 }
 
 function normalizePersonName(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return personIdentityKey(value);
 }
 
 function compactPersonKey(value) {
@@ -240,7 +237,10 @@ async function loadSavedTimesheetFromDb() {
     const data = await api('GET', '/api/timesheet-summary');
     const rows = data.rows || [];
 
-    S.timesheetRows = rows;
+    S.timesheetRows = rows.map(row => ({
+      ...row,
+      worker: canonicalPersonName(row.worker),
+    }));
     S.timesheetFileName = data.last_source_file || '';
     S.timesheetSheetName = data.last_sheet_name || '';
     S.individualSummaryMonthFilter = '';

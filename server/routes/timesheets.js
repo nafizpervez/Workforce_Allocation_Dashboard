@@ -1,5 +1,6 @@
 const express = require('express');
 const { getAppDb } = require('../database');
+const { canonicalPersonName } = require('../services/person-identity');
 const { normalizeTimesheetPayloadRows } = require('../services/timesheet-normalizer');
 const { cleanText, safeNum } = require('../services/values');
 const router = express.Router();
@@ -18,7 +19,10 @@ router.get('/api/timesheet-summary', (_, res) => {
       updated_at
     FROM timesheet_entries
     ORDER BY month, worker, work_type, project_name
-  `).all();
+  `).all().map(row => ({
+    ...row,
+    worker: canonicalPersonName(row.worker),
+  }));
 
   const meta = db.prepare(`
     SELECT source_file, sheet_name, updated_at

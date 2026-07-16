@@ -1,14 +1,21 @@
 const { getAppDb } = require('../database');
+const { canonicalPersonName, personIdentityKey } = require('./person-identity');
 const { cleanText, normCode, normImportAmountKey, normalizeImportNumber } = require('./values');
 
 function compactAssignmentTextKey(value) {
   return cleanText(value).toLowerCase().replace(/[^a-z0-9]+/g, '');
 }
 
+function compactAssignmentPersonKey(value) {
+  return personIdentityKey(value).replace(/\s+/g, '');
+}
+
 function normalizeAssignmentImportRows(rows) {
   return (rows || []).map((raw, idx) => {
     const employeeCode = cleanText(raw.employee_code || raw['Resource ID'] || raw['Employee Code'] || raw['Res ID']).toUpperCase();
-    const employeeName = cleanText(raw.employee_name || raw['Resource Name'] || raw['Employee Name'] || raw['Worker']);
+    const employeeName = canonicalPersonName(
+      raw.employee_name || raw['Resource Name'] || raw['Employee Name'] || raw['Worker'],
+    );
     const projectCode = normCode(raw.project_code || raw['Opportunity Number'] || raw['Project Code'] || raw['SA Number']);
     const projectName = cleanText(raw.project_name || raw['Project Name'] || raw['Opportunity Name']);
     const productName = cleanText(raw.product_name || raw['Product Name'] || raw['Product Description']);
@@ -52,7 +59,7 @@ function buildAssignmentImportResolvers() {
     const codeKey = normCode(e.employee_code);
     if (codeKey && !employeeByCode.has(codeKey)) employeeByCode.set(codeKey, e);
 
-    const nameKey = compactAssignmentTextKey(e.name);
+    const nameKey = compactAssignmentPersonKey(e.name);
     if (nameKey) {
       if (!employeeByName.has(nameKey)) employeeByName.set(nameKey, []);
       employeeByName.get(nameKey).push(e);
@@ -108,7 +115,7 @@ function buildAssignmentImportResolvers() {
         return { employee: employeeByCode.get(normCode(row.employee_code)) };
       }
 
-      const nameKey = compactAssignmentTextKey(row.employee_name);
+      const nameKey = compactAssignmentPersonKey(row.employee_name);
       const byName = nameKey ? employeeByName.get(nameKey) : null;
       if (byName && byName.length === 1) return { employee: byName[0] };
       if (byName && byName.length > 1) {

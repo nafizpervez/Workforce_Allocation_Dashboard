@@ -25,7 +25,7 @@ function getFilteredMatrixEmployees() {
   if (S.matrixProjectFilter) {
     const projectId = Number(S.matrixProjectFilter);
     employees = employees.filter(employee =>
-      S.assignments.some(assignment =>
+      S.matrixAssignments.some(assignment =>
         assignment.employee_id === employee.id &&
         assignment.project_id === projectId,
       ),
@@ -41,7 +41,7 @@ function getFilteredMatrixEmployees() {
   if (S.matrixMonthFilter) {
     const [year, month] = S.matrixMonthFilter.split('-').map(Number);
     employees = employees.filter(employee =>
-      S.assignments.some(assignment =>
+      S.matrixAssignments.some(assignment =>
         assignment.employee_id === employee.id &&
         assignment.year === year &&
         assignment.month === month,
@@ -68,7 +68,7 @@ function getFilteredMatrixEmployees() {
     );
 
     employees = employees.filter(employee =>
-      S.assignments.some(assignment =>
+      S.matrixAssignments.some(assignment =>
         assignment.employee_id === employee.id &&
         matchingProjectIds.has(assignment.project_id),
       ),
@@ -76,18 +76,18 @@ function getFilteredMatrixEmployees() {
   }
 
   if (S.matrixSortAssigned) {
-    const effectiveAssignments = getEffectiveFiscalAssignments(S.fiscalYear);
+    const effectiveAssignments = getEffectiveFiscalAssignments(S.matrixFiscalYear, S.matrixAssignments);
     employees = [...employees].sort((a, b) =>
       effectiveAssignments.filter(item => item.employee_id === b.id).length -
       effectiveAssignments.filter(item => item.employee_id === a.id).length,
     );
   } else if (S.matrixSortHigh) {
     employees = [...employees].sort((a, b) =>
-      (S.employeeUtil.get(b.id) || 0) - (S.employeeUtil.get(a.id) || 0),
+      (S.matrixEmployeeUtil.get(b.id) || 0) - (S.matrixEmployeeUtil.get(a.id) || 0),
     );
   } else if (S.matrixSortLow) {
     employees = [...employees].sort((a, b) =>
-      (S.employeeUtil.get(a.id) || 0) - (S.employeeUtil.get(b.id) || 0),
+      (S.matrixEmployeeUtil.get(a.id) || 0) - (S.matrixEmployeeUtil.get(b.id) || 0),
     );
   }
 
@@ -271,7 +271,7 @@ function renderAssignmentCells(employee, months) {
 
 function renderMatrix() {
   const table = document.getElementById('matrixTable');
-  const months = fiscalMonths(S.fiscalYear);
+  const months = fiscalMonths(S.matrixFiscalYear);
   const employees = getFilteredMatrixEmployees();
 
   table.querySelector('thead').innerHTML = renderMatrixHeader(months);

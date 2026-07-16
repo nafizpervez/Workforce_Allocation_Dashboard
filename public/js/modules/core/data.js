@@ -1,12 +1,145 @@
 /* Workforce Allocation Dashboard — core/data.js */
 
+let matrixFiscalYearLoadInProgress = false;
+
+function syncMatrixFiscalYearControl() {
+  const input = document.getElementById('matrixFiscalYearInput');
+  const range = document.getElementById('matrixFiscalYearRange');
+  const control = document.getElementById('matrixFiscalYearControl');
+  const endYear = getFiscalYearEnd(S.matrixFiscalYear);
+
+  if (input) input.value = String(endYear);
+  if (range) range.textContent = fiscalYearRangeLabel(S.matrixFiscalYear);
+  if (control) {
+    control.setAttribute(
+      'aria-label',
+      `${fiscalYearDisplayLabel(S.matrixFiscalYear)}, ${fiscalYearRangeLabel(S.matrixFiscalYear)}`,
+    );
+  }
+}
+
+function setMatrixFiscalYearControlBusy(isBusy) {
+  matrixFiscalYearLoadInProgress = Boolean(isBusy);
+  ['matrixFiscalYearInput', 'matrixFiscalYearPrevBtn', 'matrixFiscalYearNextBtn'].forEach(id => {
+    const element = document.getElementById(id);
+    if (element) element.disabled = matrixFiscalYearLoadInProgress;
+  });
+  document.getElementById('matrixFiscalYearControl')?.classList.toggle(
+    'opacity-60',
+    matrixFiscalYearLoadInProgress,
+  );
+}
+
+function resetMatrixFiscalYearFilters() {
+  S.matrixProjectFilter = null;
+  S.matrixMonthFilter = '';
+
+  const projectFilter = document.getElementById('matrixProjectFilter');
+  if (projectFilter) projectFilter.value = '';
+
+  const monthFilter = document.getElementById('matrixMonthFilter');
+  if (monthFilter) monthFilter.value = '';
+}
+
+function buildMatrixEmployeeUtilization() {
+  const effectiveAssignments = getEffectiveFiscalAssignments(
+    S.matrixFiscalYear,
+    S.matrixAssignments,
+  );
+  const percentageByEmployee = new Map();
+
+  effectiveAssignments.forEach(assignment => {
+    const employeeId = Number(assignment.employee_id);
+    percentageByEmployee.set(
+      employeeId,
+      (percentageByEmployee.get(employeeId) || 0) + (Number(assignment.percentage) || 0),
+    );
+  });
+
+  S.matrixEmployeeUtil = new Map(
+    getActiveEmployees().map(employee => {
+      const availableWeeks = getEmployeeAvailableFiscalWeekCount(
+        employee.id,
+        S.matrixFiscalYear,
+        S.matrixAssignments,
+      );
+      const utilization = availableWeeks
+        ? (percentageByEmployee.get(Number(employee.id)) || 0) / availableWeeks
+        : 0;
+      return [Number(employee.id), +utilization.toFixed(1)];
+    }),
+  );
+}
+
+async function loadMatrixAssignments({ announce = false } = {}) {
+  const fiscalYear = S.matrixFiscalYear;
+  const assignments = await api('GET', `/api/assignments?fiscalYear=${fiscalYear}`);
+
+  // Ignore a stale response if the user selected another FY while this request was running.
+  if (fiscalYear !== S.matrixFiscalYear) return false;
+
+  S.matrixAssignments = assignments;
+  buildMatrix();
+  buildMatrixEmployeeUtilization();
+  populateMatrixFilter();
+  renderMatrix();
+  syncMatrixFiscalYearControl();
+
+  if (announce) {
+    const assignmentText = assignments.length
+      ? `${assignments.length} assignment row${assignments.length === 1 ? '' : 's'} loaded`
+      : 'new empty assignment cells are ready';
+    toast(`${fiscalYearDisplayLabel(fiscalYear)} matrix selected — ${assignmentText}`);
+  }
+
+  return true;
+}
+
+async function changeMatrixFiscalYear(fiscalStartYear, announce = true) {
+  if (matrixFiscalYearLoadInProgress) return false;
+
+  const nextFiscalYear = normalizeFiscalYearStart(fiscalStartYear, S.matrixFiscalYear);
+  if (nextFiscalYear === S.matrixFiscalYear) {
+    syncMatrixFiscalYearControl();
+    return true;
+  }
+
+  const previousFiscalYear = S.matrixFiscalYear;
+  S.matrixFiscalYear = nextFiscalYear;
+  resetMatrixFiscalYearFilters();
+  syncMatrixFiscalYearControl();
+  setMatrixFiscalYearControlBusy(true);
+
+  try {
+    await loadMatrixAssignments({ announce });
+    return true;
+  } catch (error) {
+    S.matrixFiscalYear = previousFiscalYear;
+    syncMatrixFiscalYearControl();
+    toast(error.message, 'error');
+    console.error(error);
+    return false;
+  } finally {
+    setMatrixFiscalYearControlBusy(false);
+  }
+}
+
 /* ================================================================ LOAD */
 async function loadAll() {
+  syncMatrixFiscalYearControl();
+
   try {
     const fy = S.fiscalYear;
-    const [emps, projs, asgs, revenueRates, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
+    const matrixFy = S.matrixFiscalYear;
+    const fixedAssignmentsRequest = api('GET', `/api/assignments?fiscalYear=${fy}`);
+    const matrixAssignmentsRequest = matrixFy === fy
+      ? fixedAssignmentsRequest
+      : api('GET', `/api/assignments?fiscalYear=${matrixFy}`);
+
+    const [emps, projs, asgs, matrixAsgs, revenueRates, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
       api('GET', '/api/employees'), api('GET', '/api/projects'),
-      api('GET', `/api/assignments?fiscalYear=${fy}`),
+      fixedAssignmentsRequest,
+      matrixAssignmentsRequest,
       api('GET', '/api/revenue-rates'),
       api('GET', `/api/dashboard/stats?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/trends?fiscalYear=${fy}`),
@@ -18,8 +151,16 @@ async function loadAll() {
       api('GET', '/api/dashboard/ps-revenue-chart'),
       api('GET', '/api/dashboard/ps-type-chart'),
     ]);
-    S.employees = emps; S.projects = projs; S.assignments = asgs; S.revenueRates = revenueRates;
+    S.employees = emps.map(employee => ({
+      ...employee,
+      name: canonicalPersonName(employee.name),
+    }));
+    S.projects = projs;
+    S.assignments = asgs;
+    S.matrixAssignments = matrixAsgs;
+    S.revenueRates = revenueRates;
     buildMatrix();
+    buildMatrixEmployeeUtilization();
     S.employeeUtil = new Map(util.all.map(u => [u.id, u.utilization]));
     renderStats(stats);
     renderMatrix();
@@ -35,7 +176,7 @@ async function loadAll() {
       b.style.color = isActive ? 'white' : '#374151';
       b.style.borderColor = isActive ? '#1e40af' : '#e5e7eb';
     });
-    S.psRevenueData = psRevChart;  // keyed by category
+    S.psRevenueData = psRevChart;
     S.psTypeData = psTypeChart;
     renderInsights();
     S.lastRunningData = dl;
@@ -48,10 +189,22 @@ async function loadAll() {
     await loadSavedTimesheetFromDb();
 
     initCardDrag();
-  } catch (e) { toast(e.message, 'error'); console.error(e); }
+    return true;
+  } catch (e) {
+    toast(e.message, 'error');
+    console.error(e);
+    return false;
+  }
 }
 
-function buildMatrix() { S.matrix = {}; for (const a of S.assignments) { const k = `${a.year}-${a.month}-${a.week}`; S.matrix[a.employee_id] ||= {}; (S.matrix[a.employee_id][k] ||= []).push(a); } }
+function buildMatrix() {
+  S.matrix = {};
+  for (const assignment of S.matrixAssignments || []) {
+    const key = `${assignment.year}-${assignment.month}-${assignment.week}`;
+    S.matrix[assignment.employee_id] ||= {};
+    (S.matrix[assignment.employee_id][key] ||= []).push(assignment);
+  }
+}
 
 /* ================================================================ FILTER POPULATION */
 function populateMatrixFilter() {
@@ -64,7 +217,7 @@ function populateMatrixFilter() {
   const ps = document.getElementById('matrixProjectFilter');
   if (ps) {
     const pids = new Set(
-      S.assignments
+      S.matrixAssignments
         .filter(a => activeEmployeeIds.has(a.employee_id))
         .map(a => a.project_id)
     );
@@ -91,12 +244,16 @@ function populateMatrixFilter() {
   }
 
   const ms = document.getElementById('matrixMonthFilter');
-  if (ms && ms.options.length <= 1) {
+  if (ms) {
+    const validMonths = fiscalMonths(S.matrixFiscalYear);
+    const validValues = new Set(validMonths.map(month => `${month.y}-${month.m}`));
+    if (S.matrixMonthFilter && !validValues.has(S.matrixMonthFilter)) S.matrixMonthFilter = '';
     ms.innerHTML =
       '<option value="">All Months</option>' +
-      fiscalMonths(S.fiscalYear)
+      validMonths
         .map(m => `<option value="${m.y}-${m.m}">${esc(m.label)}</option>`)
         .join('');
+    ms.value = S.matrixMonthFilter || '';
   }
 
   const ss = document.getElementById('matrixStageFilter');

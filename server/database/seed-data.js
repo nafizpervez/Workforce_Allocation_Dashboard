@@ -10,7 +10,7 @@ const REAL_EMPLOYEES = [
   ['SGESA00033', 'S.M Abu Saleh', 'sm.abusaleh@esribangladesh.com.bd'],
   ['SGESA00040', 'Arnob Chakrabarty', 'c.arnob@esribangladesh.com.bd'],
   ['SGESA00030', 'Mahmudul Hasan', 'h.mahmudul@esribangladesh.com.bd'],
-  ['SGESA00039', 'Imran Chowdhury', 'c.imran@esribangladesh.com.bd'],
+  ['SGESA00039', 'Shah Imran Ahsan Chowdhury', 'c.imran@esribangladesh.com.bd'],
   ['SGESA00046', 'Md. Jahid Hasan Joy', 'jhasan@esribangladesh.com.bd'],
   ['SGESA00048', 'Masud Iqbal', 'miqbal@esribangladesh.com.bd'],
   ['SGESA00056', 'Md. Masuk Mowla Aunkur', 'maunkur@esribangladesh.com.bd'],

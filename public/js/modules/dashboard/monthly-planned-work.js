@@ -79,6 +79,9 @@ const MONTHLY_REVENUE_CATEGORY_RATE_FIELDS = Object.freeze({
   preSales: 'local_rate',
 });
 
+const monthlyPlannedWorkAssignmentCache = new Map();
+const monthlyPlannedWorkAssignmentRequests = new Map();
+
 function createMonthlyWorkCategoryTotals() {
   return Object.fromEntries(
     MONTHLY_PLANNED_WORK_CATEGORIES.map(category => [category.key, 0]),
@@ -217,6 +220,116 @@ function parseMonthlyWorkMonth(value) {
   return { year, month };
 }
 
+function monthlyPlannedWorkFiscalYearFromMonth(year, month) {
+  const numericYear = Number(year);
+  const numericMonth = Number(month);
+  if (!Number.isFinite(numericYear) || !Number.isFinite(numericMonth)) return null;
+  return numericMonth >= FISCAL_YEAR_START_MONTH ? numericYear : numericYear - 1;
+}
+
+function getSelectedMonthlyPlannedWorkFiscalYear() {
+  const selected = Math.trunc(Number(S.monthlyPlannedWorkFiscalYear));
+  return Number.isFinite(selected) && selected >= 1900 && selected <= 9998
+    ? selected
+    : S.fiscalYear;
+}
+
+function getMonthlyPlannedWorkAssignments(fiscalYear) {
+  const normalizedYear = normalizeFiscalYearStart(fiscalYear, S.fiscalYear);
+
+  if (normalizedYear === Number(S.fiscalYear)) return S.assignments || [];
+  if (normalizedYear === Number(S.matrixFiscalYear)) return S.matrixAssignments || [];
+  if (monthlyPlannedWorkAssignmentCache.has(normalizedYear)) {
+    return monthlyPlannedWorkAssignmentCache.get(normalizedYear);
+  }
+
+  return null;
+}
+
+function ensureMonthlyPlannedWorkAssignments(fiscalYear) {
+  const normalizedYear = normalizeFiscalYearStart(fiscalYear, S.fiscalYear);
+  const available = getMonthlyPlannedWorkAssignments(normalizedYear);
+  if (available !== null) return Promise.resolve(available);
+
+  if (monthlyPlannedWorkAssignmentRequests.has(normalizedYear)) {
+    return monthlyPlannedWorkAssignmentRequests.get(normalizedYear);
+  }
+
+  const request = api('GET', `/api/assignments?fiscalYear=${normalizedYear}`)
+    .then(assignments => {
+      const rows = Array.isArray(assignments) ? assignments : [];
+      monthlyPlannedWorkAssignmentCache.set(normalizedYear, rows);
+      return rows;
+    })
+    .finally(() => monthlyPlannedWorkAssignmentRequests.delete(normalizedYear));
+
+  monthlyPlannedWorkAssignmentRequests.set(normalizedYear, request);
+  return request;
+}
+
+function getMonthlyPlannedWorkFiscalYearOptions() {
+  const years = new Set([
+    Number(S.fiscalYear),
+    Number(S.matrixFiscalYear),
+    getCurrentFiscalYearStart(),
+  ].filter(Number.isFinite));
+
+  for (const cachedYear of monthlyPlannedWorkAssignmentCache.keys()) {
+    years.add(Number(cachedYear));
+  }
+
+  for (const assignment of [...(S.assignments || []), ...(S.matrixAssignments || [])]) {
+    const year = monthlyPlannedWorkFiscalYearFromMonth(assignment.year, assignment.month);
+    if (year !== null) years.add(year);
+  }
+
+  for (const row of S.timesheetRows || []) {
+    const parsed = parseMonthlyWorkMonth(
+      row.month ?? row.Month ?? row.month_label ?? row.monthLabel,
+    );
+    if (!parsed) continue;
+    const year = monthlyPlannedWorkFiscalYearFromMonth(parsed.year, parsed.month);
+    if (year !== null) years.add(year);
+  }
+
+  const finiteYears = [...years].filter(year => Number.isFinite(year));
+  const minimum = Math.min(S.fiscalYear, ...finiteYears);
+  const maximum = Math.max(
+    S.fiscalYear + 10,
+    getCurrentFiscalYearStart() + 10,
+    Number(S.matrixFiscalYear) + 5,
+    ...finiteYears,
+  );
+
+  for (let year = minimum; year <= maximum; year++) years.add(year);
+  return [...years].sort((a, b) => a - b);
+}
+
+function populateMonthlyPlannedWorkFiscalYearFilter() {
+  const select = document.getElementById('monthlyPlannedWorkFiscalYearFilter');
+  if (!select) return;
+
+  const selected = S.monthlyPlannedWorkFiscalYear === ''
+    ? ''
+    : String(getSelectedMonthlyPlannedWorkFiscalYear());
+  const fiscalYears = getMonthlyPlannedWorkFiscalYearOptions();
+
+  select.innerHTML = '<option value="">All</option>' + fiscalYears.map(year => (
+    `<option value="${year}">${esc(fiscalYearDisplayLabel(year))}</option>`
+  )).join('');
+  select.value = selected;
+}
+
+function setMonthlyPlannedWorkFiscalYear(value) {
+  const normalizedValue = String(value ?? '').trim();
+  S.monthlyPlannedWorkFiscalYear = normalizedValue === ''
+    ? ''
+    : normalizeFiscalYearStart(normalizedValue, S.fiscalYear);
+
+  populateMonthlyPlannedWorkFiscalYearFilter();
+  renderMonthlyPlannedWorkChart();
+}
+
 function classifyMonthlyPlannedWorkType(projectName) {
   if (isUnavailableProjectName(projectName)) return null;
 
@@ -339,8 +452,8 @@ function finalizeMonthlyWorkSource(source) {
   source.hasData = source.totalHours > 0;
 }
 
-function getMonthlyPlannedWorkSeries() {
-  const months = fiscalMonths(S.fiscalYear);
+function getMonthlyPlannedWorkSeries(fiscalYear, assignments) {
+  const months = fiscalMonths(fiscalYear);
   const monthIndex = new Map(
     months.map((month, index) => [`${month.y}-${month.m}`, index]),
   );
@@ -353,7 +466,7 @@ function getMonthlyPlannedWorkSeries() {
     actual: createMonthlyWorkSource(),
   }));
 
-  for (const assignment of getEffectiveFiscalAssignments(S.fiscalYear)) {
+  for (const assignment of getEffectiveFiscalAssignments(fiscalYear, assignments)) {
     const employeeId = Number(assignment.employee_id);
     if (!activeEmployeeIds.has(employeeId)) continue;
 
@@ -390,9 +503,10 @@ function getMonthlyPlannedWorkSeries() {
     );
   }
 
-  const actualRows = typeof getVisibleTimesheetRows === 'function'
-    ? getVisibleTimesheetRows()
-    : (S.timesheetRows || []);
+  const actualRows = (S.timesheetRows || []).filter(row => (
+    typeof isInactiveTimesheetWorker !== 'function' ||
+    !isInactiveTimesheetWorker(row.worker)
+  ));
 
   for (const timesheetRow of actualRows) {
     const parsedMonth = parseMonthlyWorkMonth(
@@ -428,6 +542,7 @@ function getMonthlyPlannedWorkSeries() {
       worker,
       parsedMonth.year,
       parsedMonth.month,
+      assignments,
     )) {
       continue;
     }
@@ -454,7 +569,7 @@ function getMonthlyPlannedWorkSeries() {
   });
 
   return {
-    fiscalYear: S.fiscalYear,
+    fiscalYear,
     rows,
     totalPlannedHours: +rows.reduce(
       (sum, row) => sum + row.planned.totalHours,
@@ -724,13 +839,40 @@ function renderMonthlyPlannedWorkChart() {
   const canvas = document.getElementById('monthlyPlannedWorkChart');
   if (!canvas) return;
 
+  populateMonthlyPlannedWorkFiscalYearFilter();
+
+  const fiscalYear = getSelectedMonthlyPlannedWorkFiscalYear();
+  const assignments = getMonthlyPlannedWorkAssignments(fiscalYear);
+
+  if (assignments === null) {
+    if (S.charts.monthlyPlannedWork) {
+      S.charts.monthlyPlannedWork.destroy();
+      S.charts.monthlyPlannedWork = null;
+    }
+
+    const meta = document.getElementById('monthlyPlannedWorkMeta');
+    if (meta) meta.textContent = `Loading ${fiscalYearDisplayLabel(fiscalYear)}…`;
+
+    ensureMonthlyPlannedWorkAssignments(fiscalYear)
+      .then(() => {
+        if (getSelectedMonthlyPlannedWorkFiscalYear() === fiscalYear) {
+          renderMonthlyPlannedWorkChart();
+        }
+      })
+      .catch(error => {
+        console.error(error);
+        toast(`Unable to load ${fiscalYearDisplayLabel(fiscalYear)} assignments`, 'error');
+      });
+    return;
+  }
+
   if (S.charts.monthlyPlannedWork) {
     S.charts.monthlyPlannedWork.destroy();
     S.charts.monthlyPlannedWork = null;
   }
 
   const mode = getMonthlyPlannedWorkMode();
-  const series = getMonthlyPlannedWorkSeries();
+  const series = getMonthlyPlannedWorkSeries(fiscalYear, assignments);
   updateMonthlyPlannedWorkTabs();
   updateMonthlyPlannedWorkMeta(series, mode);
   updateMonthlyPlannedWorkNote(mode);

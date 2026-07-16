@@ -6,8 +6,8 @@
 @import url("./components.css");
 @import url("./drag-drop.css");
 @import url("./sales-charts.css");
-@import url("./timesheets.css");
+@import url("./timesheets.css?v=resource-header-row-v1");
 @import url("./project-lists.css");
 
-@import url("./monthly-planned-work.css?v=revenue-tabs-v1");
+@import url("./monthly-planned-work.css?v=fy-filter-v2");
 @import url("./planned-actual.css");

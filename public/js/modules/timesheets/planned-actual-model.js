@@ -6,6 +6,17 @@ const PLANNED_ACTUAL_RESOURCE_COLORS = [
   '#0369A1', '#BE123C', '#A16207', '#15803D', '#6D28D9', '#0E7490',
 ];
 
+/* Time Sheet project aliases are presentation/resolution rules only. They do
+ * not edit projects, assignments, or stored Time Sheet rows. */
+const PLANNED_ACTUAL_PROJECT_ALIASES = Object.freeze([
+  Object.freeze({
+    sourceNames: Object.freeze(['2023 JUPEM GDAS3-PR']),
+    targetCode: 'SA123456',
+    targetName: 'Esri Malaysia Intrasourcing',
+    fallbackTokens: Object.freeze(['jupem', 'intrasource']),
+  }),
+]);
+
 function normalizePlannedActualText(value) {
   return String(value || '')
     .trim()
@@ -107,6 +118,51 @@ function buildPlannedActualProjectResolver(projects) {
     };
   });
 
+  const aliasTargets = PLANNED_ACTUAL_PROJECT_ALIASES.map(alias => {
+    const targetCode = normalizePlannedActualText(alias.targetCode);
+    const targetName = normalizePlannedActualText(alias.targetName);
+    const canonicalLabel = `${alias.targetCode} — ${alias.targetName}`;
+    const exactTarget = records.find(record => (
+      (targetCode && record.code === targetCode) ||
+      (targetName && record.name === targetName)
+    ));
+    const fallbackCandidates = records.filter(record =>
+      alias.fallbackTokens.every(token => record.full.includes(normalizePlannedActualText(token))),
+    );
+    const fiscalEnd = Number(S.fiscalYear) + 1;
+    const fiscalShort = String(fiscalEnd).slice(-2);
+    const fallbackTarget = exactTarget || fallbackCandidates.sort((a, b) => {
+      const score = record => {
+        let value = 0;
+        if (record.full.includes(`fy${fiscalShort}`)) value += 1000;
+        if (record.full.includes(String(fiscalEnd))) value += 500;
+        if (record.full.includes(String(S.fiscalYear))) value += 250;
+        value += Math.max(0, Number(record.project?.id) || 0) / 100000;
+        return value;
+      };
+      return score(b) - score(a);
+    })[0];
+
+    return {
+      alias,
+      sourceKeys: new Set(alias.sourceNames.map(normalizePlannedActualText)),
+      canonicalLabel,
+      target: fallbackTarget || {
+        project: null,
+        key: `alias:${targetCode || targetName}`,
+        code: targetCode,
+        name: targetName,
+        full: normalizePlannedActualText(canonicalLabel),
+        label: canonicalLabel,
+      },
+    };
+  });
+
+  function canonicalizeRecord(record) {
+    const aliasTarget = aliasTargets.find(item => item.target.key === record.key);
+    return aliasTarget ? { ...record, label: aliasTarget.canonicalLabel } : record;
+  }
+
   const exact = new Map();
   for (const record of records) {
     for (const key of [record.code, record.name, record.full]) {
@@ -119,21 +175,25 @@ function buildPlannedActualProjectResolver(projects) {
     const normalized = normalizePlannedActualText(raw);
 
     if (!normalized) return null;
-    if (exact.has(normalized)) return exact.get(normalized);
+
+    const alias = aliasTargets.find(item => item.sourceKeys.has(normalized));
+    if (alias) return { ...alias.target, label: alias.canonicalLabel };
+
+    if (exact.has(normalized)) return canonicalizeRecord(exact.get(normalized));
 
     const codeMatch = records.find(record => (
       record.code &&
       record.code.length >= 4 &&
       (` ${normalized} `).includes(` ${record.code} `)
     ));
-    if (codeMatch) return codeMatch;
+    if (codeMatch) return canonicalizeRecord(codeMatch);
 
     const nameMatch = records.find(record => (
       record.name &&
       record.name.length >= 6 &&
       (normalized.includes(record.name) || record.name.includes(normalized))
     ));
-    if (nameMatch) return nameMatch;
+    if (nameMatch) return canonicalizeRecord(nameMatch);
 
     return {
       project: null,
@@ -169,6 +229,12 @@ function addPlannedActualMonthHours(map, year, month, hours) {
   map.set(key, (map.get(key) || 0) + numericHours);
 }
 
+function addPlannedActualMonthResourceHours(map, year, month, resourceKey, resourceName, hours) {
+  const monthKey = plannedActualMonthKey(year, month);
+  if (!map.has(monthKey)) map.set(monthKey, new Map());
+  addPlannedActualHours(map.get(monthKey), resourceKey, resourceName, hours);
+}
+
 function getOrCreatePlannedActualProject(projectMap, key, label, project = null) {
   if (!projectMap.has(key)) {
     projectMap.set(key, {
@@ -177,11 +243,15 @@ function getOrCreatePlannedActualProject(projectMap, key, label, project = null)
       label: label || 'Unnamed project',
       plannedByResource: new Map(),
       actualByResource: new Map(),
+      plannedResourcesByMonth: new Map(),
+      actualResourcesByMonth: new Map(),
       plannedByMonth: new Map(),
       actualByMonth: new Map(),
       plannedHours: 0,
       actualHours: 0,
     });
+  } else if (label && projectMap.get(key).label !== label) {
+    projectMap.get(key).label = label;
   }
 
   return projectMap.get(key);
@@ -212,10 +282,48 @@ function buildPlannedActualResourceChanges(plannedResources, actualResources) {
   ));
 }
 
+function finalizePlannedActualResources(resourceMap) {
+  return [...(resourceMap || new Map()).values()]
+    .map(resource => ({ ...resource, hours: +resource.hours.toFixed(2) }))
+    .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
+}
+
+function buildPlannedActualScope(plannedMap, actualMap, plannedHours, actualHours) {
+  const plannedResources = finalizePlannedActualResources(plannedMap);
+  const actualResources = finalizePlannedActualResources(actualMap);
+  const normalizedPlannedHours = +Number(plannedHours || 0).toFixed(2);
+  const normalizedActualHours = +Number(actualHours || 0).toFixed(2);
+  const varianceHours = +(normalizedActualHours - normalizedPlannedHours).toFixed(2);
+  const variancePct = normalizedPlannedHours > 0
+    ? +((varianceHours / normalizedPlannedHours) * 100).toFixed(1)
+    : (normalizedActualHours > 0 ? null : 0);
+  const plannedKeys = new Set(plannedResources.map(resource => resource.key));
+  const actualKeys = new Set(actualResources.map(resource => resource.key));
+  const retainedKeys = [...plannedKeys].filter(key => actualKeys.has(key));
+  const unionSize = new Set([...plannedKeys, ...actualKeys]).size;
+
+  return {
+    plannedByResource: new Map(plannedResources.map(resource => [resource.key, resource])),
+    actualByResource: new Map(actualResources.map(resource => [resource.key, resource])),
+    plannedResources,
+    actualResources,
+    plannedHours: normalizedPlannedHours,
+    actualHours: normalizedActualHours,
+    varianceHours,
+    variancePct,
+    addedResources: actualResources.filter(resource => !plannedKeys.has(resource.key)),
+    removedResources: plannedResources.filter(resource => !actualKeys.has(resource.key)),
+    retainedResources: actualResources.filter(resource => plannedKeys.has(resource.key)),
+    teamOverlapPct: unionSize > 0 ? +((retainedKeys.length / unionSize) * 100).toFixed(1) : 0,
+    resourceChanges: buildPlannedActualResourceChanges(plannedResources, actualResources),
+    totalHours: +(normalizedPlannedHours + normalizedActualHours).toFixed(2),
+  };
+}
+
 function buildPlannedActualEffortData() {
+  // Plan-to-Execution remains on the dashboard's established FY27 scope.
   const fiscalYear = S.fiscalYear;
   const fiscalMonthList = fiscalMonths(fiscalYear);
-  const projectsById = new Map((S.projects || []).map(project => [Number(project.id), project]));
   const employeesById = new Map((S.employees || []).map(employee => [Number(employee.id), employee]));
   const employeeByName = new Map();
   const projectMap = new Map();
@@ -226,32 +334,39 @@ function buildPlannedActualEffortData() {
     if (key && !employeeByName.has(key)) employeeByName.set(key, employee);
   }
 
-  for (const assignment of getEffectiveFiscalAssignments(fiscalYear)) {
-
-    const project = projectsById.get(Number(assignment.project_id));
+  for (const assignment of getEffectiveFiscalAssignments(fiscalYear, S.assignments)) {
     const employee = employeesById.get(Number(assignment.employee_id));
-    if (!project || !employee || employee.active === 0 || isNonAssignablePerson(employee.name)) continue;
+    if (!employee || employee.active === 0 || isNonAssignablePerson(employee.name)) continue;
+
+    const resolvedProject = resolveProject(
+      assignment.project_name || `${assignment.project_code || ''} ${assignment.project_name || ''}`,
+    ) || resolveProject(plannedActualProjectLabel(
+      (S.projects || []).find(project => Number(project.id) === Number(assignment.project_id)),
+    ));
+    if (!resolvedProject) continue;
 
     const percentage = Math.max(0, Number(assignment.percentage) || 0);
     const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     if (hours <= 0) continue;
 
-    const projectKey = `project:${project.id}`;
     const projectEntry = getOrCreatePlannedActualProject(
       projectMap,
-      projectKey,
-      plannedActualProjectLabel(project),
-      project
+      resolvedProject.key,
+      resolvedProject.label,
+      resolvedProject.project,
     );
     const resourceKey = `employee:${employee.id}`;
 
     addPlannedActualHours(projectEntry.plannedByResource, resourceKey, employee.name, hours);
-    addPlannedActualMonthHours(
-      projectEntry.plannedByMonth,
+    addPlannedActualMonthResourceHours(
+      projectEntry.plannedResourcesByMonth,
       assignment.year,
       assignment.month,
-      hours
+      resourceKey,
+      employee.name,
+      hours,
     );
+    addPlannedActualMonthHours(projectEntry.plannedByMonth, assignment.year, assignment.month, hours);
     projectEntry.plannedHours += hours;
   }
 
@@ -259,11 +374,7 @@ function buildPlannedActualEffortData() {
     const parsedMonth = parseTimesheetFiscalMonth(row.month, fiscalYear);
     if (!parsedMonth || !isPlannedActualFiscalMonth(row.month, fiscalYear)) continue;
     if (isUnavailableProjectName(row.projectName)) continue;
-    if (isTimesheetWorkerUnavailableForMonth(
-      row.worker,
-      parsedMonth.year,
-      parsedMonth.month,
-    )) continue;
+    if (isTimesheetWorkerUnavailableForMonth(row.worker, parsedMonth.year, parsedMonth.month)) continue;
 
     const hours = Math.max(0, Number(row.qty) || 0);
     if (hours <= 0) continue;
@@ -275,7 +386,7 @@ function buildPlannedActualEffortData() {
       projectMap,
       resolvedProject.key,
       resolvedProject.label,
-      resolvedProject.project
+      resolvedProject.project,
     );
     const normalizedWorker = normalizePersonName(row.worker);
     const matchedEmployee = employeeByName.get(normalizedWorker);
@@ -285,45 +396,40 @@ function buildPlannedActualEffortData() {
     const resourceName = matchedEmployee?.name || row.worker || 'Unknown resource';
 
     addPlannedActualHours(projectEntry.actualByResource, resourceKey, resourceName, hours);
-    addPlannedActualMonthHours(
-      projectEntry.actualByMonth,
+    addPlannedActualMonthResourceHours(
+      projectEntry.actualResourcesByMonth,
       parsedMonth.year,
       parsedMonth.month,
-      hours
+      resourceKey,
+      resourceName,
+      hours,
     );
+    addPlannedActualMonthHours(projectEntry.actualByMonth, parsedMonth.year, parsedMonth.month, hours);
     projectEntry.actualHours += hours;
   }
 
   const projects = [...projectMap.values()].map(entry => {
-    const plannedResources = [...entry.plannedByResource.values()]
-      .map(resource => ({ ...resource, hours: +resource.hours.toFixed(2) }))
-      .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
-    const actualResources = [...entry.actualByResource.values()]
-      .map(resource => ({ ...resource, hours: +resource.hours.toFixed(2) }))
-      .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
-    const plannedHours = +entry.plannedHours.toFixed(2);
-    const actualHours = +entry.actualHours.toFixed(2);
-    const varianceHours = +(actualHours - plannedHours).toFixed(2);
-    const variancePct = plannedHours > 0
-      ? +((varianceHours / plannedHours) * 100).toFixed(1)
-      : (actualHours > 0 ? null : 0);
-    const plannedKeys = new Set(plannedResources.map(resource => resource.key));
-    const actualKeys = new Set(actualResources.map(resource => resource.key));
-    const retainedKeys = [...plannedKeys].filter(key => actualKeys.has(key));
-    const addedResources = actualResources.filter(resource => !plannedKeys.has(resource.key));
-    const removedResources = plannedResources.filter(resource => !actualKeys.has(resource.key));
-    const unionSize = new Set([...plannedKeys, ...actualKeys]).size;
-    const teamOverlapPct = unionSize > 0
-      ? +((retainedKeys.length / unionSize) * 100).toFixed(1)
-      : 0;
+    const annualScope = buildPlannedActualScope(
+      entry.plannedByResource,
+      entry.actualByResource,
+      entry.plannedHours,
+      entry.actualHours,
+    );
     const monthly = fiscalMonthList.map(({ y, m, label }) => {
-      const monthKey = plannedActualMonthKey(y, m);
-      const planned = +(entry.plannedByMonth.get(monthKey) || 0).toFixed(2);
-      const actual = +(entry.actualByMonth.get(monthKey) || 0).toFixed(2);
-
+      const key = plannedActualMonthKey(y, m);
+      const planned = +(entry.plannedByMonth.get(key) || 0).toFixed(2);
+      const actual = +(entry.actualByMonth.get(key) || 0).toFixed(2);
       return {
-        key: monthKey,
+        key,
         label,
+        year: y,
+        month: m,
+        ...buildPlannedActualScope(
+          entry.plannedResourcesByMonth.get(key),
+          entry.actualResourcesByMonth.get(key),
+          planned,
+          actual,
+        ),
         planned,
         actual,
         variance: +(actual - planned).toFixed(2),
@@ -332,19 +438,8 @@ function buildPlannedActualEffortData() {
 
     return {
       ...entry,
-      plannedResources,
-      actualResources,
-      plannedHours,
-      actualHours,
-      varianceHours,
-      variancePct,
-      addedResources,
-      removedResources,
-      retainedResources: actualResources.filter(resource => plannedKeys.has(resource.key)),
-      teamOverlapPct,
-      resourceChanges: buildPlannedActualResourceChanges(plannedResources, actualResources),
+      ...annualScope,
       monthly,
-      totalHours: +(plannedHours + actualHours).toFixed(2),
     };
   }).sort((a, b) => (
     Math.max(b.plannedHours, b.actualHours) - Math.max(a.plannedHours, a.actualHours) ||
@@ -354,6 +449,12 @@ function buildPlannedActualEffortData() {
 
   return {
     fiscalYear,
+    months: fiscalMonthList.map(({ y, m, label }) => ({
+      key: plannedActualMonthKey(y, m),
+      label,
+      year: y,
+      month: m,
+    })),
     projects,
     plannedHours: +projects.reduce((sum, project) => sum + project.plannedHours, 0).toFixed(2),
     actualHours: +projects.reduce((sum, project) => sum + project.actualHours, 0).toFixed(2),

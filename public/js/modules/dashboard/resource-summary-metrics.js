@@ -95,7 +95,7 @@ function classifyAllocationProject(projectName) {
 const RESOURCE_SUMMARY_WEEKS_PER_MONTH = 4;
 
 function getResourceSummaryFiscalWeekCount() {
-  return fiscalMonths(S.fiscalYear).length * RESOURCE_SUMMARY_WEEKS_PER_MONTH;
+  return fiscalMonths(S.matrixFiscalYear).length * RESOURCE_SUMMARY_WEEKS_PER_MONTH;
 }
 
 function createEmptyAllocationTotals() {
@@ -114,7 +114,7 @@ function getEmployeeFiscalAssignmentTotals(employeeId) {
   const percentageTotals = createEmptyAllocationTotals();
   const hourTotals = createEmptyAllocationTotals();
 
-  getEffectiveFiscalAssignments(S.fiscalYear).forEach(assignment => {
+  getEffectiveFiscalAssignments(S.matrixFiscalYear, S.matrixAssignments).forEach(assignment => {
     if (Number(assignment.employee_id) !== Number(employeeId)) return;
 
     const percentage = Number(assignment.percentage);
@@ -142,7 +142,8 @@ function getRevenueRateValue(rateRecord, revenueKey) {
 function getResourceSummaryViewData(employee) {
   const fiscalWeekCount = getEmployeeAvailableFiscalWeekCount(
     employee.id,
-    S.fiscalYear,
+    S.matrixFiscalYear,
+    S.matrixAssignments,
   );
   const { percentageTotals, hourTotals } = getEmployeeFiscalAssignmentTotals(employee.id);
 
@@ -283,7 +284,7 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
   let pricedAssignmentCount = 0;
   let unpricedHours = 0;
 
-  getEffectiveFiscalAssignments(S.fiscalYear).forEach(assignment => {
+  getEffectiveFiscalAssignments(S.matrixFiscalYear, S.matrixAssignments).forEach(assignment => {
     const employee = employeeMap.get(Number(assignment.employee_id));
     if (!employee) return;
 

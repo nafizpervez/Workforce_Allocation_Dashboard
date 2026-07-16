@@ -88,8 +88,8 @@ function getEffectiveAssignments(assignments = S.assignments) {
   );
 }
 
-function getEffectiveFiscalAssignments(fiscalYear = S.fiscalYear) {
-  return getEffectiveAssignments().filter(assignment => (
+function getEffectiveFiscalAssignments(fiscalYear = S.fiscalYear, assignments = S.assignments) {
+  return getEffectiveAssignments(assignments).filter(assignment => (
     (Number(assignment.year) === Number(fiscalYear) && Number(assignment.month) >= 4) ||
     (Number(assignment.year) === Number(fiscalYear) + 1 && Number(assignment.month) <= 3)
   ));
@@ -100,8 +100,8 @@ function isEmployeeUnavailableForSlot(employeeId, year, month, week, unavailable
   return slots.has(availabilitySlotKey(employeeId, year, month, week));
 }
 
-function getEmployeeUnavailableFiscalWeekCount(employeeId, fiscalYear = S.fiscalYear) {
-  const unavailableSlots = getUnavailableAssignmentSlotSet();
+function getEmployeeUnavailableFiscalWeekCount(employeeId, fiscalYear = S.fiscalYear, assignments = S.assignments) {
+  const unavailableSlots = getUnavailableAssignmentSlotSet(assignments);
   let count = 0;
 
   for (const month of fiscalMonths(fiscalYear)) {
@@ -121,16 +121,16 @@ function getEmployeeUnavailableFiscalWeekCount(employeeId, fiscalYear = S.fiscal
   return count;
 }
 
-function getEmployeeAvailableFiscalWeekCount(employeeId, fiscalYear = S.fiscalYear) {
+function getEmployeeAvailableFiscalWeekCount(employeeId, fiscalYear = S.fiscalYear, assignments = S.assignments) {
   const totalWeeks = fiscalMonths(fiscalYear).length * 4;
   return Math.max(
     0,
-    totalWeeks - getEmployeeUnavailableFiscalWeekCount(employeeId, fiscalYear),
+    totalWeeks - getEmployeeUnavailableFiscalWeekCount(employeeId, fiscalYear, assignments),
   );
 }
 
-function getEmployeeAvailableMonthWeekCount(employeeId, year, month) {
-  const unavailableSlots = getUnavailableAssignmentSlotSet();
+function getEmployeeAvailableMonthWeekCount(employeeId, year, month, assignments = S.assignments) {
+  const unavailableSlots = getUnavailableAssignmentSlotSet(assignments);
   let availableWeeks = 0;
 
   for (let week = 1; week <= 4; week++) {
@@ -148,12 +148,12 @@ function getEmployeeAvailableMonthWeekCount(employeeId, year, month) {
   return availableWeeks;
 }
 
-function isEmployeeUnavailableForEntireMonth(employeeId, year, month) {
-  return getEmployeeAvailableMonthWeekCount(employeeId, year, month) === 0;
+function isEmployeeUnavailableForEntireMonth(employeeId, year, month, assignments = S.assignments) {
+  return getEmployeeAvailableMonthWeekCount(employeeId, year, month, assignments) === 0;
 }
 
-function getAvailableEmployeesForSlot(employees, year, month, week) {
-  const unavailableSlots = getUnavailableAssignmentSlotSet();
+function getAvailableEmployeesForSlot(employees, year, month, week, assignments = S.assignments) {
+  const unavailableSlots = getUnavailableAssignmentSlotSet(assignments);
 
   return (employees || []).filter(employee =>
     !isEmployeeUnavailableForSlot(
@@ -167,12 +167,7 @@ function getAvailableEmployeesForSlot(employees, year, month, week) {
 }
 
 function normalizeAvailabilityPersonName(value) {
-  return String(value || '')
-    .trim()
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+  return personIdentityKey(value);
 }
 
 function findAvailabilityEmployeeByName(workerName) {
@@ -189,11 +184,17 @@ function findAvailabilityEmployeeByName(workerName) {
  * when the employee is marked unavailable for all four matrix weeks in that
  * month; partial-month N/A markers cannot be separated from a monthly total.
  */
-function isTimesheetWorkerUnavailableForMonth(workerName, year, month) {
+function isTimesheetWorkerUnavailableForMonth(
+  workerName,
+  year,
+  month,
+  assignments = S.assignments,
+) {
   const employee = findAvailabilityEmployeeByName(workerName);
   return Boolean(employee) && isEmployeeUnavailableForEntireMonth(
     employee.id,
     year,
     month,
+    assignments,
   );
 }

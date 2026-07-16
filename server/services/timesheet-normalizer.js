@@ -1,10 +1,11 @@
+const { canonicalPersonName } = require('./person-identity');
 const { cleanText, safeNum } = require('./values');
 
 function normalizeTimesheetPayloadRows(rows) {
   const grouped = new Map();
   for (const row of rows || []) {
     const month = cleanText(row.month);
-    const worker = cleanText(row.worker);
+    const worker = canonicalPersonName(row.worker);
     const workType = cleanText(row.workType || row.work_type);
     const projectName = cleanText(row.projectName || row.project_name || '(No project name)');
     const quantity = safeNum(row.qty, 0);

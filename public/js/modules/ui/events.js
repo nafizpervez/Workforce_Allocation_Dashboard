@@ -2,6 +2,32 @@
 
 /* ================================================================ EVENTS */
 function initEvents() {
+  const matrixFiscalYearInput = document.getElementById('matrixFiscalYearInput');
+  const commitMatrixFiscalYearInput = async () => {
+    const endYear = Math.trunc(Number(matrixFiscalYearInput?.value));
+    if (!Number.isFinite(endYear) || endYear < 1901 || endYear > 9999) {
+      syncMatrixFiscalYearControl();
+      toast('Enter a fiscal-year ending year between 1901 and 9999.', 'error');
+      return;
+    }
+    await changeMatrixFiscalYear(endYear - 1);
+  };
+
+  document.getElementById('matrixFiscalYearPrevBtn')?.addEventListener('click', () => {
+    changeMatrixFiscalYear(S.matrixFiscalYear - 1);
+  });
+  document.getElementById('matrixFiscalYearNextBtn')?.addEventListener('click', () => {
+    changeMatrixFiscalYear(S.matrixFiscalYear + 1);
+  });
+  matrixFiscalYearInput?.addEventListener('change', commitMatrixFiscalYearInput);
+  matrixFiscalYearInput?.addEventListener('keydown', event => {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      commitMatrixFiscalYearInput();
+      matrixFiscalYearInput.blur();
+    }
+  });
+  syncMatrixFiscalYearControl();
   const addBtn = document.getElementById('addMenuBtn'), addMenu = document.getElementById('addMenu');
   addBtn.addEventListener('click', e => { e.stopPropagation(); addMenu.classList.toggle('hidden'); });
   document.addEventListener('click', () => addMenu.classList.add('hidden'));
