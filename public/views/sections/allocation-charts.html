@@ -286,12 +286,41 @@
                   </div>
                 </div>
                 <div class="planned-actual-filter-group">
-                  <label class="planned-actual-filter is-project">
-                    <span>Project</span>
-                    <select id="plannedActualProjectFilter" class="field-input">
-                      <option value="">Select a project</option>
-                    </select>
-                  </label>
+                  <div class="planned-actual-filter is-project">
+                    <label for="plannedActualProjectFilter">Project</label>
+                    <div id="plannedActualProjectCombobox" class="planned-actual-combobox">
+                      <input
+                        id="plannedActualProjectFilter"
+                        class="field-input planned-actual-combobox-input"
+                        type="text"
+                        role="combobox"
+                        aria-autocomplete="list"
+                        aria-expanded="false"
+                        aria-controls="plannedActualProjectOptions"
+                        autocomplete="off"
+                        placeholder="Select or type a project"
+                      >
+                      <button
+                        id="plannedActualProjectToggle"
+                        class="planned-actual-combobox-toggle"
+                        type="button"
+                        aria-label="Show project options"
+                        aria-controls="plannedActualProjectOptions"
+                        tabindex="-1"
+                      >
+                        <svg viewBox="0 0 20 20" aria-hidden="true">
+                          <path d="m6 8 4 4 4-4" />
+                        </svg>
+                      </button>
+                      <div
+                        id="plannedActualProjectOptions"
+                        class="planned-actual-combobox-options"
+                        role="listbox"
+                        aria-label="Plan-to-Execution projects"
+                        hidden
+                      ></div>
+                    </div>
+                  </div>
                   <label class="planned-actual-filter is-month">
                     <span>Month</span>
                     <select id="plannedActualMonthFilter" class="field-input">

@@ -17,6 +17,53 @@ const PLANNED_ACTUAL_PROJECT_ALIASES = Object.freeze([
   }),
 ]);
 
+/* Generic planning categories are reconciled with Time Sheet Work Type values.
+ * This keeps non-project work such as Pre Sale, General Admin and Training
+ * Delivery from being split by the Time Sheet's Project Name column. Named
+ * delivery projects still use project-name matching. */
+const PLANNED_ACTUAL_WORK_TYPE_BUCKETS = Object.freeze([
+  Object.freeze({
+    key: 'work-type:pre-sale',
+    label: 'Pre Sale',
+    workType: 'Pre - Sales',
+    alwaysAggregate: true,
+  }),
+  Object.freeze({
+    key: 'work-type:general-admin',
+    label: 'General Admin',
+    workType: 'General Admin',
+    alwaysAggregate: true,
+  }),
+  Object.freeze({
+    key: 'work-type:training-delivery',
+    label: 'Training Delivery',
+    workType: 'Training Delivery',
+    alwaysAggregate: true,
+  }),
+  Object.freeze({
+    key: 'work-type:skill-development',
+    label: 'Skill Development',
+    workType: 'Skill Development',
+    alwaysAggregate: true,
+  }),
+  Object.freeze({
+    key: 'work-type:service-delivery-intrasourcing',
+    label: 'Service Delivery - Intrasourcing',
+    workType: 'Service Delivery - Intrasourcing',
+    alwaysAggregate: false,
+  }),
+  Object.freeze({
+    key: 'work-type:service-delivery-local-ps',
+    label: 'Service Delivery - Local PS',
+    workType: 'Service Delivery - Local PS',
+    alwaysAggregate: false,
+  }),
+]);
+
+const PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE = new Map(
+  PLANNED_ACTUAL_WORK_TYPE_BUCKETS.map(bucket => [bucket.workType, bucket]),
+);
+
 function normalizePlannedActualText(value) {
   return String(value || '')
     .trim()
@@ -25,6 +72,63 @@ function normalizePlannedActualText(value) {
     .replace(/[^a-z0-9]+/g, ' ')
     .replace(/\s+/g, ' ')
     .trim();
+}
+
+function plannedActualWorkTypeBucketForProject(projectName) {
+  const normalized = normalizePlannedActualText(projectName);
+  if (!normalized) return null;
+
+  if (/\bpre sales?\b/.test(normalized)) {
+    return PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE.get('Pre - Sales');
+  }
+
+  if (/\bgeneral admin\b/.test(normalized)) {
+    return PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE.get('General Admin');
+  }
+
+  if (/\btraining delivery\b/.test(normalized)) {
+    return PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE.get('Training Delivery');
+  }
+
+  if (/\bskill development\b/.test(normalized)) {
+    return PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE.get('Skill Development');
+  }
+
+  // Only generic service-delivery labels are Work Type buckets. A named
+  // project such as "Esri Malaysia Intrasourcing" remains project-specific.
+  if (/^(?:service delivery )?intrasourc(?:e|ing)$/.test(normalized)) {
+    return PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE.get('Service Delivery - Intrasourcing');
+  }
+
+  if (/^(?:service delivery )?local(?: ps)?$/.test(normalized)) {
+    return PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE.get('Service Delivery - Local PS');
+  }
+
+  return null;
+}
+
+function plannedActualWorkTypeBucketForTimesheetRow(row, activeBucketKeys) {
+  const normalizedWorkType = typeof normalizeTimesheetWorkType === 'function'
+    ? normalizeTimesheetWorkType(row?.workType ?? row?.work_type)
+    : String(row?.workType ?? row?.work_type ?? '').trim();
+  const bucket = PLANNED_ACTUAL_WORK_TYPE_BUCKET_BY_TYPE.get(normalizedWorkType);
+
+  if (!bucket) return null;
+  if (bucket.alwaysAggregate || activeBucketKeys.has(bucket.key)) return bucket;
+  return null;
+}
+
+function plannedActualWorkTypeResolution(bucket) {
+  return {
+    project: null,
+    key: bucket.key,
+    code: '',
+    name: bucket.label,
+    full: normalizePlannedActualText(bucket.label),
+    label: bucket.label,
+    actualMatchMode: 'work-type',
+    workType: bucket.workType,
+  };
 }
 
 function plannedActualResourceColor(resourceKey) {
@@ -235,12 +339,20 @@ function addPlannedActualMonthResourceHours(map, year, month, resourceKey, resou
   addPlannedActualHours(map.get(monthKey), resourceKey, resourceName, hours);
 }
 
-function getOrCreatePlannedActualProject(projectMap, key, label, project = null) {
+function getOrCreatePlannedActualProject(
+  projectMap,
+  key,
+  label,
+  project = null,
+  metadata = {},
+) {
   if (!projectMap.has(key)) {
     projectMap.set(key, {
       key,
       project,
       label: label || 'Unnamed project',
+      actualMatchMode: metadata.actualMatchMode || 'project-name',
+      workType: metadata.workType || '',
       plannedByResource: new Map(),
       actualByResource: new Map(),
       plannedResourcesByMonth: new Map(),
@@ -250,8 +362,12 @@ function getOrCreatePlannedActualProject(projectMap, key, label, project = null)
       plannedHours: 0,
       actualHours: 0,
     });
-  } else if (label && projectMap.get(key).label !== label) {
-    projectMap.get(key).label = label;
+  } else {
+    const entry = projectMap.get(key);
+    if (label && entry.label !== label) entry.label = label;
+    if (metadata.actualMatchMode) entry.actualMatchMode = metadata.actualMatchMode;
+    if (metadata.workType) entry.workType = metadata.workType;
+    if (!entry.project && project) entry.project = project;
   }
 
   return projectMap.get(key);
@@ -327,6 +443,7 @@ function buildPlannedActualEffortData() {
   const employeesById = new Map((S.employees || []).map(employee => [Number(employee.id), employee]));
   const employeeByName = new Map();
   const projectMap = new Map();
+  const activeWorkTypeBucketKeys = new Set();
   const resolveProject = buildPlannedActualProjectResolver(S.projects || []);
 
   for (const employee of S.employees || []) {
@@ -338,12 +455,22 @@ function buildPlannedActualEffortData() {
     const employee = employeesById.get(Number(assignment.employee_id));
     if (!employee || employee.active === 0 || isNonAssignablePerson(employee.name)) continue;
 
-    const resolvedProject = resolveProject(
-      assignment.project_name || `${assignment.project_code || ''} ${assignment.project_name || ''}`,
-    ) || resolveProject(plannedActualProjectLabel(
-      (S.projects || []).find(project => Number(project.id) === Number(assignment.project_id)),
-    ));
+    const assignmentProject = (S.projects || []).find(project =>
+      Number(project.id) === Number(assignment.project_id),
+    );
+    const assignmentProjectName = String(
+      assignment.project_name || assignmentProject?.name || '',
+    ).trim();
+    const workTypeBucket = plannedActualWorkTypeBucketForProject(assignmentProjectName);
+    const resolvedProject = workTypeBucket
+      ? plannedActualWorkTypeResolution(workTypeBucket)
+      : (
+        resolveProject(
+          assignment.project_name || `${assignment.project_code || ''} ${assignment.project_name || ''}`,
+        ) || resolveProject(plannedActualProjectLabel(assignmentProject))
+      );
     if (!resolvedProject) continue;
+    if (workTypeBucket) activeWorkTypeBucketKeys.add(workTypeBucket.key);
 
     const percentage = Math.max(0, Number(assignment.percentage) || 0);
     const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
@@ -354,6 +481,10 @@ function buildPlannedActualEffortData() {
       resolvedProject.key,
       resolvedProject.label,
       resolvedProject.project,
+      {
+        actualMatchMode: resolvedProject.actualMatchMode,
+        workType: resolvedProject.workType,
+      },
     );
     const resourceKey = `employee:${employee.id}`;
 
@@ -379,7 +510,13 @@ function buildPlannedActualEffortData() {
     const hours = Math.max(0, Number(row.qty) || 0);
     if (hours <= 0) continue;
 
-    const resolvedProject = resolveProject(row.projectName || '(No project name)');
+    const workTypeBucket = plannedActualWorkTypeBucketForTimesheetRow(
+      row,
+      activeWorkTypeBucketKeys,
+    );
+    const resolvedProject = workTypeBucket
+      ? plannedActualWorkTypeResolution(workTypeBucket)
+      : resolveProject(row.projectName || '(No project name)');
     if (!resolvedProject) continue;
 
     const projectEntry = getOrCreatePlannedActualProject(
@@ -387,6 +524,10 @@ function buildPlannedActualEffortData() {
       resolvedProject.key,
       resolvedProject.label,
       resolvedProject.project,
+      {
+        actualMatchMode: resolvedProject.actualMatchMode,
+        workType: resolvedProject.workType,
+      },
     );
     const normalizedWorker = normalizePersonName(row.worker);
     const matchedEmployee = employeeByName.get(normalizedWorker);
