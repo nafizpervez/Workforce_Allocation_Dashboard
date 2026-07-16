@@ -30,75 +30,215 @@ function renderTrends(data) { if (S.charts.trends) S.charts.trends.destroy(); co
 
 function getAssignmentBurnSeries() {
   const months = fiscalMonths(S.fiscalYear);
-  const labels = months.map(m => m.label);
-  const activeEmployeeIds = new Set(getActiveEmployees().map(e => e.id));
-  const monthIndex = new Map(months.map((m, i) => [`${m.y}-${m.m}`, i]));
-  const planned = months.map(() => 0);
+  const labels = months.map(month => month.label);
+  const monthIndex = new Map(
+    months.map((month, index) => [`${month.y}-${month.m}`, index]),
+  );
+  const activeEmployeeIds = new Set(
+    getActiveEmployees().map(employee => Number(employee.id)),
+  );
+  const plannedHours = months.map(() => 0);
+  const actualHours = months.map(() => 0);
 
-  for (const a of getEffectiveFiscalAssignments(S.fiscalYear)) {
-    if (!activeEmployeeIds.has(a.employee_id)) continue;
-    const idx = monthIndex.get(`${a.year}-${a.month}`);
-    if (idx === undefined) continue;
-    planned[idx] += (Number(a.percentage) || 0) / 100;
+  // Planned effort comes from the effective Resource Assignment rows. The
+  // effective-assignment helper already removes N/A resource-weeks and any
+  // other assignments that must not participate in analytics for those slots.
+  for (const assignment of getEffectiveFiscalAssignments(S.fiscalYear)) {
+    const employeeId = Number(assignment.employee_id);
+    if (!activeEmployeeIds.has(employeeId)) continue;
+
+    const index = monthIndex.get(
+      `${Number(assignment.year)}-${Number(assignment.month)}`,
+    );
+    if (index === undefined) continue;
+
+    const percentage = Number(assignment.percentage);
+    if (!Number.isFinite(percentage) || percentage <= 0) continue;
+
+    plannedHours[index] += WORK_HOURS_PER_WEEK * (percentage / 100);
   }
 
-  const total = planned.reduce((s, v) => s + v, 0);
-  let running = 0;
-  const cumulative = planned.map(v => {
-    running += v;
-    return +running.toFixed(2);
+  // Actual effort is recorded Time Sheet delivery. It is intentionally not
+  // extrapolated into future months: months after the latest reported month
+  // remain null in the cumulative/remaining actual series.
+  const visibleTimesheetRows = typeof getVisibleTimesheetRows === 'function'
+    ? getVisibleTimesheetRows()
+    : (S.timesheetRows || []);
+
+  for (const row of visibleTimesheetRows) {
+    const parsedMonth = typeof parseMonthlyWorkMonth === 'function'
+      ? parseMonthlyWorkMonth(
+        row.month ?? row.Month ?? row.month_label ?? row.monthLabel,
+      )
+      : null;
+    if (!parsedMonth) continue;
+
+    const index = monthIndex.get(`${parsedMonth.year}-${parsedMonth.month}`);
+    if (index === undefined) continue;
+
+    if (
+      typeof classifyMonthlyActualWorkType === 'function' &&
+      !classifyMonthlyActualWorkType(
+        row.workType ?? row.work_type ?? row['Work Type'],
+      )
+    ) {
+      continue;
+    }
+
+    const hours = Number(row.qty ?? row.hours ?? row.quantity);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+    actualHours[index] += hours;
+  }
+
+  const roundHours = value => +((Number(value) || 0).toFixed(2));
+  const roundedPlannedHours = plannedHours.map(roundHours);
+  const roundedActualHours = actualHours.map(roundHours);
+  const totalPlannedHours = roundHours(
+    roundedPlannedHours.reduce((total, value) => total + value, 0),
+  );
+  const lastActualIndex = roundedActualHours.reduce(
+    (latest, value, index) => value > 0 ? index : latest,
+    -1,
+  );
+
+  let cumulativePlannedValue = 0;
+  let cumulativeActualValue = 0;
+
+  const cumulativePlanned = roundedPlannedHours.map(value => {
+    cumulativePlannedValue += value;
+    return roundHours(cumulativePlannedValue);
   });
-  const remaining = cumulative.map(v => +Math.max(total - v, 0).toFixed(2));
-  const idealBurn = months.map((_, i) => +Math.max(total - ((total / Math.max(months.length, 1)) * (i + 1)), 0).toFixed(2));
-  const idealUp = months.map((_, i) => +Math.min((total / Math.max(months.length, 1)) * (i + 1), total).toFixed(2));
+
+  const cumulativeActual = roundedActualHours.map((value, index) => {
+    if (lastActualIndex < 0 || index > lastActualIndex) return null;
+    cumulativeActualValue += value;
+    return roundHours(cumulativeActualValue);
+  });
+
+  const plannedRemaining = cumulativePlanned.map(value => (
+    roundHours(Math.max(totalPlannedHours - value, 0))
+  ));
+  const actualRemaining = cumulativeActual.map(value => (
+    value === null
+      ? null
+      : roundHours(Math.max(totalPlannedHours - value, 0))
+  ));
 
   return {
     labels,
-    planned: planned.map(v => +v.toFixed(2)),
-    cumulative,
-    remaining,
-    idealBurn,
-    idealUp,
-    total: +total.toFixed(2),
+    plannedHours: roundedPlannedHours,
+    actualHours: roundedActualHours,
+    cumulativePlanned,
+    cumulativeActual,
+    plannedRemaining,
+    actualRemaining,
+    totalPlannedHours,
+    actualToDate: lastActualIndex >= 0
+      ? Number(cumulativeActual[lastActualIndex]) || 0
+      : 0,
+    lastActualIndex,
   };
 }
 
 function burnChartTooltipUnit(value) {
   const n = Number(value) || 0;
-  return `${n.toFixed(2)} FTE-week${Math.abs(n - 1) < 0.0001 ? '' : 's'}`;
+  return `${n.toLocaleString('en-US', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}h`;
+}
+
+function burnChartAxisUnit(value) {
+  const n = Number(value) || 0;
+  if (Math.abs(n) >= 1000000) return `${(n / 1000000).toFixed(1)}M`;
+  if (Math.abs(n) >= 1000) return `${(n / 1000).toFixed(n >= 10000 ? 0 : 1)}k`;
+  return n.toLocaleString('en-US', { maximumFractionDigits: 0 });
+}
+
+function burnTooltipFooter(series, index) {
+  const plannedMonth = series.plannedHours[index] || 0;
+  const actualMonth = series.actualHours[index] || 0;
+  const lines = [`Planned this month: ${burnChartTooltipUnit(plannedMonth)}`];
+
+  if (index <= series.lastActualIndex) {
+    lines.push(`Actual this month: ${burnChartTooltipUnit(actualMonth)}`);
+    const cumulativeVariance = (series.cumulativeActual[index] || 0) -
+      (series.cumulativePlanned[index] || 0);
+    lines.push(
+      `Actual vs planned to date: ${cumulativeVariance >= 0 ? '+' : ''}${burnChartTooltipUnit(cumulativeVariance)}`,
+    );
+  } else {
+    lines.push('Actual this month: not reported');
+  }
+
+  return lines;
+}
+
+function burnChartLegendOptions() {
+  return {
+    display: true,
+    position: 'bottom',
+    labels: {
+      boxWidth: 10,
+      boxHeight: 10,
+      font: { size: 10 },
+      padding: 12,
+      usePointStyle: true,
+    },
+  };
+}
+
+function burnChartTooltipOptions(series) {
+  return {
+    bodyFont: { size: 11 },
+    titleFont: { size: 11 },
+    footerFont: { size: 10 },
+    padding: 9,
+    filter: context => context.raw !== null,
+    callbacks: {
+      label: context => ` ${context.dataset.label}: ${burnChartTooltipUnit(context.parsed.y)}`,
+      footer: items => items.length
+        ? burnTooltipFooter(series, items[0].dataIndex)
+        : [],
+    },
+  };
 }
 
 function renderBurndownChart() {
   if (S.charts.burndown) S.charts.burndown.destroy();
-  const el = document.getElementById('burndownChart');
-  if (!el) return;
-  const ctx = el.getContext('2d');
-  const s = getAssignmentBurnSeries();
+  const element = document.getElementById('burndownChart');
+  if (!element) return;
 
-  S.charts.burndown = new Chart(ctx, {
+  const series = getAssignmentBurnSeries();
+
+  S.charts.burndown = new Chart(element.getContext('2d'), {
     type: 'line',
     data: {
-      labels: s.labels,
+      labels: series.labels,
       datasets: [
         {
-          label: 'Remaining workload',
-          data: s.remaining,
-          borderColor: '#DC2626',
-          backgroundColor: 'rgba(220, 38, 38, 0.08)',
-          fill: true,
-          tension: 0.35,
+          label: 'Planned remaining',
+          data: series.plannedRemaining,
+          borderColor: '#2563EB',
+          borderDash: [5, 4],
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.2,
           borderWidth: 2,
-          pointRadius: 3,
+          pointRadius: 2.5,
+          pointHoverRadius: 4,
         },
         {
-          label: 'Ideal burndown',
-          data: s.idealBurn,
-          borderColor: '#94A3B8',
-          borderDash: [5, 5],
+          label: 'Actual remaining',
+          data: series.actualRemaining,
+          borderColor: '#DC2626',
+          backgroundColor: 'transparent',
           fill: false,
-          tension: 0.15,
-          borderWidth: 1.5,
-          pointRadius: 0,
+          tension: 0.2,
+          borderWidth: 2.5,
+          pointRadius: 3.5,
+          pointHoverRadius: 5,
+          spanGaps: false,
         },
       ],
     },
@@ -107,22 +247,25 @@ function renderBurndownChart() {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 } },
-        tooltip: {
-          bodyFont: { size: 11 },
-          titleFont: { size: 11 },
-          padding: 8,
-          callbacks: { label: c => ` ${c.dataset.label}: ${burnChartTooltipUnit(c.parsed.y)}` },
-        },
+        legend: burnChartLegendOptions(),
+        tooltip: burnChartTooltipOptions(series),
       },
       scales: {
-        x: { ticks: { font: { size: 11 }, maxRotation: 35, minRotation: 0 }, grid: { color: '#F3F4F6' } },
+        x: {
+          ticks: { font: { size: 10 }, maxRotation: 35, minRotation: 0 },
+          grid: { color: '#F3F4F6' },
+        },
         y: {
           beginAtZero: true,
-          suggestedMax: Math.max(s.total, 1),
-          ticks: { font: { size: 11 }, callback: v => Number(v).toFixed(0) },
+          suggestedMax: Math.max(series.totalPlannedHours, 1),
+          ticks: { font: { size: 10 }, callback: burnChartAxisUnit },
           grid: { color: '#F3F4F6' },
-          title: { display: true, text: 'Remaining workload (FTE-weeks)', font: { size: 11 }, color: '#9CA3AF' },
+          title: {
+            display: true,
+            text: 'Remaining effort (hours)',
+            font: { size: 10 },
+            color: '#9CA3AF',
+          },
         },
       },
     },
@@ -131,43 +274,53 @@ function renderBurndownChart() {
 
 function renderBurnupChart() {
   if (S.charts.burnup) S.charts.burnup.destroy();
-  const el = document.getElementById('burnupChart');
-  if (!el) return;
-  const ctx = el.getContext('2d');
-  const s = getAssignmentBurnSeries();
+  const element = document.getElementById('burnupChart');
+  if (!element) return;
 
-  S.charts.burnup = new Chart(ctx, {
+  const series = getAssignmentBurnSeries();
+  const chartMaximum = Math.max(
+    series.totalPlannedHours,
+    series.actualToDate,
+    1,
+  );
+
+  S.charts.burnup = new Chart(element.getContext('2d'), {
     type: 'line',
     data: {
-      labels: s.labels,
+      labels: series.labels,
       datasets: [
         {
-          label: 'Cumulative workload',
-          data: s.cumulative,
+          label: 'Cumulative planned',
+          data: series.cumulativePlanned,
           borderColor: '#2563EB',
-          backgroundColor: 'rgba(37, 99, 235, 0.08)',
-          fill: true,
-          tension: 0.35,
+          borderDash: [5, 4],
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.2,
           borderWidth: 2,
-          pointRadius: 3,
+          pointRadius: 2.5,
+          pointHoverRadius: 4,
         },
         {
-          label: 'Total planned workload',
-          data: s.labels.map(() => s.total),
-          borderColor: '#10B981',
-          borderDash: [5, 5],
+          label: 'Cumulative actual',
+          data: series.cumulativeActual,
+          borderColor: '#059669',
+          backgroundColor: 'transparent',
+          fill: false,
+          tension: 0.2,
+          borderWidth: 2.5,
+          pointRadius: 3.5,
+          pointHoverRadius: 5,
+          spanGaps: false,
+        },
+        {
+          label: 'Total planned scope',
+          data: series.labels.map(() => series.totalPlannedHours),
+          borderColor: '#64748B',
+          borderDash: [3, 4],
+          backgroundColor: 'transparent',
           fill: false,
           tension: 0,
-          borderWidth: 1.5,
-          pointRadius: 0,
-        },
-        {
-          label: 'Ideal burnup',
-          data: s.idealUp,
-          borderColor: '#94A3B8',
-          borderDash: [3, 4],
-          fill: false,
-          tension: 0.15,
           borderWidth: 1.25,
           pointRadius: 0,
         },
@@ -178,25 +331,27 @@ function renderBurnupChart() {
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
       plugins: {
-        legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 } },
-        tooltip: {
-          bodyFont: { size: 11 },
-          titleFont: { size: 11 },
-          padding: 8,
-          callbacks: { label: c => ` ${c.dataset.label}: ${burnChartTooltipUnit(c.parsed.y)}` },
-        },
+        legend: burnChartLegendOptions(),
+        tooltip: burnChartTooltipOptions(series),
       },
       scales: {
-        x: { ticks: { font: { size: 11 }, maxRotation: 35, minRotation: 0 }, grid: { color: '#F3F4F6' } },
+        x: {
+          ticks: { font: { size: 10 }, maxRotation: 35, minRotation: 0 },
+          grid: { color: '#F3F4F6' },
+        },
         y: {
           beginAtZero: true,
-          suggestedMax: Math.max(s.total, 1),
-          ticks: { font: { size: 11 }, callback: v => Number(v).toFixed(0) },
+          suggestedMax: chartMaximum,
+          ticks: { font: { size: 10 }, callback: burnChartAxisUnit },
           grid: { color: '#F3F4F6' },
-          title: { display: true, text: 'Cumulative workload (FTE-weeks)', font: { size: 11 }, color: '#9CA3AF' },
+          title: {
+            display: true,
+            text: 'Cumulative effort (hours)',
+            font: { size: 10 },
+            color: '#9CA3AF',
+          },
         },
       },
     },
   });
 }
-

@@ -267,12 +267,16 @@ async function loadSavedTimesheetFromDb() {
 
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
+    renderBurndownChart();
+    renderBurnupChart();
     renderMonthlyPlannedWorkChart();
     initPlannedActualEffortEvents();
     renderPlannedActualEffortChart();
   } catch (e) {
     console.error(e);
     toast('Failed to load saved Time Sheet data from DB', 'error');
+    renderBurndownChart();
+    renderBurnupChart();
     renderMonthlyPlannedWorkChart();
     initPlannedActualEffortEvents();
     renderPlannedActualEffortChart();
