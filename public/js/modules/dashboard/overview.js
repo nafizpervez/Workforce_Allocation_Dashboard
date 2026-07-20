@@ -1,27 +1,144 @@
 /* Workforce Allocation Dashboard — dashboard/overview.js */
 
 /* ================================================================ STATS */
+function getActiveResourceDesignationSummary() {
+  const designationCounts = new Map(
+    (RESOURCE_DESIGNATIONS || []).map(designation => [designation, 0]),
+  );
+  const designationInitials = new Map([
+    ['Team Lead', 'TL'],
+    ['Senior Consultant', 'SC'],
+    ['Consultant', 'C'],
+    ['Junior Consultant', 'JC'],
+    ['Analyst', 'A'],
+  ]);
+
+  for (const employee of S.employees || []) {
+    if (Number(employee?.active ?? 1) === 0) continue;
+
+    const matchedDesignation = (RESOURCE_DESIGNATIONS || []).find(designation => (
+      normalizeDesignationKey(designation) ===
+      normalizeDesignationKey(employee.designation)
+    ));
+
+    if (!matchedDesignation) continue;
+    designationCounts.set(
+      matchedDesignation,
+      (designationCounts.get(matchedDesignation) || 0) + 1,
+    );
+  }
+
+  return [
+    {
+      label: 'SM',
+      fullLabel: 'Senior Manager, Delivery',
+      count: 1,
+      isManager: true,
+    },
+    ...(RESOURCE_DESIGNATIONS || []).map(designation => ({
+      label: designationInitials.get(designation) || designation,
+      fullLabel: designation,
+      count: designationCounts.get(designation) || 0,
+      isManager: false,
+    })),
+  ];
+}
+
+function renderActiveResourceDesignationList() {
+  const rows = getActiveResourceDesignationSummary();
+
+  return `
+    <section class="active-resource-composition" aria-label="Active resources by designation">
+      <div class="active-resource-composition__heading">
+        <span>Team composition</span>
+        <span class="active-resource-composition__hint">By designation</span>
+      </div>
+      <div class="active-resource-composition__grid">
+        ${rows.map(row => `
+          <div class="active-resource-composition__item${row.isManager ? ' active-resource-composition__item--manager' : ''}" title="${esc(row.fullLabel)}">
+            <span class="active-resource-composition__label" aria-label="${esc(row.fullLabel)}">${esc(row.label)}</span>
+            <span class="active-resource-composition__count" aria-label="${esc(`${row.count} ${row.fullLabel}`)}">${esc(String(row.count))}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>`;
+}
+
+function renderStatTrend(td) {
+  const up = td.up;
+
+  return `
+    <div class="stat-card-trend ${up ? 'text-green-600' : 'text-orange-600'}">
+      <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+        ${up
+          ? '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>'
+          : '<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>'}
+      </svg>
+      <span>${esc(td.value)}</span>
+    </div>`;
+}
+
+function renderStatSummary(c, td, { activeResource = false } = {}) {
+  return `
+    <div class="${activeResource ? 'active-resource-card__summary' : ''}">
+      <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3">
+        <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
+      </div>
+      <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
+      <div class="text-sm text-gray-500 mb-2">${esc(c.label)}</div>
+      ${renderStatTrend(td)}
+    </div>`;
+}
+
 function renderStats(s) {
   const t = s.trends || {};
   const cards = [
-    { v: s.active_employees.toLocaleString(), label: 'Active Resources', tk: 'employees', action: 'view-employees', bg: 'bg-blue-100', fg: 'text-blue-600', formula: `Active team members · click to manage active\/inactive status`, icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>' },
-    { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', action: 'view-projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: `Count of all projects registered in the system`, icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
-    { v: s.avg_utilization + '%', label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: `Available weekly allocation only; N/A resource-weeks are excluded from numerator and denominator`, icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
+    {
+      v: s.active_employees.toLocaleString(),
+      label: 'Active Resources',
+      tk: 'employees',
+      action: 'view-employees',
+      bg: 'bg-blue-100',
+      fg: 'text-blue-600',
+      formula: 'Active team members · click to manage active/inactive status',
+      icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+      detailType: 'designation-breakdown',
+    },
+    { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', action: 'view-projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: 'Count of all projects registered in the system', icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
+    { v: `${s.avg_utilization}%`, label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: 'Available weekly allocation only; N/A resource-weeks are excluded from numerator and denominator', icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
     { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
     { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Active PS Resources: ${s.ps_count} · Avg Utilization: ${s.avg_utilization}% · Score = avg util ÷ PS count`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
-    { v: s.on_time_pct + '%', label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: `On-track projects ÷ Total projects × 100`, icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
+    { v: `${s.on_time_pct}%`, label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: 'On-track projects ÷ Total projects × 100', icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
   ];
+
   document.getElementById('statsRow').innerHTML = cards.map(c => {
-    const td = t[c.tk] || { value: '—', up: true }, up = td.up;
-    return `<div class="dc dc-stat"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}><div class="dc-handle" title="Drag card"><svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor"><circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/><circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/><circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/></svg></div>
-    <div class="stat-card-inner bg-white rounded-xl border border-gray-200 p-5 relative" style="box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-      <div class="stat-tooltip">${esc(c.formula)}</div>
-      <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3"><svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg></div>
-      <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
-      <div class="text-sm text-gray-500 mb-2">${esc(c.label)}</div>
-      <div class="flex items-center gap-1 text-xs font-medium ${up ? 'text-green-600' : 'text-orange-600'}">
-        <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">${up ? '<polyline points="23 6 13.5 15.5 8.5 10.5 1 18"/><polyline points="17 6 23 6 23 12"/>' : '<polyline points="23 18 13.5 8.5 8.5 13.5 1 6"/><polyline points="17 18 23 18 23 12"/>'}</svg>
-        ${esc(td.value)}</div></div></div>`;
+    const td = t[c.tk] || { value: '—', up: true };
+    const isActiveResourceCard = c.detailType === 'designation-breakdown';
+    const wrapperClass = isActiveResourceCard
+      ? 'dc dc-stat dc-stat--active-resources'
+      : 'dc dc-stat';
+    const cardContent = isActiveResourceCard
+      ? `
+        <div class="active-resource-card">
+          ${renderStatSummary(c, td, { activeResource: true })}
+          ${renderActiveResourceDesignationList()}
+        </div>`
+      : renderStatSummary(c, td);
+
+    return `
+      <div class="${wrapperClass}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>
+        <div class="dc-handle" title="Drag card">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+            <circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/>
+            <circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/>
+            <circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/>
+          </svg>
+        </div>
+        <div class="stat-card-inner bg-white rounded-xl border border-gray-200 p-5 relative" style="box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+          <div class="stat-tooltip">${esc(c.formula)}</div>
+          ${cardContent}
+        </div>
+      </div>`;
   }).join('');
 }
 
