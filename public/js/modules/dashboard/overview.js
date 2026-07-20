@@ -148,7 +148,7 @@ function formatUtilizationMetric(value) {
 function renderUtilizationBreakdown(s) {
   const rows = [
     {
-      label: 'Avg. Intrasourcing Utilization',
+      label: 'Intrasourcing Utilization',
       value: formatUtilizationMetric(s.avg_intrasourcing_utilization),
       tone: 'intrasourcing',
     },
