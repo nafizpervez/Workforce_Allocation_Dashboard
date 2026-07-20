@@ -195,6 +195,21 @@ function getClosedWonProjectSummary(projects, now = new Date()) {
   };
 }
 
+function getOpenProjectProbabilitySummary(projects) {
+  const openProjects = projects.filter(project => (
+    String(project.stage || '').trim().toLowerCase() !== 'closed won'
+  ));
+
+  return {
+    weightedProspects: openProjects.filter(project => (
+      Number(project.probability) >= 75
+    )).length,
+    prospects: openProjects.filter(project => (
+      Number(project.probability) < 75
+    )).length,
+  };
+}
+
 function periodMetrics(rawAssignments, employees, totalWeeks) {
   const unavailableSlots = getUnavailableSlotSet(rawAssignments);
   const effectiveAssignments = filterEffectiveAssignments(rawAssignments);
@@ -265,6 +280,7 @@ router.get('/api/dashboard/stats', (req, res) => {
       name,
       stage,
       progress,
+      probability,
       end_date,
       product_family,
       product_amount,
@@ -274,6 +290,9 @@ router.get('/api/dashboard/stats', (req, res) => {
   `).all().filter(project => !isUnavailableProjectName(project.name));
   const activeProjects = analyticProjects.filter(project => project.stage !== 'Closed Won').length;
   const runningProjectSummary = getClosedWonProjectSummary(analyticProjects);
+  const openProjectProbabilitySummary = getOpenProjectProbabilitySummary(
+    analyticProjects,
+  );
   const assignedProjects = new Set(
     fiscalMetrics.effectiveAssignments.map(assignment => Number(assignment.project_id)),
   ).size;
@@ -326,6 +345,8 @@ router.get('/api/dashboard/stats', (req, res) => {
     billable_utilization: fiscalAllocationSummary.billable,
     project_utilization: fiscalAllocationSummary.project,
     assigned_projects: assignedProjects,
+    weighted_prospect_projects: openProjectProbabilitySummary.weightedProspects,
+    prospect_projects: openProjectProbabilitySummary.prospects,
     productivity,
     ps_count: psCount,
     on_time_pct: onTime,

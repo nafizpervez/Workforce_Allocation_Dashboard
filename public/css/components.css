@@ -250,10 +250,11 @@
 #statsRow {
   display: grid;
   grid-template-columns:
-    minmax(370px, 1.25fr)
-    minmax(350px, 1.18fr)
-    minmax(330px, 1.08fr)
-    repeat(3, minmax(0, 1fr));
+    minmax(350px, 1.22fr)
+    minmax(335px, 1.16fr)
+    minmax(315px, 1.05fr)
+    minmax(310px, 1.04fr)
+    repeat(2, minmax(0, 0.84fr));
   gap: 18px;
   overflow: visible;
   padding: 1px;
@@ -673,6 +674,141 @@
   background: #ffffff;
 }
 
+
+.assigned-project-card {
+  display: grid;
+  grid-template-columns: 104px minmax(0, 1fr);
+  gap: 11px;
+  height: 138px;
+  min-height: 138px;
+}
+
+.assigned-project-card__summary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-right: 11px;
+  border-right: 1px solid #f3dfc3;
+}
+
+.assigned-project-card__summary > .text-sm.text-gray-500 {
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.assigned-project-breakdown {
+  min-width: 0;
+  padding: 1px 0;
+}
+
+.assigned-project-breakdown__heading {
+  display: flex;
+  min-height: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.assigned-project-breakdown__hint {
+  color: #94a3b8;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.assigned-project-breakdown__list {
+  display: grid;
+  gap: 6px;
+}
+
+.assigned-project-breakdown__item {
+  display: flex;
+  min-width: 0;
+  height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 7px 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.assigned-project-breakdown__label {
+  min-width: 0;
+  overflow: hidden;
+  color: #475569;
+  font-size: 9.5px;
+  font-weight: 600;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.assigned-project-breakdown__value {
+  display: inline-flex;
+  min-width: 35px;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 10px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.assigned-project-breakdown__item--running {
+  border-color: #ddd6fe;
+  background: #faf5ff;
+}
+
+.assigned-project-breakdown__item--running .assigned-project-breakdown__label,
+.assigned-project-breakdown__item--running .assigned-project-breakdown__value {
+  color: #7c3aed;
+}
+
+.assigned-project-breakdown__item--running .assigned-project-breakdown__value {
+  border-color: #c4b5fd;
+}
+
+.assigned-project-breakdown__item--weighted {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.assigned-project-breakdown__item--weighted .assigned-project-breakdown__label,
+.assigned-project-breakdown__item--weighted .assigned-project-breakdown__value {
+  color: #b45309;
+}
+
+.assigned-project-breakdown__item--weighted .assigned-project-breakdown__value {
+  border-color: #fcd34d;
+}
+
+.assigned-project-breakdown__item--prospect {
+  border-color: #fed7aa;
+  background: #fff7ed;
+}
+
+.assigned-project-breakdown__item--prospect .assigned-project-breakdown__label,
+.assigned-project-breakdown__item--prospect .assigned-project-breakdown__value {
+  color: #ea580c;
+}
+
+.assigned-project-breakdown__item--prospect .assigned-project-breakdown__value {
+  border-color: #fdba74;
+}
+
 @media (max-width: 1500px) {
   #statsRow {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -687,7 +823,8 @@
 
   #statsRow > .dc-stat--active-resources,
   #statsRow > .dc-stat--running-projects,
-  #statsRow > .dc-stat--utilization {
+  #statsRow > .dc-stat--utilization,
+  #statsRow > .dc-stat--assigned-projects {
     grid-column: 1 / -1;
   }
 }
@@ -699,7 +836,8 @@
 
   #statsRow > .dc-stat--active-resources,
   #statsRow > .dc-stat--running-projects,
-  #statsRow > .dc-stat--utilization {
+  #statsRow > .dc-stat--utilization,
+  #statsRow > .dc-stat--assigned-projects {
     grid-column: auto;
   }
 
@@ -730,9 +868,19 @@
     padding-right: 11px;
   }
 
+  .assigned-project-card {
+    grid-template-columns: 100px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .assigned-project-card__summary {
+    padding-right: 10px;
+  }
+
   .active-resource-composition__hint,
   .running-project-health__hint,
-  .utilization-breakdown__hint {
+  .utilization-breakdown__hint,
+  .assigned-project-breakdown__hint {
     display: none;
   }
 }

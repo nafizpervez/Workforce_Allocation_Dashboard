@@ -195,6 +195,56 @@ function renderUtilizationCard(c, td, s) {
     </div>`;
 }
 
+function renderAssignedProjectBreakdown(s) {
+  const rows = [
+    {
+      label: 'Running Project',
+      value: (Number(s.running_projects) || 0).toLocaleString(),
+      tone: 'running',
+    },
+    {
+      label: 'Weighted Prospect',
+      value: (Number(s.weighted_prospect_projects) || 0).toLocaleString(),
+      tone: 'weighted',
+    },
+    {
+      label: 'Prospect',
+      value: (Number(s.prospect_projects) || 0).toLocaleString(),
+      tone: 'prospect',
+    },
+  ];
+
+  return `
+    <section class="assigned-project-breakdown" aria-label="Project portfolio counts">
+      <div class="assigned-project-breakdown__heading">
+        <span class="assigned-project-breakdown__hint">Project portfolio</span>
+      </div>
+      <div class="assigned-project-breakdown__list">
+        ${rows.map(row => `
+          <div class="assigned-project-breakdown__item assigned-project-breakdown__item--${row.tone}">
+            <span class="assigned-project-breakdown__label">${esc(row.label)}</span>
+            <span class="assigned-project-breakdown__value">${esc(row.value)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>`;
+}
+
+function renderAssignedProjectsCard(c, td, s) {
+  return `
+    <div class="assigned-project-card">
+      <div class="assigned-project-card__summary">
+        <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
+        </div>
+        <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
+        <div class="text-sm text-gray-500 mb-2">${esc(c.label)}</div>
+        ${renderStatTrend(td)}
+      </div>
+      ${renderAssignedProjectBreakdown(s)}
+    </div>`;
+}
+
 function renderStatTrend(td) {
   const up = td.up;
 
@@ -256,7 +306,16 @@ function renderStats(s) {
       icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
       detailType: 'utilization-breakdown',
     },
-    { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
+    {
+      v: s.assigned_projects.toLocaleString(),
+      label: 'Assigned Projects',
+      tk: 'assigned_projects',
+      bg: 'bg-orange-100',
+      fg: 'text-orange-600',
+      formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}. Running Projects use the existing Closed Won Professional Services definition. Weighted Prospects are non-Closed Won projects with probability ≥ 75%; Prospects are non-Closed Won projects with probability below 75%.`,
+      icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+      detailType: 'assigned-project-breakdown',
+    },
     { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Active PS Resources: ${s.ps_count} · Avg Utilization: ${s.avg_utilization}% · Score = avg util ÷ PS count`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
     { v: `${s.on_time_pct}%`, label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: 'On-track projects ÷ Total projects × 100', icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
   ];
@@ -266,12 +325,14 @@ function renderStats(s) {
     const isActiveResourceCard = c.detailType === 'designation-breakdown';
     const isRunningProjectCard = c.detailType === 'running-project-breakdown';
     const isUtilizationCard = c.detailType === 'utilization-breakdown';
+    const isAssignedProjectCard = c.detailType === 'assigned-project-breakdown';
     const wrapperClass = [
       'dc',
       'dc-stat',
       isActiveResourceCard ? 'dc-stat--active-resources' : '',
       isRunningProjectCard ? 'dc-stat--running-projects' : '',
       isUtilizationCard ? 'dc-stat--utilization' : '',
+      isAssignedProjectCard ? 'dc-stat--assigned-projects' : '',
     ].filter(Boolean).join(' ');
     const cardContent = isActiveResourceCard
       ? `
@@ -283,7 +344,9 @@ function renderStats(s) {
         ? renderRunningProjectCard(c, s)
         : isUtilizationCard
           ? renderUtilizationCard(c, td, s)
-          : renderStatSummary(c, td);
+          : isAssignedProjectCard
+            ? renderAssignedProjectsCard(c, td, s)
+            : renderStatSummary(c, td);
 
     return `
       <div class="${wrapperClass}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>
