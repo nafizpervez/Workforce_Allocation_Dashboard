@@ -138,6 +138,63 @@ function renderRunningProjectCard(c, s) {
     </div>`;
 }
 
+function formatUtilizationMetric(value) {
+  return `${Number(value || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
+function renderUtilizationBreakdown(s) {
+  const rows = [
+    {
+      label: 'Avg. Intrasourcing Utilization',
+      value: formatUtilizationMetric(s.avg_intrasourcing_utilization),
+      tone: 'intrasourcing',
+    },
+    {
+      label: 'Billable Utilization',
+      value: formatUtilizationMetric(s.billable_utilization),
+      tone: 'billable',
+    },
+    {
+      label: 'Project Utilization',
+      value: formatUtilizationMetric(s.project_utilization),
+      tone: 'project',
+    },
+  ];
+
+  return `
+    <section class="utilization-breakdown" aria-label="Utilization allocation averages">
+      <div class="utilization-breakdown__heading">
+        <span class="utilization-breakdown__hint">Allocation averages</span>
+      </div>
+      <div class="utilization-breakdown__list">
+        ${rows.map(row => `
+          <div class="utilization-breakdown__item utilization-breakdown__item--${row.tone}">
+            <span class="utilization-breakdown__label">${esc(row.label)}</span>
+            <span class="utilization-breakdown__value">${esc(row.value)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>`;
+}
+
+function renderUtilizationCard(c, td, s) {
+  return `
+    <div class="utilization-card">
+      <div class="utilization-card__summary">
+        <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
+        </div>
+        <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
+        <div class="text-sm text-gray-500 mb-2">${esc(c.label)}</div>
+        ${renderStatTrend(td)}
+      </div>
+      ${renderUtilizationBreakdown(s)}
+    </div>`;
+}
+
 function renderStatTrend(td) {
   const up = td.up;
 
@@ -189,7 +246,16 @@ function renderStats(s) {
       icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
       detailType: 'running-project-breakdown',
     },
-    { v: `${s.avg_utilization}%`, label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: 'Available weekly allocation only; N/A resource-weeks are excluded from numerator and denominator', icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
+    {
+      v: `${s.avg_utilization}%`,
+      label: 'Avg Utilization',
+      tk: 'utilization',
+      bg: 'bg-teal-100',
+      fg: 'text-teal-600',
+      formula: 'Available weekly allocation only; N/A resource-weeks are excluded. Avg. Intrasourcing uses the matrix Intrasourcing average. Billable adds Intrasourcing, Local and Pre Sale. Project Utilization also adds Training.',
+      icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
+      detailType: 'utilization-breakdown',
+    },
     { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
     { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Active PS Resources: ${s.ps_count} · Avg Utilization: ${s.avg_utilization}% · Score = avg util ÷ PS count`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
     { v: `${s.on_time_pct}%`, label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: 'On-track projects ÷ Total projects × 100', icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
@@ -199,11 +265,13 @@ function renderStats(s) {
     const td = t[c.tk] || { value: '—', up: true };
     const isActiveResourceCard = c.detailType === 'designation-breakdown';
     const isRunningProjectCard = c.detailType === 'running-project-breakdown';
+    const isUtilizationCard = c.detailType === 'utilization-breakdown';
     const wrapperClass = [
       'dc',
       'dc-stat',
       isActiveResourceCard ? 'dc-stat--active-resources' : '',
       isRunningProjectCard ? 'dc-stat--running-projects' : '',
+      isUtilizationCard ? 'dc-stat--utilization' : '',
     ].filter(Boolean).join(' ');
     const cardContent = isActiveResourceCard
       ? `
@@ -213,7 +281,9 @@ function renderStats(s) {
         </div>`
       : isRunningProjectCard
         ? renderRunningProjectCard(c, s)
-        : renderStatSummary(c, td);
+        : isUtilizationCard
+          ? renderUtilizationCard(c, td, s)
+          : renderStatSummary(c, td);
 
     return `
       <div class="${wrapperClass}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>

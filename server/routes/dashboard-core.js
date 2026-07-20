@@ -65,6 +65,98 @@ function isProfessionalServiceProject(project) {
   return family === 'professional service' || family === 'professional services';
 }
 
+function normalizeAllocationProjectName(value) {
+  return String(value || '')
+    .replace(/[‐‑‒–—−_]+/g, '-')
+    .replace(/\s*-\s*/g, '-')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function classifyAllocationProject(projectName) {
+  const normalizedName = normalizeAllocationProjectName(projectName);
+  if (isUnavailableProjectName(normalizedName)) return 'unavailable';
+  if (/intrasource/i.test(normalizedName)) return 'intrasourcing';
+  if (/pre[\s-]*sale/i.test(normalizedName)) return 'preSale';
+  if (/training[\s-]*delivery/i.test(normalizedName)) return 'training';
+  if (/general[\s-]*admin/i.test(normalizedName)) return 'generalAdmin';
+  return 'local';
+}
+
+function getFiscalAllocationCategorySummary(rawAssignments, employees, totalWeeks) {
+  const unavailableSlots = getUnavailableSlotSet(rawAssignments);
+  const effectiveAssignments = filterEffectiveAssignments(rawAssignments);
+  const unavailableCountByEmployee = new Map();
+  const percentagesByEmployee = new Map();
+  const categoryKeys = [
+    'intrasourcing',
+    'local',
+    'preSale',
+    'training',
+    'generalAdmin',
+  ];
+
+  for (const slot of unavailableSlots) {
+    const employeeId = Number(String(slot).split('|')[0]);
+    unavailableCountByEmployee.set(
+      employeeId,
+      (unavailableCountByEmployee.get(employeeId) || 0) + 1,
+    );
+  }
+
+  for (const assignment of effectiveAssignments) {
+    const employeeId = Number(assignment.employee_id);
+    const category = classifyAllocationProject(assignment.project_name);
+    if (!categoryKeys.includes(category)) continue;
+
+    if (!percentagesByEmployee.has(employeeId)) {
+      percentagesByEmployee.set(
+        employeeId,
+        Object.fromEntries(categoryKeys.map(key => [key, 0])),
+      );
+    }
+
+    percentagesByEmployee.get(employeeId)[category] +=
+      Number(assignment.percentage) || 0;
+  }
+
+  const availableRows = employees.map(employee => {
+    const employeeId = Number(employee.id);
+    const unavailableWeeks = unavailableCountByEmployee.get(employeeId) || 0;
+    const availableWeeks = Math.max(0, totalWeeks - unavailableWeeks);
+    const percentageTotals = percentagesByEmployee.get(employeeId) ||
+      Object.fromEntries(categoryKeys.map(key => [key, 0]));
+
+    return {
+      availableWeeks,
+      allocation: Object.fromEntries(categoryKeys.map(key => [
+        key,
+        availableWeeks ? percentageTotals[key] / availableWeeks : 0,
+      ])),
+    };
+  }).filter(row => row.availableWeeks > 0);
+
+  const averageCategory = category => availableRows.length
+    ? availableRows.reduce(
+      (total, row) => total + row.allocation[category],
+      0,
+    ) / availableRows.length
+    : 0;
+
+  const intrasourcing = averageCategory('intrasourcing');
+  const local = averageCategory('local');
+  const preSale = averageCategory('preSale');
+  const training = averageCategory('training');
+  const billable = intrasourcing + local + preSale;
+  const project = billable + training;
+
+  return {
+    intrasourcing: +intrasourcing.toFixed(1),
+    billable: +billable.toFixed(1),
+    project: +project.toFixed(1),
+  };
+}
+
 function getClosedWonProjectSummary(projects, now = new Date()) {
   const today = new Date(Date.UTC(
     now.getUTCFullYear(),
@@ -160,6 +252,11 @@ router.get('/api/dashboard/stats', (req, res) => {
   const assignments = getAssignmentRows();
   const fiscalRaw = assignments.filter(assignment => isFiscalAssignment(assignment, fy));
   const fiscalMetrics = periodMetrics(fiscalRaw, employees, FY_WEEK_COUNT);
+  const fiscalAllocationSummary = getFiscalAllocationCategorySummary(
+    fiscalRaw,
+    employees,
+    FY_WEEK_COUNT,
+  );
 
   const activeEmployees = employees.length;
   const analyticProjects = db.prepare(`
@@ -225,6 +322,9 @@ router.get('/api/dashboard/stats', (req, res) => {
     on_time_running_projects: runningProjectSummary.onTimeProjects,
     running_project_revenue: runningProjectSummary.revenue,
     avg_utilization: +avgUtil.toFixed(1),
+    avg_intrasourcing_utilization: fiscalAllocationSummary.intrasourcing,
+    billable_utilization: fiscalAllocationSummary.billable,
+    project_utilization: fiscalAllocationSummary.project,
     assigned_projects: assignedProjects,
     productivity,
     ps_count: psCount,

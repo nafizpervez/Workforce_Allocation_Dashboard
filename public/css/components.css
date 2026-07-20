@@ -250,9 +250,10 @@
 #statsRow {
   display: grid;
   grid-template-columns:
-    minmax(370px, 1.28fr)
-    minmax(350px, 1.22fr)
-    repeat(4, minmax(0, 1fr));
+    minmax(370px, 1.25fr)
+    minmax(350px, 1.18fr)
+    minmax(330px, 1.08fr)
+    repeat(3, minmax(0, 1fr));
   gap: 18px;
   overflow: visible;
   padding: 1px;
@@ -536,6 +537,142 @@
   border-color: #ddd6fe;
 }
 
+
+
+.utilization-card {
+  display: grid;
+  grid-template-columns: 108px minmax(0, 1fr);
+  gap: 11px;
+  height: 138px;
+  min-height: 138px;
+}
+
+.utilization-card__summary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: flex-start;
+  padding-right: 11px;
+  border-right: 1px solid #dbe7e5;
+}
+
+.utilization-card__summary > .text-sm.text-gray-500 {
+  margin-bottom: 4px;
+  line-height: 1.2;
+}
+
+.utilization-breakdown {
+  min-width: 0;
+  padding: 1px 0;
+}
+
+.utilization-breakdown__heading {
+  display: flex;
+  min-height: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.utilization-breakdown__hint {
+  color: #94a3b8;
+  font-size: 8.5px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.utilization-breakdown__list {
+  display: grid;
+  gap: 6px;
+}
+
+.utilization-breakdown__item {
+  display: flex;
+  min-width: 0;
+  height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 7px 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.utilization-breakdown__label {
+  min-width: 0;
+  color: #475569;
+  font-size: 9px;
+  font-weight: 600;
+  line-height: 1.1;
+}
+
+.utilization-breakdown__value {
+  display: inline-flex;
+  min-width: 44px;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid #bde8df;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #0f766e;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.utilization-breakdown__item--intrasourcing {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.utilization-breakdown__item--intrasourcing .utilization-breakdown__label,
+.utilization-breakdown__item--intrasourcing .utilization-breakdown__value {
+  color: #0f766e;
+}
+
+.utilization-breakdown__item--intrasourcing .utilization-breakdown__value {
+  border-color: #5eead4;
+  background: #ffffff;
+}
+
+.utilization-breakdown__item--billable {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.utilization-breakdown__item--billable .utilization-breakdown__label,
+.utilization-breakdown__item--billable .utilization-breakdown__value {
+  color: #b45309;
+}
+
+.utilization-breakdown__item--billable .utilization-breakdown__value {
+  border-color: #fcd34d;
+  background: #ffffff;
+}
+
+.utilization-breakdown__item--project {
+  border-color: #ddd6fe;
+  background: #faf5ff;
+}
+
+.utilization-breakdown__item--project .utilization-breakdown__label,
+.utilization-breakdown__item--project .utilization-breakdown__value {
+  color: #7c3aed;
+}
+
+.utilization-breakdown__item--project .utilization-breakdown__value {
+  border-color: #c4b5fd;
+  background: #ffffff;
+}
+
 @media (max-width: 1500px) {
   #statsRow {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -549,7 +686,8 @@
   }
 
   #statsRow > .dc-stat--active-resources,
-  #statsRow > .dc-stat--running-projects {
+  #statsRow > .dc-stat--running-projects,
+  #statsRow > .dc-stat--utilization {
     grid-column: 1 / -1;
   }
 }
@@ -560,7 +698,8 @@
   }
 
   #statsRow > .dc-stat--active-resources,
-  #statsRow > .dc-stat--running-projects {
+  #statsRow > .dc-stat--running-projects,
+  #statsRow > .dc-stat--utilization {
     grid-column: auto;
   }
 
@@ -582,8 +721,18 @@
     padding-right: 11px;
   }
 
+  .utilization-card {
+    grid-template-columns: 104px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .utilization-card__summary {
+    padding-right: 11px;
+  }
+
   .active-resource-composition__hint,
-  .running-project-health__hint {
+  .running-project-health__hint,
+  .utilization-breakdown__hint {
     display: none;
   }
 }

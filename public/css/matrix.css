@@ -203,11 +203,11 @@ tr.row-even td.cell {
 }
 
 tr.row-even .matrix-allocation-cell {
-  background: #f8fafc;
+  background: #fbfcfe;
 }
 
 tr.row-even .matrix-revenue-cell {
-  background: #f2f7fc;
+  background: #eff6ff;
 }
 
 tr.row-odd .matrix-fixed-cell,
@@ -216,11 +216,11 @@ tr.row-odd td.cell {
 }
 
 tr.row-odd .matrix-allocation-cell {
-  background: #f3f6f9;
+  background: #f7f9fb;
 }
 
 tr.row-odd .matrix-revenue-cell {
-  background: #edf4fb;
+  background: #e7f1ff;
 }
 
 tr.matrix-row:hover .matrix-fixed-cell,
