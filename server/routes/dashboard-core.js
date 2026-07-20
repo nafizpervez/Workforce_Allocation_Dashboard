@@ -1,6 +1,6 @@
 const express = require('express');
 const { getAppDb } = require('../database');
-const { calcDealStatuses } = require('../services/project-analytics');
+const { calcDealStatuses, getRevenueAmount } = require('../services/project-analytics');
 const { fiscalMonths, getRunningProjectCutoffDate } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
 const {
@@ -37,6 +37,70 @@ function isFiscalAssignment(assignment, fiscalYear) {
     (Number(assignment.year) === Number(fiscalYear) && Number(assignment.month) >= 4) ||
     (Number(assignment.year) === Number(fiscalYear) + 1 && Number(assignment.month) <= 3)
   );
+}
+
+function parseProjectDate(dateText) {
+  const value = String(dateText || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(value)) return null;
+
+  const date = new Date(`${value}T00:00:00Z`);
+  return Number.isNaN(date.getTime()) ? null : date;
+}
+
+function addUtcMonths(date, monthCount) {
+  const result = new Date(date.getTime());
+  result.setUTCMonth(result.getUTCMonth() + Number(monthCount || 0));
+  return result;
+}
+
+function normalizeProjectFamily(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function isProfessionalServiceProject(project) {
+  const family = normalizeProjectFamily(project?.product_family);
+  return family === 'professional service' || family === 'professional services';
+}
+
+function getClosedWonProjectSummary(projects, now = new Date()) {
+  const today = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+
+  const runningProjects = projects.filter(project => (
+    String(project.stage || '').trim().toLowerCase() === 'closed won' &&
+    isProfessionalServiceProject(project)
+  ));
+
+  let delayedProjects = 0;
+  let onTimeProjects = 0;
+
+  for (const project of runningProjects) {
+    const closeWonDate = parseProjectDate(project.end_date);
+    if (!closeWonDate) continue;
+
+    const sixMonthDeadline = addUtcMonths(closeWonDate, 6);
+
+    if (sixMonthDeadline < today) {
+      if (Number(project.progress) < 100) delayedProjects += 1;
+    } else {
+      onTimeProjects += 1;
+    }
+  }
+
+  return {
+    count: runningProjects.length,
+    delayedProjects,
+    onTimeProjects,
+    revenue: +runningProjects
+      .reduce((total, project) => total + getRevenueAmount(project), 0)
+      .toFixed(2),
+  };
 }
 
 function periodMetrics(rawAssignments, employees, totalWeeks) {
@@ -98,9 +162,21 @@ router.get('/api/dashboard/stats', (req, res) => {
   const fiscalMetrics = periodMetrics(fiscalRaw, employees, FY_WEEK_COUNT);
 
   const activeEmployees = employees.length;
-  const analyticProjects = db.prepare(`SELECT id, name, stage, progress FROM projects`).all()
-    .filter(project => !isUnavailableProjectName(project.name));
+  const analyticProjects = db.prepare(`
+    SELECT
+      id,
+      name,
+      stage,
+      progress,
+      end_date,
+      product_family,
+      product_amount,
+      opp_amount,
+      budget
+    FROM projects
+  `).all().filter(project => !isUnavailableProjectName(project.name));
   const activeProjects = analyticProjects.filter(project => project.stage !== 'Closed Won').length;
+  const runningProjectSummary = getClosedWonProjectSummary(analyticProjects);
   const assignedProjects = new Set(
     fiscalMetrics.effectiveAssignments.map(assignment => Number(assignment.project_id)),
   ).size;
@@ -144,6 +220,10 @@ router.get('/api/dashboard/stats', (req, res) => {
   res.json({
     active_employees: activeEmployees,
     active_projects: activeProjects,
+    running_projects: runningProjectSummary.count,
+    delayed_running_projects: runningProjectSummary.delayedProjects,
+    on_time_running_projects: runningProjectSummary.onTimeProjects,
+    running_project_revenue: runningProjectSummary.revenue,
     avg_utilization: +avgUtil.toFixed(1),
     assigned_projects: assignedProjects,
     productivity,

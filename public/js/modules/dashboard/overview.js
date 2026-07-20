@@ -64,6 +64,80 @@ function renderActiveResourceDesignationList() {
     </section>`;
 }
 
+function formatRunningProjectRevenue(value) {
+  if (typeof formatRevenueViewValue === 'function') {
+    return formatRevenueViewValue(value);
+  }
+
+  const amount = Number(value) || 0;
+  const absoluteAmount = Math.abs(amount);
+
+  if (absoluteAmount >= 1_000_000) {
+    return `$${(amount / 1_000_000).toLocaleString('en-US', {
+      maximumFractionDigits: 1,
+    })}M`;
+  }
+
+  if (absoluteAmount >= 1_000) {
+    return `$${(amount / 1_000).toLocaleString('en-US', {
+      maximumFractionDigits: 1,
+    })}K`;
+  }
+
+  return `$${amount.toLocaleString('en-US', {
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function renderRunningProjectSummary(s) {
+  const rows = [
+    {
+      label: 'Delayed Projects',
+      value: (Number(s.delayed_running_projects) || 0).toLocaleString(),
+      tone: 'delayed',
+    },
+    {
+      label: 'On-Time Projects',
+      value: (Number(s.on_time_running_projects) || 0).toLocaleString(),
+      tone: 'on-time',
+    },
+    {
+      label: 'Running Revenue',
+      value: formatRunningProjectRevenue(s.running_project_revenue),
+      tone: 'revenue',
+    },
+  ];
+
+  return `
+    <section class="running-project-health" aria-label="Running project health">
+      <div class="running-project-health__heading">
+        <span class="running-project-health__hint">Professional Services</span>
+      </div>
+      <div class="running-project-health__list">
+        ${rows.map(row => `
+          <div class="running-project-health__item running-project-health__item--${row.tone}">
+            <span class="running-project-health__label">${esc(row.label)}</span>
+            <span class="running-project-health__value">${esc(String(row.value))}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>`;
+}
+
+function renderRunningProjectCard(c, s) {
+  return `
+    <div class="running-project-card">
+      <div class="running-project-card__summary">
+        <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
+        </div>
+        <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
+        <div class="text-sm text-gray-500">${esc(c.label)}</div>
+      </div>
+      ${renderRunningProjectSummary(s)}
+    </div>`;
+}
+
 function renderStatTrend(td) {
   const up = td.up;
 
@@ -104,7 +178,17 @@ function renderStats(s) {
       icon: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
       detailType: 'designation-breakdown',
     },
-    { v: s.active_projects.toLocaleString(), label: 'Projects', tk: 'projects', action: 'view-projects', bg: 'bg-purple-100', fg: 'text-purple-600', formula: 'Count of all projects registered in the system', icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>' },
+    {
+      v: Number(s.running_projects || 0).toLocaleString(),
+      label: 'Running Projects',
+      tk: 'projects',
+      action: 'view-projects',
+      bg: 'bg-purple-100',
+      fg: 'text-purple-600',
+      formula: 'Closed Won Professional Services projects only. Delayed means the Close Won Date passed six months ago and progress remains below 100%. Revenue uses Product Amount, falling back to Opportunity Amount or Budget.',
+      icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
+      detailType: 'running-project-breakdown',
+    },
     { v: `${s.avg_utilization}%`, label: 'Avg Utilization', tk: 'utilization', bg: 'bg-teal-100', fg: 'text-teal-600', formula: 'Available weekly allocation only; N/A resource-weeks are excluded from numerator and denominator', icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>' },
     { v: s.assigned_projects.toLocaleString(), label: 'Assigned Projects', tk: 'assigned_projects', bg: 'bg-orange-100', fg: 'text-orange-600', formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}`, icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>' },
     { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Active PS Resources: ${s.ps_count} · Avg Utilization: ${s.avg_utilization}% · Score = avg util ÷ PS count`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
@@ -114,16 +198,22 @@ function renderStats(s) {
   document.getElementById('statsRow').innerHTML = cards.map(c => {
     const td = t[c.tk] || { value: '—', up: true };
     const isActiveResourceCard = c.detailType === 'designation-breakdown';
-    const wrapperClass = isActiveResourceCard
-      ? 'dc dc-stat dc-stat--active-resources'
-      : 'dc dc-stat';
+    const isRunningProjectCard = c.detailType === 'running-project-breakdown';
+    const wrapperClass = [
+      'dc',
+      'dc-stat',
+      isActiveResourceCard ? 'dc-stat--active-resources' : '',
+      isRunningProjectCard ? 'dc-stat--running-projects' : '',
+    ].filter(Boolean).join(' ');
     const cardContent = isActiveResourceCard
       ? `
         <div class="active-resource-card">
           ${renderStatSummary(c, td, { activeResource: true })}
           ${renderActiveResourceDesignationList()}
         </div>`
-      : renderStatSummary(c, td);
+      : isRunningProjectCard
+        ? renderRunningProjectCard(c, s)
+        : renderStatSummary(c, td);
 
     return `
       <div class="${wrapperClass}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>

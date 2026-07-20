@@ -250,8 +250,9 @@
 #statsRow {
   display: grid;
   grid-template-columns:
-    minmax(370px, 1.35fr)
-    repeat(5, minmax(0, 1fr));
+    minmax(370px, 1.28fr)
+    minmax(350px, 1.22fr)
+    repeat(4, minmax(0, 1fr));
   gap: 18px;
   overflow: visible;
   padding: 1px;
@@ -398,14 +399,158 @@
   color: #1d4ed8;
 }
 
-@media (max-width: 1180px) {
+
+
+.running-project-card {
+  display: grid;
+  grid-template-columns: 116px minmax(0, 1fr);
+  gap: 13px;
+  height: 138px;
+  min-height: 138px;
+}
+
+.running-project-card__summary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding-right: 13px;
+  padding-bottom: 1px;
+  border-right: 1px solid #e5e7eb;
+}
+
+.running-project-card__summary > .text-sm.text-gray-500 {
+  line-height: 1.2;
+}
+
+.running-project-health {
+  min-width: 0;
+  padding: 1px 0;
+}
+
+.running-project-health__heading {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-height: 14px;
+  margin-bottom: 8px;
+}
+
+.running-project-health__hint {
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.running-project-health__list {
+  display: grid;
+  gap: 7px;
+}
+
+.running-project-health__item {
+  display: flex;
+  min-width: 0;
+  height: 34px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 5px 8px 5px 10px;
+  border: 1px solid #eef2f7;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.running-project-health__label {
+  min-width: 0;
+  overflow: hidden;
+  color: #475569;
+  font-size: 10.5px;
+  font-weight: 600;
+  line-height: 1.1;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.running-project-health__value {
+  display: inline-flex;
+  min-width: 31px;
+  height: 21px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 7px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 10.5px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.running-project-health__item--delayed {
+  border-color: #fee2e2;
+  background: #fffafa;
+}
+
+.running-project-health__item--delayed .running-project-health__label,
+.running-project-health__item--delayed .running-project-health__value {
+  color: #dc2626;
+}
+
+.running-project-health__item--delayed .running-project-health__value {
+  border-color: #fecaca;
+}
+
+.running-project-health__item--on-time {
+  border-color: #d1fae5;
+  background: #f8fffb;
+}
+
+.running-project-health__item--on-time .running-project-health__label,
+.running-project-health__item--on-time .running-project-health__value {
+  color: #059669;
+}
+
+.running-project-health__item--on-time .running-project-health__value {
+  border-color: #a7f3d0;
+}
+
+.running-project-health__item--revenue {
+  border-color: #ede9fe;
+  background: #fbfaff;
+}
+
+.running-project-health__item--revenue .running-project-health__label,
+.running-project-health__item--revenue .running-project-health__value {
+  color: #7c3aed;
+}
+
+.running-project-health__item--revenue .running-project-health__value {
+  min-width: 52px;
+  border-color: #ddd6fe;
+}
+
+@media (max-width: 1500px) {
   #statsRow {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
   }
+}
 
-  #statsRow > .dc-stat--active-resources {
-    grid-column: span 2;
+@media (max-width: 900px) {
+  #statsRow {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  #statsRow > .dc-stat--active-resources,
+  #statsRow > .dc-stat--running-projects {
+    grid-column: 1 / -1;
   }
 }
 
@@ -414,7 +559,8 @@
     grid-template-columns: minmax(0, 1fr);
   }
 
-  #statsRow > .dc-stat--active-resources {
+  #statsRow > .dc-stat--active-resources,
+  #statsRow > .dc-stat--running-projects {
     grid-column: auto;
   }
 
@@ -427,7 +573,17 @@
     padding-right: 11px;
   }
 
-  .active-resource-composition__hint {
+  .running-project-card {
+    grid-template-columns: 106px minmax(0, 1fr);
+    gap: 11px;
+  }
+
+  .running-project-card__summary {
+    padding-right: 11px;
+  }
+
+  .active-resource-composition__hint,
+  .running-project-health__hint {
     display: none;
   }
 }
