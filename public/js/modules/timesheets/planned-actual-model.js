@@ -333,6 +333,57 @@ function addPlannedActualMonthHours(map, year, month, hours) {
   map.set(key, (map.get(key) || 0) + numericHours);
 }
 
+function addPlannedActualMonthAmount(map, year, month, amount) {
+  const numericAmount = Number(amount) || 0;
+  if (numericAmount <= 0) return;
+
+  const key = plannedActualMonthKey(year, month);
+  map.set(key, (map.get(key) || 0) + numericAmount);
+}
+
+function getPlannedActualBudgetRateField(projectName, workType = '') {
+  const normalizedWorkType = normalizePlannedActualText(
+    typeof normalizeTimesheetWorkType === 'function'
+      ? normalizeTimesheetWorkType(workType)
+      : workType,
+  );
+  const normalizedProject = normalizePlannedActualText(projectName);
+  const classificationText = normalizedWorkType || normalizedProject;
+
+  if (!classificationText) return null;
+  if (/general admin|skill development/.test(classificationText)) return null;
+  if (/intrasourc/.test(classificationText)) return 'intrasourcing_rate';
+  if (/pre sales?|training delivery|local ps|service delivery local/.test(classificationText)) {
+    return 'local_rate';
+  }
+
+  if (/general admin|skill development/.test(normalizedProject)) return null;
+  if (/intrasourc/.test(normalizedProject)) return 'intrasourcing_rate';
+
+  // Named delivery projects that are not Intrasourcing use the shared Local
+  // rate, matching the dashboard's existing revenue model.
+  return 'local_rate';
+}
+
+function getPlannedActualHourlyRate(employee, projectName, workType = '') {
+  if (!employee) return null;
+
+  const rateField = getPlannedActualBudgetRateField(projectName, workType);
+  if (!rateField) return null;
+
+  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const rate = Number(rateRecord?.[rateField]);
+  return Number.isFinite(rate) && rate >= 0 ? rate : null;
+}
+
+function calculatePlannedActualBudget(hours, employee, projectName, workType = '') {
+  const numericHours = Number(hours) || 0;
+  if (numericHours <= 0) return 0;
+
+  const hourlyRate = getPlannedActualHourlyRate(employee, projectName, workType);
+  return hourlyRate === null ? 0 : numericHours * hourlyRate;
+}
+
 function addPlannedActualMonthResourceHours(map, year, month, resourceKey, resourceName, hours) {
   const monthKey = plannedActualMonthKey(year, month);
   if (!map.has(monthKey)) map.set(monthKey, new Map());
@@ -359,8 +410,12 @@ function getOrCreatePlannedActualProject(
       actualResourcesByMonth: new Map(),
       plannedByMonth: new Map(),
       actualByMonth: new Map(),
+      plannedBudgetByMonth: new Map(),
+      actualBudgetByMonth: new Map(),
       plannedHours: 0,
       actualHours: 0,
+      plannedBudget: 0,
+      actualBudget: 0,
     });
   } else {
     const entry = projectMap.get(key);
@@ -404,7 +459,14 @@ function finalizePlannedActualResources(resourceMap) {
     .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
 }
 
-function buildPlannedActualScope(plannedMap, actualMap, plannedHours, actualHours) {
+function buildPlannedActualScope(
+  plannedMap,
+  actualMap,
+  plannedHours,
+  actualHours,
+  plannedBudget = 0,
+  actualBudget = 0,
+) {
   const plannedResources = finalizePlannedActualResources(plannedMap);
   const actualResources = finalizePlannedActualResources(actualMap);
   const normalizedPlannedHours = +Number(plannedHours || 0).toFixed(2);
@@ -425,6 +487,8 @@ function buildPlannedActualScope(plannedMap, actualMap, plannedHours, actualHour
     actualResources,
     plannedHours: normalizedPlannedHours,
     actualHours: normalizedActualHours,
+    plannedBudget: +Number(plannedBudget || 0).toFixed(2),
+    actualBudget: +Number(actualBudget || 0).toFixed(2),
     varianceHours,
     variancePct,
     addedResources: actualResources.filter(resource => !plannedKeys.has(resource.key)),
@@ -498,7 +562,20 @@ function buildPlannedActualEffortData() {
       hours,
     );
     addPlannedActualMonthHours(projectEntry.plannedByMonth, assignment.year, assignment.month, hours);
+    const plannedBudget = calculatePlannedActualBudget(
+      hours,
+      employee,
+      assignmentProjectName,
+      resolvedProject.workType,
+    );
+    addPlannedActualMonthAmount(
+      projectEntry.plannedBudgetByMonth,
+      assignment.year,
+      assignment.month,
+      plannedBudget,
+    );
     projectEntry.plannedHours += hours;
+    projectEntry.plannedBudget += plannedBudget;
   }
 
   for (const row of getVisibleTimesheetRows()) {
@@ -546,7 +623,20 @@ function buildPlannedActualEffortData() {
       hours,
     );
     addPlannedActualMonthHours(projectEntry.actualByMonth, parsedMonth.year, parsedMonth.month, hours);
+    const actualBudget = calculatePlannedActualBudget(
+      hours,
+      matchedEmployee,
+      row.projectName || resolvedProject.label,
+      row.workType,
+    );
+    addPlannedActualMonthAmount(
+      projectEntry.actualBudgetByMonth,
+      parsedMonth.year,
+      parsedMonth.month,
+      actualBudget,
+    );
     projectEntry.actualHours += hours;
+    projectEntry.actualBudget += actualBudget;
   }
 
   const projects = [...projectMap.values()].map(entry => {
@@ -555,6 +645,8 @@ function buildPlannedActualEffortData() {
       entry.actualByResource,
       entry.plannedHours,
       entry.actualHours,
+      entry.plannedBudget,
+      entry.actualBudget,
     );
     const monthly = fiscalMonthList.map(({ y, m, label }) => {
       const key = plannedActualMonthKey(y, m);
@@ -570,6 +662,8 @@ function buildPlannedActualEffortData() {
           entry.actualResourcesByMonth.get(key),
           planned,
           actual,
+          entry.plannedBudgetByMonth.get(key) || 0,
+          entry.actualBudgetByMonth.get(key) || 0,
         ),
         planned,
         actual,
@@ -599,7 +693,30 @@ function buildPlannedActualEffortData() {
     projects,
     plannedHours: +projects.reduce((sum, project) => sum + project.plannedHours, 0).toFixed(2),
     actualHours: +projects.reduce((sum, project) => sum + project.actualHours, 0).toFixed(2),
+    plannedBudget: +projects.reduce((sum, project) => sum + project.plannedBudget, 0).toFixed(2),
+    actualBudget: +projects.reduce((sum, project) => sum + project.actualBudget, 0).toFixed(2),
   };
+}
+
+function formatPlannedActualBudget(value) {
+  if (typeof formatRevenueViewValue === 'function') {
+    return formatRevenueViewValue(value);
+  }
+
+  return `$${Number(value || 0).toLocaleString('en-US', {
+    maximumFractionDigits: 0,
+  })}`;
+}
+
+function formatPlannedActualBudgetExact(value) {
+  if (typeof formatExactRevenueValue === 'function') {
+    return formatExactRevenueValue(value);
+  }
+
+  return `$${Number(value || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
 }
 
 function formatPlannedActualHours(value) {

@@ -4,7 +4,7 @@
 function runningProjectRowHtml(d) {
   const barColor = '#10B981';
   const amount = fmtUsd(d.product_amount || 0);
-  const closingDate = d.closing_date || d.project_closing_date || d.end_date;
+  const closingDate = d.project_closing_date || d.closing_date || '';
   const today = new Date();
   const daysVal = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
   const isPast = daysVal !== null && daysVal < 0;

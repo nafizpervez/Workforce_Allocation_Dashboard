@@ -347,6 +347,7 @@ function applyPipelineFilters(list) {
 function applyRunningFilters(list) {
   const q = (S.runSearch || '').toLowerCase().trim();
   return list.filter(d => {
+    if (Number(d.progress) >= 100) return false;
     if (!getAmountOk(d.opp_amount, S.runAmountFilt)) return false;
     const cd = d.closing_date || d.project_closing_date || d.end_date;
     if (S.runCloseFilt && !matchDateFilter(cd, S.runCloseFilt)) return false;

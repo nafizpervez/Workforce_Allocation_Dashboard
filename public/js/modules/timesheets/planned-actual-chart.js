@@ -1,187 +1,53 @@
 /* Workforce Allocation Dashboard — timesheets/planned-actual-chart.js */
 
 let plannedActualFlowResizeTimer = null;
-let plannedActualProjectOptions = [];
-let plannedActualProjectActiveIndex = -1;
+let plannedActualProjectInputTimer = null;
 
-function normalizePlannedActualProjectSearch(value) {
-  if (typeof normalizePlannedActualText === 'function') {
-    return normalizePlannedActualText(value);
-  }
+function normalizePlannedActualProjectInput(value) {
   return String(value || '')
     .trim()
     .toLowerCase()
-    .replace(/[^a-z0-9]+/g, ' ')
-    .replace(/\s+/g, ' ')
-    .trim();
+    .replace(/[–—]/g, '-')
+    .replace(/\s+/g, ' ');
 }
 
-function getPlannedActualProjectInput() {
-  return document.getElementById('plannedActualProjectFilter');
-}
+function resolvePlannedActualProject(data, value) {
+  const normalized = normalizePlannedActualProjectInput(value);
+  if (!normalized) return null;
 
-function getPlannedActualProjectList() {
-  return document.getElementById('plannedActualProjectOptions');
+  return data.projects.find(project => (
+    normalizePlannedActualProjectInput(project.key) === normalized ||
+    normalizePlannedActualProjectInput(project.label) === normalized
+  )) || null;
 }
 
 function getPlannedActualSelection(data) {
-  const input = getPlannedActualProjectInput();
-  const selectedKey = input?.dataset.selectedKey || '';
-  const selected = data.projects.find(item => item.key === selectedKey);
-  if (selected) return selected;
-
-  const typed = normalizePlannedActualProjectSearch(input?.value);
-  const exact = typed
-    ? data.projects.find(item => normalizePlannedActualProjectSearch(item.label) === typed)
-    : null;
-  return exact || data.projects[0] || null;
-}
-
-function getFilteredPlannedActualProjects(query = '') {
-  const normalizedQuery = normalizePlannedActualProjectSearch(query);
-  if (!normalizedQuery) return [...plannedActualProjectOptions];
-
-  return plannedActualProjectOptions.filter(project => {
-    const label = normalizePlannedActualProjectSearch(project.label);
-    const key = normalizePlannedActualProjectSearch(project.key);
-    return label.includes(normalizedQuery) || key.includes(normalizedQuery);
-  });
-}
-
-function setPlannedActualProjectListOpen(open) {
-  const input = getPlannedActualProjectInput();
-  const list = getPlannedActualProjectList();
-  if (!input || !list) return;
-
-  list.hidden = !open;
-  input.setAttribute('aria-expanded', open ? 'true' : 'false');
-  if (!open) {
-    plannedActualProjectActiveIndex = -1;
-    input.removeAttribute('aria-activedescendant');
-  }
-}
-
-function renderPlannedActualProjectOptions(query = '') {
-  const input = getPlannedActualProjectInput();
-  const list = getPlannedActualProjectList();
-  if (!input || !list) return [];
-
-  const matches = getFilteredPlannedActualProjects(query);
-  const selectedKey = input.dataset.selectedKey || '';
-
-  list.innerHTML = matches.length
-    ? matches.map((project, index) => {
-      const isSelected = project.key === selectedKey;
-      const isActive = index === plannedActualProjectActiveIndex;
-      return `
-        <button
-          id="plannedActualProjectOption-${index}"
-          class="planned-actual-combobox-option${isSelected ? ' is-selected' : ''}${isActive ? ' is-active' : ''}"
-          type="button"
-          role="option"
-          aria-selected="${isSelected ? 'true' : 'false'}"
-          data-project-key="${esc(project.key)}"
-        >${esc(project.label)}</button>
-      `;
-    }).join('')
-    : '<div class="planned-actual-combobox-empty" role="status">No matching project</div>';
-
-  if (plannedActualProjectActiveIndex >= matches.length) {
-    plannedActualProjectActiveIndex = matches.length ? 0 : -1;
-  }
-
-  const active = plannedActualProjectActiveIndex >= 0
-    ? document.getElementById(`plannedActualProjectOption-${plannedActualProjectActiveIndex}`)
-    : null;
-  if (active) {
-    active.classList.add('is-active');
-    input.setAttribute('aria-activedescendant', active.id);
-    active.scrollIntoView({ block: 'nearest' });
-  } else {
-    input.removeAttribute('aria-activedescendant');
-  }
-
-  return matches;
-}
-
-function commitPlannedActualProject(project, { render = true } = {}) {
-  const input = getPlannedActualProjectInput();
-  if (!input || !project) return false;
-
-  input.dataset.selectedKey = project.key;
-  input.dataset.selectedLabel = project.label;
-  input.value = project.label;
-  input.setCustomValidity('');
-  setPlannedActualProjectListOpen(false);
-
-  if (render) renderPlannedActualEffortChart();
-  return true;
-}
-
-function restorePlannedActualProjectSelection() {
-  const input = getPlannedActualProjectInput();
-  if (!input) return;
-
-  const selected = plannedActualProjectOptions.find(
-    project => project.key === (input.dataset.selectedKey || ''),
-  );
-  if (selected) {
-    input.value = selected.label;
-    input.setCustomValidity('');
-  }
-}
-
-function commitTypedPlannedActualProject() {
-  const input = getPlannedActualProjectInput();
-  if (!input) return false;
-
-  const typed = normalizePlannedActualProjectSearch(input.value);
-  const matches = getFilteredPlannedActualProjects(input.value);
-  const exact = typed
-    ? plannedActualProjectOptions.find(
-      project => normalizePlannedActualProjectSearch(project.label) === typed,
-    )
-    : null;
-  const active = plannedActualProjectActiveIndex >= 0
-    ? matches[plannedActualProjectActiveIndex]
-    : null;
-  const project = exact || active || (matches.length === 1 ? matches[0] : null);
-
-  if (project) return commitPlannedActualProject(project);
-
-  input.setCustomValidity('Select a project from the available matches.');
-  input.reportValidity();
-  restorePlannedActualProjectSelection();
-  setPlannedActualProjectListOpen(false);
-  return false;
+  const input = document.getElementById('plannedActualProjectFilter');
+  const resolved = resolvePlannedActualProject(data, input?.value);
+  return resolved || (!String(input?.value || '').trim() ? data.projects[0] || null : null);
 }
 
 function populatePlannedActualProjectFilter(data) {
-  const input = getPlannedActualProjectInput();
-  if (!input) return;
+  const input = document.getElementById('plannedActualProjectFilter');
+  const options = document.getElementById('plannedActualProjectOptions');
+  if (!input || !options) return;
 
-  plannedActualProjectOptions = Array.isArray(data.projects) ? data.projects : [];
-  const currentKey = input.dataset.selectedKey || '';
-  const current = plannedActualProjectOptions.find(project => project.key === currentKey);
-  const selected = current || plannedActualProjectOptions[0] || null;
+  const current = input.value;
+  const resolved = resolvePlannedActualProject(data, current);
 
-  if (selected) {
-    input.dataset.selectedKey = selected.key;
-    input.dataset.selectedLabel = selected.label;
-    input.value = selected.label;
-    input.placeholder = 'Select or type a project';
-    input.disabled = false;
+  options.innerHTML = data.projects.map(project => (
+    `<option value="${esc(project.label)}"></option>`
+  )).join('');
+
+  if (resolved) {
+    input.value = resolved.label;
+    input.dataset.projectKey = resolved.key;
+  } else if (!current.trim() && data.projects[0]) {
+    input.value = data.projects[0].label;
+    input.dataset.projectKey = data.projects[0].key;
   } else {
-    input.dataset.selectedKey = '';
-    input.dataset.selectedLabel = '';
-    input.value = '';
-    input.placeholder = 'No project data';
-    input.disabled = true;
+    delete input.dataset.projectKey;
   }
-
-  plannedActualProjectActiveIndex = -1;
-  renderPlannedActualProjectOptions('');
-  setPlannedActualProjectListOpen(false);
 }
 
 function populatePlannedActualMonthFilter(data) {
@@ -228,12 +94,6 @@ function renderPlannedActualSummary(data, project) {
     return;
   }
 
-  const varianceClass = project.varianceHours > 0
-    ? 'is-over'
-    : project.varianceHours < 0
-      ? 'is-under'
-      : 'is-on-plan';
-
   summary.innerHTML = `
     <div class="planned-actual-metric">
       <span>Planned resources</span>
@@ -251,13 +111,13 @@ function renderPlannedActualSummary(data, project) {
       <span>Actual effort</span>
       <strong>${esc(formatPlannedActualHours(project.actualHours))}</strong>
     </div>
-    <div class="planned-actual-metric ${varianceClass}">
-      <span>Execution variance</span>
-      <strong>${esc(formatPlannedActualVariance(project.varianceHours, project.variancePct))}</strong>
+    <div class="planned-actual-metric is-budget">
+      <span>Planned Budget</span>
+      <strong title="${esc(formatPlannedActualBudgetExact(project.plannedBudget))}">${esc(formatPlannedActualBudget(project.plannedBudget))}</strong>
     </div>
-    <div class="planned-actual-metric">
-      <span>Team retained</span>
-      <strong>${project.teamOverlapPct.toFixed(1)}%</strong>
+    <div class="planned-actual-metric is-budget">
+      <span>Actual Budget</span>
+      <strong title="${esc(formatPlannedActualBudgetExact(project.actualBudget))}">${esc(formatPlannedActualBudget(project.actualBudget))}</strong>
     </div>
   `;
 
@@ -266,7 +126,7 @@ function renderPlannedActualSummary(data, project) {
     const actualSource = project.actualMatchMode === 'work-type' && project.workType
       ? `actual hours use Time Sheet Work Type “${project.workType}”`
       : 'actual hours use matching Time Sheet project names';
-    note.textContent = `FY${data.fiscalYear + 1}${monthText}: planned hours come from weekly Resource Assignments; ${actualSource}.`;
+    note.textContent = `FY${data.fiscalYear + 1}${monthText}: planned hours and budget come from weekly Resource Assignments; ${actualSource}. Budgets use each matched resource’s saved designation rate.`;
   }
 }
 
@@ -649,98 +509,26 @@ function renderPlannedActualEffortChart() {
 }
 
 function initPlannedActualEffortEvents() {
-  const input = getPlannedActualProjectInput();
-  const list = getPlannedActualProjectList();
-  const toggle = document.getElementById('plannedActualProjectToggle');
+  const projectInput = document.getElementById('plannedActualProjectFilter');
+  if (projectInput && projectInput.dataset.bound !== '1') {
+    projectInput.dataset.bound = '1';
 
-  if (input && input.dataset.bound !== '1') {
-    input.dataset.bound = '1';
-
-    input.addEventListener('focus', () => {
-      plannedActualProjectActiveIndex = -1;
-      renderPlannedActualProjectOptions(input.value);
-      setPlannedActualProjectListOpen(true);
+    projectInput.addEventListener('input', () => {
+      clearTimeout(plannedActualProjectInputTimer);
+      plannedActualProjectInputTimer = setTimeout(() => {
+        const data = buildPlannedActualEffortData();
+        if (resolvePlannedActualProject(data, projectInput.value)) {
+          renderPlannedActualEffortChart();
+        }
+      }, 120);
     });
 
-    input.addEventListener('input', () => {
-      input.setCustomValidity('');
-      plannedActualProjectActiveIndex = -1;
-      renderPlannedActualProjectOptions(input.value);
-      setPlannedActualProjectListOpen(true);
-    });
-
-    input.addEventListener('keydown', event => {
-      const matches = getFilteredPlannedActualProjects(input.value);
-
-      if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
-        event.preventDefault();
-        if (!matches.length) return;
-        const direction = event.key === 'ArrowDown' ? 1 : -1;
-        plannedActualProjectActiveIndex = plannedActualProjectActiveIndex < 0
-          ? (direction > 0 ? 0 : matches.length - 1)
-          : (plannedActualProjectActiveIndex + direction + matches.length) % matches.length;
-        renderPlannedActualProjectOptions(input.value);
-        setPlannedActualProjectListOpen(true);
-        return;
-      }
-
+    projectInput.addEventListener('change', renderPlannedActualEffortChart);
+    projectInput.addEventListener('keydown', event => {
       if (event.key === 'Enter') {
         event.preventDefault();
-        commitTypedPlannedActualProject();
-        return;
-      }
-
-      if (event.key === 'Escape') {
-        event.preventDefault();
-        restorePlannedActualProjectSelection();
-        setPlannedActualProjectListOpen(false);
-      }
-    });
-
-    input.addEventListener('blur', () => {
-      window.setTimeout(() => {
-        if (!document.activeElement?.closest('#plannedActualProjectCombobox')) {
-          restorePlannedActualProjectSelection();
-          setPlannedActualProjectListOpen(false);
-        }
-      }, 0);
-    });
-  }
-
-  if (list && list.dataset.bound !== '1') {
-    list.dataset.bound = '1';
-    list.addEventListener('mousedown', event => event.preventDefault());
-    list.addEventListener('click', event => {
-      const option = event.target.closest('[data-project-key]');
-      if (!option) return;
-      const project = plannedActualProjectOptions.find(
-        item => item.key === option.dataset.projectKey,
-      );
-      commitPlannedActualProject(project);
-    });
-  }
-
-  if (toggle && toggle.dataset.bound !== '1') {
-    toggle.dataset.bound = '1';
-    toggle.addEventListener('click', () => {
-      if (!input || input.disabled) return;
-      const willOpen = document.getElementById('plannedActualProjectOptions')?.hidden !== false;
-      if (willOpen) {
-        input.focus();
-        input.select();
-        plannedActualProjectActiveIndex = -1;
-        renderPlannedActualProjectOptions('');
-      }
-      setPlannedActualProjectListOpen(willOpen);
-    });
-  }
-
-  if (document.documentElement.dataset.plannedActualProjectOutsideBound !== '1') {
-    document.documentElement.dataset.plannedActualProjectOutsideBound = '1';
-    document.addEventListener('mousedown', event => {
-      if (!event.target.closest('#plannedActualProjectCombobox')) {
-        restorePlannedActualProjectSelection();
-        setPlannedActualProjectListOpen(false);
+        clearTimeout(plannedActualProjectInputTimer);
+        renderPlannedActualEffortChart();
       }
     });
   }

@@ -835,6 +835,132 @@ function getMonthlyChartValue(row, workSource, categoryKey, mode) {
     : row[workSource].shares[categoryKey];
 }
 
+function getMonthlyPlannedWorkTooltipElement() {
+  let tooltip = document.getElementById('monthlyPlannedWorkTooltip');
+  if (tooltip) return tooltip;
+
+  tooltip = document.createElement('div');
+  tooltip.id = 'monthlyPlannedWorkTooltip';
+  tooltip.className = 'monthly-planned-work-tooltip';
+  tooltip.setAttribute('role', 'status');
+  tooltip.setAttribute('aria-live', 'polite');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function hideMonthlyPlannedWorkTooltip() {
+  const tooltip = document.getElementById('monthlyPlannedWorkTooltip');
+  if (tooltip) tooltip.style.opacity = '0';
+}
+
+function formatMonthlyWorkTooltipCell(source, categoryKey, mode, hasData = true) {
+  if (!hasData) return '—';
+
+  const hours = Number(source.hours[categoryKey]) || 0;
+  if (mode === 'revenue') {
+    const revenue = Number(source.revenue[categoryKey]) || 0;
+    return `${formatMonthlyRevenue(revenue, { exact: true })}<small>${formatMonthlyPlannedHours(hours)}</small>`;
+  }
+
+  const share = Number(source.shares[categoryKey]) || 0;
+  return `${formatMonthlyPlannedHours(hours)} <small>(${formatMonthlyPlannedPercent(share)})</small>`;
+}
+
+function formatMonthlyWorkTooltipTotal(source, mode, hasData = true) {
+  if (!hasData) return '—';
+
+  if (mode === 'revenue') {
+    return `${formatMonthlyRevenue(source.totalRevenue, { exact: true })}<small>${formatMonthlyPlannedHours(source.totalHours)}</small>`;
+  }
+
+  return `${formatMonthlyPlannedHours(source.totalHours)} <small>(${source.totalHours > 0 ? '100%' : '0%'})</small>`;
+}
+
+function buildMonthlyPlannedWorkTooltipHtml(row, mode) {
+  const categoryRows = MONTHLY_PLANNED_WORK_CATEGORIES.map(category => `
+    <tr>
+      <th scope="row">
+        <span class="monthly-planned-work-tooltip__swatch" style="background:${esc(category.color)}"></span>
+        <span>${esc(category.label)}</span>
+      </th>
+      <td>${formatMonthlyWorkTooltipCell(row.planned, category.key, mode)}</td>
+      <td>${formatMonthlyWorkTooltipCell(row.actual, category.key, mode, row.actual.hasData)}</td>
+    </tr>
+  `).join('');
+
+  const plannedResourceText = `${row.planned.resourceCount} resource${row.planned.resourceCount === 1 ? '' : 's'} · ${row.planned.projectCount} project${row.planned.projectCount === 1 ? '' : 's'}`;
+  const actualResourceText = row.actual.hasData
+    ? `${row.actual.resourceCount} resource${row.actual.resourceCount === 1 ? '' : 's'} · ${row.actual.projectCount} project${row.actual.projectCount === 1 ? '' : 's'}`
+    : 'No matching Time Sheet data';
+
+  return `
+    <div class="monthly-planned-work-tooltip__title">${esc(row.label)}</div>
+    <table class="monthly-planned-work-tooltip__table">
+      <thead>
+        <tr>
+          <th scope="col">Work type</th>
+          <th scope="col">Planned</th>
+          <th scope="col">Actual</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${categoryRows}
+        <tr class="monthly-planned-work-tooltip__total">
+          <th scope="row">Total</th>
+          <td>${formatMonthlyWorkTooltipTotal(row.planned, mode)}</td>
+          <td>${formatMonthlyWorkTooltipTotal(row.actual, mode, row.actual.hasData)}</td>
+        </tr>
+      </tbody>
+    </table>
+    <div class="monthly-planned-work-tooltip__meta">
+      <span><strong>Planned:</strong> ${esc(plannedResourceText)}</span>
+      <span><strong>Actual:</strong> ${esc(actualResourceText)}</span>
+    </div>
+  `;
+}
+
+function renderMonthlyPlannedWorkTooltip(context, series, mode) {
+  const { chart, tooltip } = context;
+  const element = getMonthlyPlannedWorkTooltipElement();
+
+  if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) {
+    element.style.opacity = '0';
+    return;
+  }
+
+  const row = series.rows[tooltip.dataPoints[0].dataIndex];
+  if (!row) {
+    element.style.opacity = '0';
+    return;
+  }
+
+  element.innerHTML = buildMonthlyPlannedWorkTooltipHtml(row, mode);
+  element.style.opacity = '1';
+  element.style.pointerEvents = 'none';
+
+  const canvasRect = chart.canvas.getBoundingClientRect();
+  const elementRect = element.getBoundingClientRect();
+  const viewportPadding = 10;
+  let left = canvasRect.left + tooltip.caretX + 14;
+  let top = canvasRect.top + tooltip.caretY - (elementRect.height / 2);
+
+  if (left + elementRect.width > window.innerWidth - viewportPadding) {
+    left = canvasRect.left + tooltip.caretX - elementRect.width - 14;
+  }
+
+  left = Math.max(viewportPadding, Math.min(
+    left,
+    window.innerWidth - elementRect.width - viewportPadding,
+  ));
+  top = Math.max(viewportPadding, Math.min(
+    top,
+    window.innerHeight - elementRect.height - viewportPadding,
+  ));
+
+  element.style.left = `${left}px`;
+  element.style.top = `${top}px`;
+}
+
 function renderMonthlyPlannedWorkChart() {
   const canvas = document.getElementById('monthlyPlannedWorkChart');
   if (!canvas) return;
@@ -865,6 +991,8 @@ function renderMonthlyPlannedWorkChart() {
       });
     return;
   }
+
+  hideMonthlyPlannedWorkTooltip();
 
   if (S.charts.monthlyPlannedWork) {
     S.charts.monthlyPlannedWork.destroy();
@@ -968,82 +1096,9 @@ function renderMonthlyPlannedWorkChart() {
           },
         },
         tooltip: {
-          padding: 11,
-          bodySpacing: 5,
-          filter(context) {
-            return context.raw !== null && context.raw !== undefined;
-          },
-          callbacks: {
-            title(items) {
-              if (!items.length) return '';
-              return series.rows[items[0].dataIndex].label;
-            },
-            label(context) {
-              const row = series.rows[context.dataIndex];
-              const source = row[context.dataset.workSource];
-              const hours = source.hours[context.dataset.categoryKey] || 0;
-              const sourceLabel = context.dataset.workSource === 'planned'
-                ? 'Planned'
-                : 'Actual';
-
-              if (mode === 'revenue') {
-                const revenue = Number(context.raw) || 0;
-                return ` ${sourceLabel} · ${context.dataset.categoryLabel}: ${formatMonthlyRevenue(revenue, { exact: true })} · ${formatMonthlyPlannedHours(hours)}`;
-              }
-
-              const share = Number(context.raw) || 0;
-              return ` ${sourceLabel} · ${context.dataset.categoryLabel}: ${formatMonthlyPlannedHours(hours)} (${formatMonthlyPlannedPercent(share)})`;
-            },
-            afterBody(items) {
-              if (!items.length) return [];
-              const row = series.rows[items[0].dataIndex];
-
-              if (mode === 'revenue') {
-                const lines = [
-                  '',
-                  `Planned revenue: ${formatMonthlyRevenue(row.planned.totalRevenue, { exact: true })}`,
-                ];
-
-                if (row.planned.unpricedRevenueHours > 0) {
-                  lines.push(
-                    `Planned unpriced hours: ${formatMonthlyPlannedHours(row.planned.unpricedRevenueHours)}`,
-                  );
-                }
-
-                if (row.actual.hasData) {
-                  lines.push(
-                    `Actual revenue: ${formatMonthlyRevenue(row.actual.totalRevenue, { exact: true })}`,
-                  );
-
-                  if (row.actual.unpricedRevenueHours > 0) {
-                    lines.push(
-                      `Actual unpriced hours: ${formatMonthlyPlannedHours(row.actual.unpricedRevenueHours)}`,
-                    );
-                  }
-                } else {
-                  lines.push('Actual: no matching Time Sheet data');
-                }
-
-                return lines;
-              }
-
-              const lines = [
-                '',
-                `Planned total: ${formatMonthlyPlannedHours(row.planned.totalHours)} · ${row.planned.totalFteWeeks.toFixed(1)} FTE-weeks`,
-                `${row.planned.resourceCount} planned resource${row.planned.resourceCount === 1 ? '' : 's'} · ${row.planned.projectCount} project${row.planned.projectCount === 1 ? '' : 's'}`,
-              ];
-
-              if (row.actual.hasData) {
-                lines.push(
-                  `Actual total: ${formatMonthlyPlannedHours(row.actual.totalHours)}`,
-                  `${row.actual.resourceCount} Time Sheet resource${row.actual.resourceCount === 1 ? '' : 's'} · ${row.actual.projectCount} project${row.actual.projectCount === 1 ? '' : 's'}`,
-                );
-              } else {
-                lines.push('Actual: no matching Time Sheet data');
-              }
-
-              return lines;
-            },
+          enabled: false,
+          external(context) {
+            renderMonthlyPlannedWorkTooltip(context, series, mode);
           },
         },
       },

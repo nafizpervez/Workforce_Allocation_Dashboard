@@ -169,3 +169,136 @@
     height: 440px;
   }
 }
+
+
+.monthly-planned-work-tooltip {
+  position: fixed;
+  z-index: 90;
+  width: min(660px, calc(100vw - 20px));
+  padding: 12px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.96);
+  color: #e2e8f0;
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 90ms ease;
+  backdrop-filter: blur(8px);
+}
+
+.monthly-planned-work-tooltip__title {
+  margin-bottom: 8px;
+  color: #ffffff;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.monthly-planned-work-tooltip__table {
+  width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  font-size: 10.5px;
+  table-layout: fixed;
+}
+
+.monthly-planned-work-tooltip__table th,
+.monthly-planned-work-tooltip__table td {
+  padding: 6px 8px;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  text-align: right;
+  vertical-align: middle;
+}
+
+.monthly-planned-work-tooltip__table th:first-child {
+  width: 46%;
+  text-align: left;
+}
+
+.monthly-planned-work-tooltip__table th:last-child,
+.monthly-planned-work-tooltip__table td:last-child {
+  border-right: 0;
+}
+
+.monthly-planned-work-tooltip__table tbody tr:last-child th,
+.monthly-planned-work-tooltip__table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.monthly-planned-work-tooltip__table thead th {
+  background: rgba(30, 41, 59, 0.92);
+  color: #cbd5e1;
+  font-size: 9.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-transform: uppercase;
+}
+
+.monthly-planned-work-tooltip__table tbody th {
+  color: #e2e8f0;
+  font-weight: 600;
+}
+
+.monthly-planned-work-tooltip__table tbody td {
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.monthly-planned-work-tooltip__table td small {
+  display: block;
+  margin-top: 1px;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 500;
+}
+
+.monthly-planned-work-tooltip__swatch {
+  display: inline-block;
+  width: 8px;
+  height: 8px;
+  margin-right: 6px;
+  border-radius: 2px;
+  vertical-align: 0;
+}
+
+.monthly-planned-work-tooltip__total th,
+.monthly-planned-work-tooltip__total td {
+  background: rgba(51, 65, 85, 0.72);
+  color: #ffffff !important;
+  font-weight: 700 !important;
+}
+
+.monthly-planned-work-tooltip__meta {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 8px;
+  color: #cbd5e1;
+  font-size: 9.5px;
+}
+
+.monthly-planned-work-tooltip__meta span {
+  min-width: 0;
+}
+
+@media (max-width: 700px) {
+  .monthly-planned-work-tooltip {
+    width: calc(100vw - 16px);
+    padding: 9px;
+  }
+
+  .monthly-planned-work-tooltip__table th,
+  .monthly-planned-work-tooltip__table td {
+    padding: 5px;
+  }
+
+  .monthly-planned-work-tooltip__meta {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}

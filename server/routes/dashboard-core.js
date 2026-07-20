@@ -166,7 +166,8 @@ function getClosedWonProjectSummary(projects, now = new Date()) {
 
   const runningProjects = projects.filter(project => (
     String(project.stage || '').trim().toLowerCase() === 'closed won' &&
-    isProfessionalServiceProject(project)
+    isProfessionalServiceProject(project) &&
+    Number(project.progress) < 100
   ));
 
   let delayedProjects = 0;
@@ -443,6 +444,7 @@ router.get('/api/dashboard/deadlines', (_, res) => {
            progress, priority, opp_amount, product_amount, account_name, stage, color, opportunity_owner
       FROM projects
      WHERE stage = 'Closed Won'
+       AND COALESCE(progress, 0) < 100
        AND end_date >= ?
        AND UPPER(COALESCE(product_name,'')) NOT LIKE '%PERSONAL USE%'
        AND UPPER(COALESCE(product_name,'')) NOT LIKE '%STUDENT USE%'
@@ -456,9 +458,9 @@ router.get('/api/dashboard/deadlines', (_, res) => {
   const statusMap = calcDealStatuses(allProjects);
 
   const enriched = rows.map(r => {
-    const closingDate = r.project_closing_date || r.end_date;
+    const closingDate = r.project_closing_date || null;
     const days = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
-    const status = days === null ? '—' : days < 0 ? 'Overdue' : days < 14 ? 'Due Soon' : 'On Track';
+    const status = days === null ? '' : days < 0 ? 'PS Work Begins' : days < 14 ? 'Due Soon' : 'On Track';
     return { ...r, closing_date: closingDate, days, status, deal_status: statusMap[r.id] || 'NEW LOGO' };
   });
   res.json(enriched);
