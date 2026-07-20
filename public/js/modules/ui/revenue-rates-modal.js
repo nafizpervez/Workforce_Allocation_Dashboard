@@ -120,6 +120,9 @@ async function saveRevenueRates() {
     S.revenueRates = await api('PUT', '/api/revenue-rates', { rates });
     closeModal();
     renderMatrix();
+    if (typeof renderStats === 'function' && S.dashboardStats) {
+      renderStats(S.dashboardStats);
+    }
     if (typeof renderMonthlyPlannedWorkChart === 'function') {
       renderMonthlyPlannedWorkChart();
     }

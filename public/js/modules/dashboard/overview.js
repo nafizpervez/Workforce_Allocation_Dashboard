@@ -245,6 +245,97 @@ function renderAssignedProjectsCard(c, td, s) {
     </div>`;
 }
 
+function getCommittedTargetSummary() {
+  const totals = {
+    intrasourcing: 0,
+    local: 0,
+  };
+  const activeEmployeeById = new Map(
+    getActiveEmployees().map(employee => [Number(employee.id), employee]),
+  );
+
+  for (const assignment of getEffectiveFiscalAssignments(
+    S.fiscalYear,
+    S.assignments,
+  )) {
+    const employee = activeEmployeeById.get(Number(assignment.employee_id));
+    if (!employee) continue;
+
+    const category = classifyAllocationProject(
+      getSummaryAssignmentProjectName(assignment),
+    );
+    if (category !== 'intrasourcing' && category !== 'local') continue;
+
+    const percentage = Number(assignment.percentage);
+    if (!Number.isFinite(percentage) || percentage <= 0) continue;
+
+    const rateRecord = getRevenueRateForDesignation(employee.designation);
+    const hourlyRate = getRevenueRateValue(rateRecord, category);
+    if (hourlyRate === null) continue;
+
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
+    totals[category] += hours * hourlyRate;
+  }
+
+  return {
+    intrasourcing: +totals.intrasourcing.toFixed(2),
+    local: +totals.local.toFixed(2),
+    total: +(totals.intrasourcing + totals.local).toFixed(2),
+  };
+}
+
+function formatCommittedTargetRevenue(value) {
+  return typeof formatRevenueViewValue === 'function'
+    ? formatRevenueViewValue(value)
+    : `$${Number(value || 0).toLocaleString('en-US', {
+      maximumFractionDigits: 0,
+    })}`;
+}
+
+function renderCommittedTargetBreakdown(summary) {
+  const rows = [
+    {
+      label: 'Intrasourcing Revenue Target',
+      value: formatCommittedTargetRevenue(summary.intrasourcing),
+      tone: 'intrasourcing',
+    },
+    {
+      label: 'Local PS Revenue Target',
+      value: formatCommittedTargetRevenue(summary.local),
+      tone: 'local',
+    },
+  ];
+
+  return `
+    <section class="committed-target-breakdown" aria-label="Committed revenue targets">
+      <div class="committed-target-breakdown__heading">
+        <span class="committed-target-breakdown__hint">Revenue targets</span>
+      </div>
+      <div class="committed-target-breakdown__list">
+        ${rows.map(row => `
+          <div class="committed-target-breakdown__item committed-target-breakdown__item--${row.tone}">
+            <span class="committed-target-breakdown__label">${esc(row.label)}</span>
+            <span class="committed-target-breakdown__value">${esc(row.value)}</span>
+          </div>
+        `).join('')}
+      </div>
+    </section>`;
+}
+
+function renderCommittedTargetCard(c, summary) {
+  return `
+    <div class="committed-target-card">
+      <div class="committed-target-card__summary">
+        <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
+        </div>
+        <div class="committed-target-card__amount">${esc(formatCommittedTargetRevenue(summary.total))}</div>
+        <div class="committed-target-card__title">Committed Target</div>
+      </div>
+      ${renderCommittedTargetBreakdown(summary)}
+    </div>`;
+}
+
 function renderStatTrend(td) {
   const up = td.up;
 
@@ -272,6 +363,7 @@ function renderStatSummary(c, td, { activeResource = false } = {}) {
 }
 
 function renderStats(s) {
+  S.dashboardStats = s;
   const t = s.trends || {};
   const cards = [
     {
@@ -316,9 +408,18 @@ function renderStats(s) {
       icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
       detailType: 'assigned-project-breakdown',
     },
-    { v: `${s.productivity}/${s.ps_count}`, label: 'Productivity Score', tk: 'productivity', bg: 'bg-amber-100', fg: 'text-amber-600', formula: `Active PS Resources: ${s.ps_count} · Avg Utilization: ${s.avg_utilization}% · Score = avg util ÷ PS count`, icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>' },
+    {
+      label: 'Committed Target',
+      bg: 'bg-amber-100',
+      fg: 'text-amber-600',
+      formula: 'Planned Resource Assignment revenue for the dashboard fiscal year. Committed Target equals Intrasourcing revenue plus Local PS revenue. Pre Sale, Training, General Admin and unavailable N/A resource-weeks are excluded.',
+      icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
+      detailType: 'committed-target-breakdown',
+    },
     { v: `${s.on_time_pct}%`, label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: 'On-track projects ÷ Total projects × 100', icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
   ];
+
+  const committedTargetSummary = getCommittedTargetSummary();
 
   document.getElementById('statsRow').innerHTML = cards.map(c => {
     const td = t[c.tk] || { value: '—', up: true };
@@ -326,6 +427,7 @@ function renderStats(s) {
     const isRunningProjectCard = c.detailType === 'running-project-breakdown';
     const isUtilizationCard = c.detailType === 'utilization-breakdown';
     const isAssignedProjectCard = c.detailType === 'assigned-project-breakdown';
+    const isCommittedTargetCard = c.detailType === 'committed-target-breakdown';
     const wrapperClass = [
       'dc',
       'dc-stat',
@@ -333,6 +435,7 @@ function renderStats(s) {
       isRunningProjectCard ? 'dc-stat--running-projects' : '',
       isUtilizationCard ? 'dc-stat--utilization' : '',
       isAssignedProjectCard ? 'dc-stat--assigned-projects' : '',
+      isCommittedTargetCard ? 'dc-stat--committed-target' : '',
     ].filter(Boolean).join(' ');
     const cardContent = isActiveResourceCard
       ? `
@@ -346,7 +449,9 @@ function renderStats(s) {
           ? renderUtilizationCard(c, td, s)
           : isAssignedProjectCard
             ? renderAssignedProjectsCard(c, td, s)
-            : renderStatSummary(c, td);
+            : isCommittedTargetCard
+              ? renderCommittedTargetCard(c, committedTargetSummary)
+              : renderStatSummary(c, td);
 
     return `
       <div class="${wrapperClass}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>
