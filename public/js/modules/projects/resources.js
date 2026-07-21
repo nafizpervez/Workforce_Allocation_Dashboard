@@ -22,6 +22,12 @@ function openResourceModal() {
       <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.dept || '—')}</td>
       <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.designation || '—')}</td>
       <td class="py-2.5 px-4">
+        <div class="workdays-inline-editor">
+          <input id="teamWorkdays-${e.id}" type="number" min="0" step="1" value="${esc(String(Number(e.workdays) || 0))}" aria-label="Workdays for ${esc(e.name)}">
+          <button type="button" onclick="saveEmployeeWorkdays(${e.id}, 'teamWorkdays-${e.id}', 'team')">Save</button>
+        </div>
+      </td>
+      <td class="py-2.5 px-4">
         <span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${util}%</span>
       </td>
       <td class="py-2.5 px-4">
@@ -42,6 +48,7 @@ function openResourceModal() {
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Name</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Dept</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Designation</th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Workdays</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Util</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Status</th>
         </tr></thead>
@@ -61,7 +68,7 @@ function openResourceModal() {
       <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>`,
-    'max-w-4xl'
+    'max-w-6xl'
   );
 }
 
@@ -287,4 +294,42 @@ function openProjectsModal() {
     });
     refresh();
   });
+}
+
+async function saveEmployeeWorkdays(empId, inputId, reopenTarget = 'team') {
+  const input = document.getElementById(inputId);
+  const workdays = Number(input?.value);
+
+  if (!Number.isInteger(workdays) || workdays < 0) {
+    toast('Workdays must be a non-negative whole number', 'error');
+    input?.focus();
+    return;
+  }
+
+  try {
+    const updated = await api('PATCH', `/api/employees/${empId}/workdays`, { workdays });
+    const idx = S.employees.findIndex(employee => employee.id === empId);
+    if (idx >= 0) S.employees[idx] = { ...S.employees[idx], ...updated };
+
+    buildMatrix();
+    populateMatrixFilter();
+    renderMatrix();
+    renderYearlyWorkByProjectChart();
+    renderProjectWisePeopleChart();
+    renderMonthlyPlannedWorkChart();
+    renderTeamSummaryChart();
+    renderIndividualSummaryChart();
+    renderInsights();
+
+    const stats = await api('GET', `/api/dashboard/stats?fiscalYear=${S.fiscalYear}`);
+    renderStats(stats);
+
+    if (reopenTarget === 'maximum') openCapacityAllocationDetailsModal('maximum');
+    else if (reopenTarget === 'days') openCapacityAllocationDetailsModal('days');
+    else openResourceModal();
+
+    toast(`${updated.name} Workdays updated to ${updated.workdays}`);
+  } catch (error) {
+    toast(error?.message || 'Failed to update Workdays', 'error');
+  }
 }
