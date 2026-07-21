@@ -86,13 +86,91 @@ function assignmentProjectCombo(selectedId) {
   `;
 }
 
+function getAssignmentPreSaleProductOptions(selectedName) {
+  const products = [...(S.preSaleProducts || [])].sort((a, b) => (
+    String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
+  ));
+  const selectedProduct = getPreSaleProductByName(selectedName);
+  const options = [];
+
+  if (selectedName && !selectedProduct) {
+    options.push(`<option value="" selected disabled>${esc(selectedName)} — not in PreSale Product master</option>`);
+  } else {
+    options.push(`<option value="" ${selectedProduct ? '' : 'selected'} disabled>Select a saved product…</option>`);
+  }
+
+  for (const product of products) {
+    const selected = selectedProduct && Number(selectedProduct.id) === Number(product.id);
+    options.push(`
+      <option
+        value="${esc(product.name)}"
+        data-product-amount="${esc(Number(product.amount) || 0)}"
+        ${selected ? 'selected' : ''}
+      >${esc(product.name)} — ${esc(formatPreSaleProductAmount(product.amount))}</option>
+    `);
+  }
+
+  return { options: options.join(''), selectedProduct, hasProducts: products.length > 0 };
+}
+
+function renderAssignmentProductField(project, assignment = {}) {
+  const productName = getAssignmentProductName(project, assignment);
+
+  if (!isPreSaleAssignmentProject(project)) {
+    return `
+      <input
+        id="fa_product_name"
+        type="text"
+        class="field-input bg-gray-50 text-gray-700 font-semibold cursor-default"
+        value="${esc(productName)}"
+        readonly
+        title="${esc(productName)}"
+      >
+    `;
+  }
+
+  const productOptions = getAssignmentPreSaleProductOptions(productName);
+  return `
+    <select
+      id="fa_product_name"
+      class="field-input"
+      ${productOptions.hasProducts ? '' : 'disabled'}
+      aria-describedby="fa_product_amount_reference"
+    >
+      ${productOptions.options}
+    </select>
+    <div id="fa_product_amount_reference" class="presale-product-amount-reference">
+      ${productOptions.selectedProduct
+        ? `Saved amount: ${esc(formatPreSaleProductAmount(productOptions.selectedProduct.amount))}`
+        : (productOptions.hasProducts
+          ? 'Select a product to see its saved amount.'
+          : 'No products are saved. Use the PreSale Product button first.')}
+    </div>
+  `;
+}
+
+function wireAssignmentProductAmountReference() {
+  const select = document.getElementById('fa_product_name');
+  const reference = document.getElementById('fa_product_amount_reference');
+  if (!select || select.tagName !== 'SELECT' || !reference) return;
+
+  const sync = () => {
+    const product = getPreSaleProductByName(select.value);
+    reference.textContent = product
+      ? `Saved amount: ${formatPreSaleProductAmount(product.amount)}`
+      : 'Select a product to see its saved amount.';
+  };
+  select.addEventListener('change', sync);
+  sync();
+}
+
 function assignmentProjectInfoBlock(selectedId, assignment, editing) {
   const project = getAssignmentProjectById(selectedId);
-  const editable = editing && isPreSaleAssignmentProject(project);
+  const preSale = isPreSaleAssignmentProject(project);
+  const customerEditable = editing && preSale;
   const customerName = getAssignmentCustomerName(project, assignment);
-  const productName = getAssignmentProductName(project, assignment);
-  const readonly = editable ? '' : 'readonly';
-  const fieldClass = editable
+  const customerReadonly = customerEditable ? '' : 'readonly';
+  const customerClass = customerEditable
     ? 'field-input'
     : 'field-input bg-gray-50 text-gray-700 font-semibold cursor-default';
 
@@ -103,27 +181,22 @@ function assignmentProjectInfoBlock(selectedId, assignment, editing) {
         <input
           id="fa_customer_name"
           type="text"
-          class="${fieldClass}"
+          class="${customerClass}"
           value="${esc(customerName)}"
-          ${readonly}
+          ${customerReadonly}
           title="${esc(customerName)}"
         >
       </div>
       <div>
         <label class="field-label">Product Name</label>
-        <input
-          id="fa_product_name"
-          type="text"
-          class="${fieldClass}"
-          value="${esc(productName)}"
-          ${readonly}
-          title="${esc(productName)}"
-        >
+        <div id="fa_product_field_container">
+          ${renderAssignmentProductField(project, assignment)}
+        </div>
       </div>
     </div>
-    <p id="fa_project_info_hint" class="text-xs ${editable ? 'text-blue-600' : 'text-gray-400'} -mt-2">
-      ${editable
-        ? 'Pre Sale assignment: Customer Name and Product Name can be edited.'
+    <p id="fa_project_info_hint" class="text-xs ${preSale ? 'text-blue-600' : 'text-gray-400'} -mt-2">
+      ${preSale
+        ? `Pre Sale assignment: Product Name is restricted to the saved PreSale Product master.${editing ? ' Customer Name remains editable.' : ''}`
         : 'Customer Name and Product Name are read-only except for Pre Sale assignments.'}
     </p>
   `;
@@ -276,6 +349,7 @@ function openAssignmentModal(opts = {}) {
 
   wireAssignmentPercentageControls();
   wireAssignmentProjectCombobox({ editing, assignment });
+  wireAssignmentProductAmountReference();
 }
 
 function wireAssignmentPercentageControls() {
@@ -329,36 +403,39 @@ function wireAssignmentProjectCombobox({ editing, assignment }) {
 
   function syncProjectInfo(projectId, preserveExistingValues = false) {
     const project = getAssignmentProjectById(projectId);
-    const editable = editing && isPreSaleAssignmentProject(project);
+    const preSale = isPreSaleAssignmentProject(project);
+    const customerEditable = editing && preSale;
     const customerInput = document.getElementById('fa_customer_name');
-    const productInput = document.getElementById('fa_product_name');
+    const productContainer = document.getElementById('fa_product_field_container');
+    const currentProductName = preserveExistingValues
+      ? cleanAssignmentInfoValue(document.getElementById('fa_product_name')?.value)
+      : '';
     const hint = document.getElementById('fa_project_info_hint');
+    const fallback = Number(projectId) === Number(assignment?.project_id)
+      ? assignment
+      : {};
 
-    setInfoFieldMode(customerInput, editable);
-    setInfoFieldMode(productInput, editable);
+    setInfoFieldMode(customerInput, customerEditable);
 
-    if (!preserveExistingValues) {
-      const fallback = Number(projectId) === Number(assignment?.project_id)
-        ? assignment
-        : {};
+    if (!preserveExistingValues && customerInput) {
       const customerName = getAssignmentCustomerName(project, fallback);
-      const productName = getAssignmentProductName(project, fallback);
+      customerInput.value = customerName;
+      customerInput.title = customerName;
+    }
 
-      if (customerInput) {
-        customerInput.value = customerName;
-        customerInput.title = customerName;
-      }
-      if (productInput) {
-        productInput.value = productName;
-        productInput.title = productName;
-      }
+    if (productContainer) {
+      const productAssignment = currentProductName
+        ? { assignment_product_name: currentProductName }
+        : fallback;
+      productContainer.innerHTML = renderAssignmentProductField(project, productAssignment);
+      wireAssignmentProductAmountReference();
     }
 
     if (hint) {
-      hint.textContent = editable
-        ? 'Pre Sale assignment: Customer Name and Product Name can be edited.'
+      hint.textContent = preSale
+        ? `Pre Sale assignment: Product Name is restricted to the saved PreSale Product master.${editing ? ' Customer Name remains editable.' : ''}`
         : 'Customer Name and Product Name are read-only except for Pre Sale assignments.';
-      hint.className = `text-xs ${editable ? 'text-blue-600' : 'text-gray-400'} -mt-2`;
+      hint.className = `text-xs ${preSale ? 'text-blue-600' : 'text-gray-400'} -mt-2`;
     }
   }
 
@@ -501,13 +578,21 @@ async function saveAssignment(id) {
     slots,
   };
 
-  if (id && isPreSaleAssignmentProject(project)) {
-    payload.customer_name = cleanAssignmentInfoValue(
-      document.getElementById('fa_customer_name')?.value,
-    );
-    payload.product_name = cleanAssignmentInfoValue(
+  if (isPreSaleAssignmentProject(project)) {
+    const productName = cleanAssignmentInfoValue(
       document.getElementById('fa_product_name')?.value,
     );
+    if (!getPreSaleProductByName(productName)) {
+      toast('Select a Product Name from the saved PreSale Product master.', 'error');
+      return;
+    }
+    payload.product_name = productName;
+
+    if (id) {
+      payload.customer_name = cleanAssignmentInfoValue(
+        document.getElementById('fa_customer_name')?.value,
+      );
+    }
   }
 
   try {

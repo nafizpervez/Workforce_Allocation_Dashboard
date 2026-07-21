@@ -7,6 +7,8 @@
  * ignored for analytics. The marker assignment remains in S.matrix so it can
  * still be viewed and edited in the Resource Assignment table.
  */
+const N_A_MONTHLY_WORKDAYS_DEDUCTION = 18.33;
+
 const UNAVAILABLE_PROJECT_NAME_KEYS = new Set([
   'na',
   'notapplicable',
@@ -72,6 +74,75 @@ function getUnavailableAssignmentSlotSet(assignments = S.assignments) {
   }
 
   return unavailableSlots;
+}
+
+function availabilityMonthKey(employeeId, year, month) {
+  return [Number(employeeId), Number(year), Number(month)].join('|');
+}
+
+function getUnavailableAssignmentMonthSet(assignments = S.assignments) {
+  const unavailableMonths = new Set();
+
+  for (const assignment of assignments || []) {
+    if (!isUnavailableAssignment(assignment)) continue;
+    unavailableMonths.add(availabilityMonthKey(
+      assignment?.employee_id,
+      assignment?.year,
+      assignment?.month,
+    ));
+  }
+
+  return unavailableMonths;
+}
+
+function isMonthInFiscalYear(year, month, fiscalYear = S.fiscalYear) {
+  const y = Number(year);
+  const m = Number(month);
+  const fy = Number(fiscalYear);
+  return (y === fy && m >= 4 && m <= 12) ||
+    (y === fy + 1 && m >= 1 && m <= 3);
+}
+
+function getEmployeeUnavailableFiscalMonthCount(
+  employeeId,
+  fiscalYear = S.fiscalYear,
+  assignments = S.assignments,
+) {
+  const unavailableMonths = getUnavailableAssignmentMonthSet(assignments);
+  let count = 0;
+
+  for (const month of fiscalMonths(fiscalYear)) {
+    if (unavailableMonths.has(availabilityMonthKey(employeeId, month.y, month.m))) {
+      count += 1;
+    }
+  }
+
+  return count;
+}
+
+function getAdjustedEmployeeWorkdays(
+  employeeId,
+  baseWorkdays,
+  fiscalYear = S.fiscalYear,
+  assignments = S.assignments,
+) {
+  const normalizedBaseWorkdays = Number.isFinite(Number(baseWorkdays)) && Number(baseWorkdays) >= 0
+    ? Number(baseWorkdays)
+    : 220;
+  const unavailableMonthCount = getEmployeeUnavailableFiscalMonthCount(
+    employeeId,
+    fiscalYear,
+    assignments,
+  );
+  const deduction = unavailableMonthCount * N_A_MONTHLY_WORKDAYS_DEDUCTION;
+  const adjustedWorkdays = Math.max(0, normalizedBaseWorkdays - deduction);
+
+  return {
+    baseWorkdays: +normalizedBaseWorkdays.toFixed(2),
+    unavailableMonthCount,
+    workdayDeduction: +deduction.toFixed(2),
+    adjustedWorkdays: +adjustedWorkdays.toFixed(2),
+  };
 }
 
 function isAssignmentInUnavailableSlot(assignment, unavailableSlots = null) {

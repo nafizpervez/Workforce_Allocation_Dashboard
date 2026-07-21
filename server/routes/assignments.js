@@ -5,8 +5,10 @@ const { FISCAL_WHERE, fiscalParams } = require('../services/fiscal');
 const { assignUniqueProjectColors } = require('../services/project-colors');
 const {
   getAssignmentProject,
+  isPreSaleProjectName,
   resolveAssignmentMetadata,
 } = require('../services/assignment-metadata');
+const { findPreSaleProductByName } = require('../services/presale-products');
 const { safeNum } = require('../services/values');
 
 const router = express.Router();
@@ -53,9 +55,25 @@ function resolveProjectMetadata(projectId, body, fallback = {}) {
   const project = getAssignmentProject(db, projectId);
   if (!project) return { project: null, customerName: null, productName: null };
 
+  const metadata = resolveAssignmentMetadata(project, body, fallback);
+  if (!isPreSaleProjectName(project.name)) {
+    return { project, ...metadata };
+  }
+
+  const product = findPreSaleProductByName(db, metadata.productName);
+  if (!product) {
+    return {
+      project,
+      ...metadata,
+      error: 'Select a Product Name from the saved PreSale Product master.',
+    };
+  }
+
   return {
     project,
-    ...resolveAssignmentMetadata(project, body, fallback),
+    ...metadata,
+    productName: product.name,
+    productAmount: Number(product.amount) || 0,
   };
 }
 
@@ -78,6 +96,7 @@ router.post('/api/assignments', (req, res) => {
 
   const metadata = resolveProjectMetadata(project_id, req.body);
   if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+  if (metadata.error) return res.status(400).json({ error: metadata.error });
 
   const info = db.prepare(`
     INSERT INTO assignments(
@@ -106,6 +125,7 @@ router.post('/api/assignments/bulk', (req, res) => {
 
   const metadata = resolveProjectMetadata(project_id, req.body);
   if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+  if (metadata.error) return res.status(400).json({ error: metadata.error });
 
   const pct = safeNum(percentage, 0);
   const insert = db.prepare(`
@@ -284,6 +304,7 @@ router.put('/api/assignments/:id', (req, res) => {
   const projectId = req.body?.project_id ?? existing.project_id;
   const metadata = resolveProjectMetadata(projectId, req.body, existing);
   if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+  if (metadata.error) return res.status(400).json({ error: metadata.error });
 
   const fields = ['employee_id', 'project_id', 'year', 'month', 'week', 'percentage'];
   const updates = [];
@@ -325,6 +346,7 @@ router.post('/api/assignments/:id/reschedule', (req, res) => {
 
   const metadata = resolveProjectMetadata(project_id, req.body, existing);
   if (!metadata.project) return res.status(404).json({ error: 'project not found' });
+  if (metadata.error) return res.status(400).json({ error: metadata.error });
 
   const pct = safeNum(percentage, 0);
   const transaction = db.transaction(() => {

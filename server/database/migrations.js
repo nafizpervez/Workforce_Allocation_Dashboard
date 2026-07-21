@@ -1,5 +1,6 @@
 const { ensureRevenueRatesTable } = require('../services/revenue-rates');
 const { ensureCommittedTargetsTable } = require('../services/committed-targets');
+const { ensurePreSaleProductsTable } = require('../services/presale-products');
 const {
   PERSON_IDENTITY_ALIASES,
   canonicalPersonName,
@@ -189,6 +190,8 @@ function runMigrations(db) {
   catch (error) { console.error('Revenue rate table migration failed:', error); }
   try { ensureCommittedTargetsTable(db); }
   catch (error) { console.error('Committed target table migration failed:', error); }
+  try { ensurePreSaleProductsTable(db); }
+  catch (error) { console.error('PreSale Product table migration failed:', error); }
   try { canonicalizeKnownPeople(db); }
   catch (error) { console.error('Person identity canonicalization migration failed:', error); }
 }

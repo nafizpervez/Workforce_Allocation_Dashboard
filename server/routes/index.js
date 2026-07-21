@@ -2,6 +2,7 @@ module.exports = [
   require('./employees'),
   require('./revenue-rates'),
   require('./committed-targets'),
+  require('./presale-products'),
   require('./projects'),
   require('./assignments'),
   require('./timesheets'),

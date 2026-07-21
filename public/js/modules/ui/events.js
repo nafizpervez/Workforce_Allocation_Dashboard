@@ -299,6 +299,7 @@ function initEvents() {
   });
 
   document.getElementById('downloadAssignmentExcelBtn')?.addEventListener('click', downloadAssignmentExcel);
+  document.getElementById('preSaleProductBtn')?.addEventListener('click', openPreSaleProductsModal);
   document.getElementById('reserveRevenueBtn')?.addEventListener('click', openRevenueRatesModal);
 
   initColResize(); initSectionDrag();

@@ -278,7 +278,8 @@ function renderUtilizationBreakdown(s) {
             class="utilization-breakdown__item utilization-breakdown__item--${row.tone}"
             data-action="open-utilization-details"
             data-utilization-metric="${esc(row.key)}"
-            aria-label="Open ${esc(row.label)} calculation details"
+            aria-label="Open ${esc(row.label)} calculation details. Exact value ${esc(row.exactValue)}"
+            title="${esc(row.label)}: ${esc(row.exactValue)}"
           >
             <span class="utilization-breakdown__label">${esc(row.label)}</span>
             <span class="utilization-breakdown__value">${esc(row.value)}</span>
@@ -360,7 +361,7 @@ async function openUtilizationDetailsModal(metric) {
           </div>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[900px] border-collapse text-left">
+          <table class="w-full min-w-[1120px] border-collapse text-left">
             <thead class="sticky top-0 bg-white shadow-sm">
               <tr>
                 <th class="px-3 py-2 text-xs font-semibold text-gray-500">#</th>
@@ -592,11 +593,13 @@ function getCapacityAllocationDetails() {
     activeEmployees.map(employee => [Number(employee.id), employee]),
   );
   const resourceRows = activeEmployees.map(employee => {
-    const workdays = Number(employee.workdays);
-    const normalizedWorkdays = Number.isFinite(workdays) && workdays >= 0
-      ? workdays
-      : 220;
-    const capacityHours = normalizedWorkdays * CAPACITY_HOURS_PER_WORKDAY;
+    const workdayAdjustment = getAdjustedEmployeeWorkdays(
+      employee.id,
+      employee.workdays,
+      S.fiscalYear,
+      S.assignments,
+    );
+    const capacityHours = workdayAdjustment.adjustedWorkdays * CAPACITY_HOURS_PER_WORKDAY;
     const rateRecord = getRevenueRateForDesignation(employee.designation);
     const hourlyRate = getRevenueRateValue(rateRecord, 'local');
     const maximumAmount = hourlyRate === null
@@ -607,7 +610,10 @@ function getCapacityAllocationDetails() {
       id: Number(employee.id),
       name: employee.name || '',
       designation: employee.designation || 'No supported designation',
-      workdays: normalizedWorkdays,
+      baseWorkdays: workdayAdjustment.baseWorkdays,
+      unavailableMonthCount: workdayAdjustment.unavailableMonthCount,
+      workdayDeduction: workdayAdjustment.workdayDeduction,
+      workdays: workdayAdjustment.adjustedWorkdays,
       capacityHours,
       hourlyRate,
       maximumAmount,
@@ -725,7 +731,8 @@ function getCapacityAllocationSummary() {
 function formatCapacityDays(value) {
   const amount = Number(value) || 0;
   return `${amount.toLocaleString('en-US', {
-    maximumFractionDigits: 1,
+    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
+    maximumFractionDigits: 2,
   })} days`;
 }
 
@@ -735,18 +742,21 @@ function renderCapacityAllocationBreakdown(summary) {
       key: 'maximum',
       label: 'Max Capacity Amount',
       value: formatCommittedTargetRevenue(summary.maximumCapacity),
+      exactValue: formatExactRevenueValue(summary.maximumCapacity),
       tone: 'maximum',
     },
     {
       key: 'days',
       label: 'Available Capacity',
       value: formatCapacityDays(summary.availableCapacityDays),
+      exactValue: formatCapacityDays(summary.availableCapacityDays),
       tone: 'days',
     },
     {
       key: 'allocated',
       label: 'Capacity Allocated',
       value: formatCommittedTargetRevenue(summary.capacityAllocated),
+      exactValue: formatExactRevenueValue(summary.capacityAllocated),
       tone: 'allocated',
     },
   ];
@@ -763,7 +773,8 @@ function renderCapacityAllocationBreakdown(summary) {
             class="capacity-allocation-breakdown__item capacity-allocation-breakdown__item--${row.tone}"
             data-action="open-capacity-details"
             data-capacity-metric="${esc(row.key)}"
-            aria-label="Open ${esc(row.label)} calculation details"
+            aria-label="Open ${esc(row.label)} calculation details. Exact value ${esc(row.exactValue)}"
+            title="${esc(row.label)}: ${esc(row.exactValue)}"
           >
             <span class="capacity-allocation-breakdown__label">${esc(row.label)}</span>
             <span class="capacity-allocation-breakdown__value">${esc(row.value)}</span>
@@ -806,8 +817,10 @@ function renderMaximumCapacityDetails(details) {
           <div class="text-sm font-semibold text-gray-900">${esc(row.name)}</div>
           <div class="text-xs text-gray-400">${esc(row.designation)}</div>
         </td>
-        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(row.workdays.toLocaleString())}</td>
-        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString())}h</td>
+        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityDays(row.baseWorkdays).replace(' days', ''))}</td>
+        <td class="px-3 py-3 text-right text-sm text-amber-700">${row.unavailableMonthCount ? `${esc(String(row.unavailableMonthCount))} × ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)}` : '—'}</td>
+        <td class="px-3 py-3 text-right text-sm font-semibold text-teal-700">${esc(formatCapacityDays(row.workdays).replace(' days', ''))}</td>
+        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString('en-US', { maximumFractionDigits: 2 }))}h</td>
         <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityRate(row.hourlyRate))}</td>
         <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900">${esc(formatExactRevenueValue(row.maximumAmount))}</td>
         <td class="px-3 py-3 text-xs text-amber-700">${esc(row.note || 'Included')}</td>
@@ -821,7 +834,7 @@ function renderMaximumCapacityDetails(details) {
       { label: 'Resources Without Rate', value: String(excludedCount) },
     ])}
     <div class="mx-5 mt-4 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-800">
-      Formula per resource: Workdays × ${CAPACITY_HOURS_PER_WORKDAY} hours/day × saved Local / Pre Sale / Training hourly rate. Resources without a supported rate contribute $0.
+      Formula per resource: adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY} hours/day × saved Local / Pre Sale / Training hourly rate. Each fiscal month containing one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)} days once for that resource, with a zero-day floor. Resources without a supported rate contribute $0.
     </div>
     <div class="nice-scroll mt-4 overflow-x-auto">
       <table class="w-full min-w-[900px] border-collapse text-left">
@@ -829,7 +842,9 @@ function renderMaximumCapacityDetails(details) {
           <tr>
             <th class="px-3 py-2 text-xs font-semibold text-gray-500">#</th>
             <th class="px-3 py-2 text-xs font-semibold text-gray-500">Resource</th>
-            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Workdays</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Base Workdays</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">N/A Deduction</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Adjusted Workdays</th>
             <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Capacity Hours</th>
             <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Hourly Rate</th>
             <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Capacity Amount</th>
@@ -854,8 +869,10 @@ function renderAvailableCapacityDetails(details) {
           <div class="text-sm font-semibold text-gray-900">${esc(row.name)}</div>
           <div class="text-xs text-gray-400">${esc(row.designation)}</div>
         </td>
-        <td class="px-4 py-3 text-right text-sm font-semibold text-teal-700">${esc(row.workdays.toLocaleString())} days</td>
-        <td class="px-4 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString())}h</td>
+        <td class="px-4 py-3 text-right text-sm text-gray-600">${esc(formatCapacityDays(row.baseWorkdays))}</td>
+        <td class="px-4 py-3 text-right text-sm text-amber-700">${row.unavailableMonthCount ? `${esc(String(row.unavailableMonthCount))} month${row.unavailableMonthCount === 1 ? '' : 's'} / ${esc(formatCapacityDays(row.workdayDeduction))}` : '—'}</td>
+        <td class="px-4 py-3 text-right text-sm font-semibold text-teal-700">${esc(formatCapacityDays(row.workdays))}</td>
+        <td class="px-4 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString('en-US', { maximumFractionDigits: 2 }))}h</td>
       </tr>`).join('');
 
   return `
@@ -866,15 +883,17 @@ function renderAvailableCapacityDetails(details) {
       { label: 'Hours Per Workday', value: String(CAPACITY_HOURS_PER_WORKDAY) },
     ])}
     <div class="mx-5 mt-4 rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-xs text-teal-800">
-      Available Capacity is the sum of the editable Workdays value for every active resource. Capacity hours are shown for reference as Workdays × ${CAPACITY_HOURS_PER_WORKDAY}.
+      Available Capacity is the sum of adjusted Workdays for active resources. Each affected resource-month with one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)} days once, never below zero. Capacity hours are adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY}.
     </div>
     <div class="nice-scroll mt-4 overflow-x-auto">
-      <table class="w-full min-w-[620px] border-collapse text-left">
+      <table class="w-full min-w-[880px] border-collapse text-left">
         <thead class="sticky top-0 z-10 bg-white shadow-sm">
           <tr>
             <th class="px-4 py-2 text-xs font-semibold text-gray-500">#</th>
             <th class="px-4 py-2 text-xs font-semibold text-gray-500">Resource</th>
-            <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Workdays</th>
+            <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Base Workdays</th>
+            <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">N/A Deduction</th>
+            <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Adjusted Workdays</th>
             <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Capacity Hours</th>
           </tr>
         </thead>
@@ -937,12 +956,12 @@ function openCapacityAllocationDetailsModal(metric) {
   const config = {
     maximum: {
       title: 'Maximum Capacity Amount',
-      subtitle: 'Workdays × 8 hours × designation Local rate',
+      subtitle: 'Adjusted Workdays × 8 hours × designation Local rate',
       body: renderMaximumCapacityDetails(details),
     },
     days: {
       title: 'Available Capacity',
-      subtitle: 'Total active-resource Workdays',
+      subtitle: 'Adjusted active-resource Workdays after monthly N/A deductions',
       body: renderAvailableCapacityDetails(details),
     },
     allocated: {
@@ -972,7 +991,11 @@ function renderCapacityAllocationCard(c, summary) {
         <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3">
           <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
         </div>
-        <div class="capacity-allocation-card__amount">${esc(formatCommittedTargetRevenue(summary.remainingCapacity))}</div>
+        <div
+          class="capacity-allocation-card__amount"
+          title="Exact Allocated Capacity: ${esc(formatExactRevenueValue(summary.remainingCapacity))}"
+        >${esc(formatCommittedTargetRevenue(summary.remainingCapacity))}</div>
+        <div class="capacity-allocation-card__exact" title="Exact Allocated Capacity">${esc(formatExactRevenueValue(summary.remainingCapacity))}</div>
         <div class="capacity-allocation-card__title">Allocated Capacity</div>
       </div>
       ${renderCapacityAllocationBreakdown(summary)}
@@ -1063,7 +1086,7 @@ function renderStats(s) {
       label: 'Allocated Capacity',
       bg: 'bg-indigo-100',
       fg: 'text-indigo-600',
-      formula: 'Remaining Capacity equals Maximum Capacity Amount minus Capacity Allocated. Maximum Capacity uses each active resource’s Workdays × 8 hours × saved Local / Pre Sale / Training designation rate. Capacity Allocated is planned Intrasourcing revenue plus planned Local revenue.',
+      formula: 'Remaining Capacity equals Maximum Capacity Amount minus Capacity Allocated. Maximum Capacity uses each active resource’s adjusted Workdays × 8 hours × saved Local / Pre Sale / Training designation rate. Each affected N/A resource-month deducts 18.33 days once. Capacity Allocated is planned Intrasourcing revenue plus planned Local revenue.',
       icon: '<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19V3"/><path d="M2 19h22"/>',
       detailType: 'capacity-allocation-breakdown',
     },

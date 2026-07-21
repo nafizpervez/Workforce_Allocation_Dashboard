@@ -36,7 +36,7 @@ const S = {
   fiscalYear: 2026,
   // Only the Resource Assignment Matrix may move across fiscal years.
   matrixFiscalYear: getCurrentFiscalYearStart(),
-  employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [],
+  employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
   matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},
   searchQuery: '',
   insightsPeriodHigh: 'fiscal',
