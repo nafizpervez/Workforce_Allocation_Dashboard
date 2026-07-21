@@ -297,8 +297,8 @@ const UTILIZATION_DETAIL_CONFIG = Object.freeze({
   }),
   billable: Object.freeze({
     title: 'Billable Utilization',
-    formula: 'Average of each eligible resource’s Intrasourcing + Local + Pre-Sale allocation.',
-    included: 'Intrasourcing + Local + Pre-Sale',
+    formula: 'Average of each eligible resource’s Intrasourcing + Local allocation.',
+    included: 'Intrasourcing + Local',
   }),
   project: Object.freeze({
     title: 'Project Utilization',
@@ -1069,7 +1069,7 @@ function renderStats(s) {
       tk: 'utilization',
       bg: 'bg-teal-100',
       fg: 'text-teal-600',
-      formula: 'Available weekly allocation only; N/A resource-weeks are excluded. Intrasourcing Utilization uses the matrix Intrasourcing average. Billable adds Intrasourcing, Local and Pre-Sale. Project Utilization also adds Training.',
+      formula: 'Available weekly allocation only; N/A resource-weeks are excluded. Intrasourcing Utilization uses the matrix Intrasourcing average. Billable includes only Intrasourcing and Local. Project Utilization includes Intrasourcing, Local, Pre-Sale and Training.',
       icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
       detailType: 'utilization-breakdown',
     },

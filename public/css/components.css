@@ -1374,42 +1374,43 @@ button.committed-target-breakdown__item:focus-visible {
 }
 
 .workdays-inline-editor input {
-  width: 5.25rem;
-  border: 1px solid #99f6e4;
-  border-radius: 0.55rem;
-  background: #f0fdfa;
-  padding: 0.42rem 0.5rem;
-  color: #0f766e;
-  font-size: 0.9rem;
-  font-weight: 800;
+  width: 5rem;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  background: #fff;
+  padding: 0.38rem 0.5rem;
+  color: #1f2937;
+  font-size: 0.82rem;
+  font-weight: 500;
   text-align: right;
   outline: none;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease;
 }
 
 .workdays-inline-editor input:focus {
-  border-color: #14b8a6;
-  box-shadow: 0 0 0 3px rgba(20, 184, 166, 0.14);
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, 0.12);
 }
 
 .workdays-inline-editor button {
-  border: 1px solid #0d9488;
-  border-radius: 0.5rem;
-  background: #0d9488;
-  padding: 0.42rem 0.58rem;
-  color: #fff;
+  border: 1px solid #d1d5db;
+  border-radius: 0.45rem;
+  background: #fff;
+  padding: 0.38rem 0.55rem;
+  color: #374151;
   font-size: 0.72rem;
-  font-weight: 800;
-  transition: background 0.15s ease, transform 0.15s ease;
+  font-weight: 600;
+  transition: background 0.15s ease, border-color 0.15s ease;
 }
 
 .workdays-inline-editor button:hover {
-  background: #0f766e;
-  transform: translateY(-1px);
+  border-color: #9ca3af;
+  background: #f9fafb;
 }
 
 .workdays-inline-editor--capacity input {
   width: 4.75rem;
-  font-size: 1rem;
+  font-size: 0.82rem;
 }
 
 .adjusted-workdays-badge {
