@@ -160,6 +160,46 @@ function initEvents() {
 
   /* Body delegation */
   document.body.addEventListener('click', e => {
+    const designationResources = e.target.closest('[data-action="open-designation-resources"]');
+    if (designationResources) {
+      e.preventDefault();
+      e.stopPropagation();
+      openDesignationResourceModal(designationResources.dataset.designation);
+      return;
+    }
+
+    const utilizationDetails = e.target.closest('[data-action="open-utilization-details"]');
+    if (utilizationDetails) {
+      e.preventDefault();
+      e.stopPropagation();
+      openUtilizationDetailsModal(utilizationDetails.dataset.utilizationMetric);
+      return;
+    }
+
+    const projectPortfolioMetric = e.target.closest('[data-action="open-project-portfolio-metric"]');
+    if (projectPortfolioMetric) {
+      e.preventDefault();
+      e.stopPropagation();
+      openProjectPortfolioMetricModal(projectPortfolioMetric.dataset.projectPortfolioMetric);
+      return;
+    }
+
+    const runningMetric = e.target.closest('[data-action="open-running-project-metric"]');
+    if (runningMetric) {
+      e.preventDefault();
+      e.stopPropagation();
+      openRunningProjectMetricModal(runningMetric.dataset.runningProjectMetric);
+      return;
+    }
+
+    const committedTarget = e.target.closest('[data-action="edit-committed-target"]');
+    if (committedTarget) {
+      e.preventDefault();
+      e.stopPropagation();
+      openCommittedTargetModal(committedTarget.dataset.targetKey);
+      return;
+    }
+
     const ep = e.target.closest('[data-action="edit-emp-side"]'); if (ep) openEmployeeModal({ id: +ep.dataset.emp });
     const pr = e.target.closest('[data-action="edit-project"]'); if (pr) openProjectModal({ id: +pr.dataset.project });
     const va = e.target.closest('[data-view-all]'); if (va) openViewAllModal(va.dataset.viewAll);

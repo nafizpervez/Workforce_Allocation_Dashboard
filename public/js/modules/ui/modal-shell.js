@@ -22,7 +22,13 @@ function openModal(html, width = 'max-w-lg') {
       child !== header && child !== footer,
     );
 
-    if (middleChildren.length) {
+    if (middleChildren.length === 1 && middleChildren[0].classList.contains('modal-scroll-body')) {
+      // Some large modals provide their own scroll container. Keep it as the
+      // panel's direct flex child instead of nesting it inside another
+      // modal-scroll-body; nested scroll areas prevent wheel/trackpad events
+      // from reaching the constrained outer element.
+      middleChildren[0].classList.add('nice-scroll');
+    } else if (middleChildren.length) {
       const scrollBody = document.createElement('div');
       scrollBody.className = 'modal-scroll-body nice-scroll';
       panel.insertBefore(scrollBody, footer || null);

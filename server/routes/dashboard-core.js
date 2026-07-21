@@ -1,7 +1,7 @@
 const express = require('express');
 const { getAppDb } = require('../database');
-const { calcDealStatuses, getRevenueAmount } = require('../services/project-analytics');
-const { fiscalMonths, getRunningProjectCutoffDate } = require('../services/fiscal');
+const { calcDealStatuses } = require('../services/project-analytics');
+const { fiscalMonths } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
 const {
   assignmentSlotKey,
@@ -14,10 +14,11 @@ const db = getAppDb();
 
 const FY_WEEK_COUNT = 48;
 const MONTH_WEEK_COUNT = 4;
+const RUNNING_CLOSED_WON_START_DATE = '2025-03-01';
 
 function getActiveEmployeeRows() {
   return db.prepare(`
-    SELECT id, name, dept
+    SELECT id, employee_code, name, dept, designation, email
     FROM employees
     WHERE COALESCE(active, 1) = 1
     ORDER BY id
@@ -51,6 +52,12 @@ function addUtcMonths(date, monthCount) {
   const result = new Date(date.getTime());
   result.setUTCMonth(result.getUTCMonth() + Number(monthCount || 0));
   return result;
+}
+
+function isClosedWonDateInRunningWindow(dateText) {
+  const value = String(dateText || '').trim();
+  return /^\d{4}-\d{2}-\d{2}$/.test(value) &&
+    value >= RUNNING_CLOSED_WON_START_DATE;
 }
 
 function normalizeProjectFamily(value) {
@@ -157,56 +164,129 @@ function getFiscalAllocationCategorySummary(rawAssignments, employees, totalWeek
   };
 }
 
-function getClosedWonProjectSummary(projects, now = new Date()) {
+function getFiscalAllocationResourceDetails(rawAssignments, employees, totalWeeks) {
+  const unavailableSlots = getUnavailableSlotSet(rawAssignments);
+  const effectiveAssignments = filterEffectiveAssignments(rawAssignments);
+  const unavailableCountByEmployee = new Map();
+  const categoryKeys = ['intrasourcing', 'local', 'preSale', 'training', 'generalAdmin'];
+  const percentagesByEmployee = new Map();
+
+  for (const slot of unavailableSlots) {
+    const employeeId = Number(String(slot).split('|')[0]);
+    unavailableCountByEmployee.set(
+      employeeId,
+      (unavailableCountByEmployee.get(employeeId) || 0) + 1,
+    );
+  }
+
+  for (const assignment of effectiveAssignments) {
+    const employeeId = Number(assignment.employee_id);
+    const category = classifyAllocationProject(assignment.project_name);
+    if (!categoryKeys.includes(category)) continue;
+
+    if (!percentagesByEmployee.has(employeeId)) {
+      percentagesByEmployee.set(
+        employeeId,
+        Object.fromEntries(categoryKeys.map(key => [key, 0])),
+      );
+    }
+    percentagesByEmployee.get(employeeId)[category] +=
+      Number(assignment.percentage) || 0;
+  }
+
+  return employees.map(employee => {
+    const employeeId = Number(employee.id);
+    const unavailableWeeks = unavailableCountByEmployee.get(employeeId) || 0;
+    const availableWeeks = Math.max(0, totalWeeks - unavailableWeeks);
+    const totals = percentagesByEmployee.get(employeeId) ||
+      Object.fromEntries(categoryKeys.map(key => [key, 0]));
+    const allocation = Object.fromEntries(categoryKeys.map(key => [
+      key,
+      availableWeeks ? +(totals[key] / availableWeeks).toFixed(2) : 0,
+    ]));
+
+    return {
+      id: employee.id,
+      employee_code: employee.employee_code || '',
+      name: employee.name,
+      dept: employee.dept || '',
+      designation: employee.designation || '',
+      email: employee.email || '',
+      available_weeks: availableWeeks,
+      unavailable_weeks: unavailableWeeks,
+      allocation,
+      metrics: {
+        intrasourcing: allocation.intrasourcing,
+        billable: +(allocation.intrasourcing + allocation.local + allocation.preSale).toFixed(2),
+        project: +(allocation.intrasourcing + allocation.local + allocation.preSale + allocation.training).toFixed(2),
+      },
+    };
+  }).filter(row => row.available_weeks > 0);
+}
+
+function isProfessionalServiceRunningProject(project) {
+  return (
+    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
+    isProfessionalServiceProject(project) &&
+    Number(project?.progress) < 100 &&
+    isClosedWonDateInRunningWindow(project?.end_date)
+  );
+}
+
+function isOpenProject(project) {
+  return String(project?.stage || '').trim().toLowerCase() !== 'closed won';
+}
+
+function matchesProjectPortfolioMetric(project, metric) {
+  if (metric === 'running') return isProfessionalServiceRunningProject(project);
+  if (metric === 'weighted') {
+    return isOpenProject(project) && Number(project?.probability) >= 75;
+  }
+  if (metric === 'prospect') {
+    return isOpenProject(project) && Number(project?.probability) < 75;
+  }
+  return false;
+}
+
+function getRunningProjectTiming(project, now = new Date()) {
+  const closeWonDate = parseProjectDate(project?.end_date);
+  if (!closeWonDate) return 'unclassified';
+
   const today = new Date(Date.UTC(
     now.getUTCFullYear(),
     now.getUTCMonth(),
     now.getUTCDate(),
   ));
+  const sixMonthDeadline = addUtcMonths(closeWonDate, 6);
+  return sixMonthDeadline < today ? 'delayed' : 'on-time';
+}
 
-  const runningProjects = projects.filter(project => (
-    String(project.stage || '').trim().toLowerCase() === 'closed won' &&
-    isProfessionalServiceProject(project) &&
-    Number(project.progress) < 100
-  ));
-
-  let delayedProjects = 0;
-  let onTimeProjects = 0;
-
-  for (const project of runningProjects) {
-    const closeWonDate = parseProjectDate(project.end_date);
-    if (!closeWonDate) continue;
-
-    const sixMonthDeadline = addUtcMonths(closeWonDate, 6);
-
-    if (sixMonthDeadline < today) {
-      if (Number(project.progress) < 100) delayedProjects += 1;
-    } else {
-      onTimeProjects += 1;
-    }
-  }
+function getClosedWonProjectSummary(projects, now = new Date()) {
+  const runningProjects = projects.filter(isProfessionalServiceRunningProject);
+  const delayedProjects = runningProjects.filter(project => (
+    getRunningProjectTiming(project, now) === 'delayed'
+  )).length;
+  const onTimeProjects = runningProjects.filter(project => (
+    getRunningProjectTiming(project, now) === 'on-time'
+  )).length;
 
   return {
     count: runningProjects.length,
     delayedProjects,
     onTimeProjects,
     revenue: +runningProjects
-      .reduce((total, project) => total + getRevenueAmount(project), 0)
+      .reduce((total, project) => total + (Number(project.product_amount) || 0), 0)
       .toFixed(2),
   };
 }
 
 function getOpenProjectProbabilitySummary(projects) {
-  const openProjects = projects.filter(project => (
-    String(project.stage || '').trim().toLowerCase() !== 'closed won'
-  ));
-
   return {
-    weightedProspects: openProjects.filter(project => (
-      Number(project.probability) >= 75
+    weightedProspects: projects.filter(project => (
+      matchesProjectPortfolioMetric(project, 'weighted')
     )).length,
-    prospects: openProjects.filter(project => (
-      Number(project.probability) < 75
+    prospects: projects.filter(project => (
+      matchesProjectPortfolioMetric(project, 'prospect')
     )).length,
   };
 }
@@ -434,10 +514,149 @@ router.get('/api/dashboard/pipeline', (_, res) => {
   res.json(rows);
 });
 
-/* Running Projects: All Closed Won projects from Jan 1 two years before current year */
+router.get('/api/dashboard/utilization-details', (req, res) => {
+  const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
+  const metric = String(req.query.metric || 'project').trim();
+  const allowedMetrics = new Set(['intrasourcing', 'billable', 'project']);
+  if (!allowedMetrics.has(metric)) {
+    return res.status(400).json({ error: 'Unknown utilization metric.' });
+  }
+
+  const employees = getActiveEmployeeRows();
+  const fiscalRaw = getAssignmentRows().filter(assignment => (
+    isFiscalAssignment(assignment, fy)
+  ));
+  const resources = getFiscalAllocationResourceDetails(
+    fiscalRaw,
+    employees,
+    FY_WEEK_COUNT,
+  ).sort((a, b) => (
+    Number(b.metrics[metric]) - Number(a.metrics[metric]) ||
+    String(a.name).localeCompare(String(b.name))
+  ));
+  const average = resources.length
+    ? resources.reduce((total, row) => total + Number(row.metrics[metric]), 0) / resources.length
+    : 0;
+
+  return res.json({
+    metric,
+    fiscal_year: fy,
+    average: +average.toFixed(1),
+    eligible_resources: resources.length,
+    total_available_weeks: resources.reduce(
+      (total, row) => total + Number(row.available_weeks),
+      0,
+    ),
+    resources,
+  });
+});
+
+router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
+  const metric = String(req.query.metric || 'running').trim().toLowerCase();
+  const allowedMetrics = new Set(['running', 'weighted', 'prospect']);
+  if (!allowedMetrics.has(metric)) {
+    return res.status(400).json({ error: 'Unknown project portfolio metric.' });
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      id, code, name, account_name, client, end_date, project_closing_date,
+      fiscal_period, product_name, product_family, progress, probability,
+      priority, opp_amount, product_amount, stage, color, opportunity_owner
+    FROM projects
+  `).all().filter(project => (
+    !isUnavailableProjectName(project.name) &&
+    matchesProjectPortfolioMetric(project, metric)
+  ));
+  const allProjects = db.prepare(`
+    SELECT id, code, name, account_name, client, end_date,
+           fiscal_period, stage, product_name
+    FROM projects
+  `).all();
+  const statusMap = calcDealStatuses(allProjects);
+  const projects = rows.map(project => ({
+    ...project,
+    closing_date: project.project_closing_date || null,
+    deal_status: statusMap[project.id] || 'NEW LOGO',
+  })).sort((a, b) => (
+    metric === 'running'
+      ? String(b.end_date || '').localeCompare(String(a.end_date || ''))
+      : Number(b.probability || 0) - Number(a.probability || 0) || Number(a.id) - Number(b.id)
+  ));
+
+  return res.json({ metric, count: projects.length, projects });
+});
+
+router.get('/api/dashboard/running-project-metrics', (req, res) => {
+  const metric = String(req.query.metric || 'revenue').trim().toLowerCase();
+  const allowedMetrics = new Set(['delayed', 'on-time', 'revenue']);
+
+  if (!allowedMetrics.has(metric)) {
+    return res.status(400).json({ error: 'Unknown running-project metric.' });
+  }
+
+  const rows = db.prepare(`
+    SELECT
+      id,
+      code,
+      name,
+      account_name,
+      client,
+      end_date,
+      project_closing_date,
+      product_name,
+      product_family,
+      progress,
+      priority,
+      opp_amount,
+      product_amount,
+      stage,
+      color,
+      opportunity_owner
+    FROM projects
+  `).all().filter(project => (
+    !isUnavailableProjectName(project.name) &&
+    isProfessionalServiceRunningProject(project)
+  ));
+
+  const filtered = rows.filter(project => (
+    metric === 'revenue' || getRunningProjectTiming(project) === metric
+  ));
+  const allProjects = db.prepare(`
+    SELECT id, code, name, account_name, client, end_date,
+           fiscal_period, stage, product_name
+    FROM projects
+  `).all();
+  const statusMap = calcDealStatuses(allProjects);
+
+  const projects = filtered
+    .map(project => ({
+      ...project,
+      closing_date: project.project_closing_date || null,
+      timing: getRunningProjectTiming(project),
+      deal_status: statusMap[project.id] || 'NEW LOGO',
+    }))
+    .sort((a, b) => (
+      String(a.project_closing_date || a.end_date || '9999-12-31')
+        .localeCompare(String(b.project_closing_date || b.end_date || '9999-12-31')) ||
+      Number(a.id) - Number(b.id)
+    ));
+
+  return res.json({
+    metric,
+    count: projects.length,
+    total_product_amount: +projects.reduce(
+      (total, project) => total + (Number(project.product_amount) || 0),
+      0,
+    ).toFixed(2),
+    projects,
+  });
+});
+
+/* Running Projects: Closed Won on or after March 1, 2025 */
 router.get('/api/dashboard/deadlines', (_, res) => {
   const today = new Date();
-  const runningProjectCutoff = getRunningProjectCutoffDate();
+  const runningProjectCutoff = RUNNING_CLOSED_WON_START_DATE;
 
   const rows = db.prepare(`
     SELECT id, code, name, end_date, project_closing_date, product_name, product_family,

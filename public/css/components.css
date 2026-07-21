@@ -1028,3 +1028,58 @@
     display: none;
   }
 }
+
+/* Clickable KPI breakdown rows */
+button.running-project-health__item,
+button.committed-target-breakdown__item {
+  width: 100%;
+  margin: 0;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: transform 120ms ease, box-shadow 120ms ease, filter 120ms ease;
+}
+
+button.running-project-health__item:hover,
+button.committed-target-breakdown__item:hover {
+  filter: brightness(0.985);
+  box-shadow: 0 3px 9px rgba(15, 23, 42, 0.08);
+  transform: translateY(-1px);
+}
+
+button.running-project-health__item:focus-visible,
+button.committed-target-breakdown__item:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+/* ── Clickable KPI detail rows ───────────────────────────────── */
+.active-resource-composition__item,
+.utilization-breakdown__item,
+.assigned-project-breakdown__item {
+  width: 100%;
+  appearance: none;
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition:
+    transform 0.12s ease,
+    box-shadow 0.12s ease,
+    border-color 0.12s ease,
+    filter 0.12s ease;
+}
+
+.active-resource-composition__item:hover,
+.utilization-breakdown__item:hover,
+.assigned-project-breakdown__item:hover {
+  transform: translateY(-1px);
+  filter: saturate(1.08);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+}
+
+.active-resource-composition__item:focus-visible,
+.utilization-breakdown__item:focus-visible,
+.assigned-project-breakdown__item:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}

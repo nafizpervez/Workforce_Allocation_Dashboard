@@ -55,13 +55,82 @@ function renderActiveResourceDesignationList() {
       </div>
       <div class="active-resource-composition__grid">
         ${rows.map(row => `
-          <div class="active-resource-composition__item${row.isManager ? ' active-resource-composition__item--manager' : ''}" title="${esc(row.fullLabel)}">
-            <span class="active-resource-composition__label" aria-label="${esc(row.fullLabel)}">${esc(row.label)}</span>
-            <span class="active-resource-composition__count" aria-label="${esc(`${row.count} ${row.fullLabel}`)}">${esc(String(row.count))}</span>
-          </div>
+          <button
+            type="button"
+            class="active-resource-composition__item${row.isManager ? ' active-resource-composition__item--manager' : ''}"
+            data-action="open-designation-resources"
+            data-designation="${esc(row.fullLabel)}"
+            title="Open ${esc(row.fullLabel)} resources"
+            aria-label="Open ${esc(row.fullLabel)} resources, ${esc(String(row.count))} people"
+          >
+            <span class="active-resource-composition__label">${esc(row.label)}</span>
+            <span class="active-resource-composition__count">${esc(String(row.count))}</span>
+          </button>
         `).join('')}
       </div>
     </section>`;
+}
+
+function getDesignationModalResources(designation) {
+  const activeEmployees = (S.employees || []).filter(employee => (
+    Number(employee?.active ?? 1) !== 0
+  ));
+  const normalizedDesignation = normalizeDesignationKey(designation);
+
+  if (normalizedDesignation === normalizeDesignationKey('Senior Manager, Delivery')) {
+    return activeEmployees.filter(employee => (
+      personIdentityKey(employee.name) === personIdentityKey('Debashish Bhowmick') ||
+      /debashish/i.test(String(employee.name || ''))
+    ));
+  }
+
+  return activeEmployees.filter(employee => (
+    normalizeDesignationKey(employee.designation) === normalizedDesignation
+  ));
+}
+
+function openDesignationResourceModal(designation) {
+  const resources = getDesignationModalResources(designation);
+  const rows = resources.map((employee, index) => {
+    const utilization = Number(S.employeeUtil?.get(Number(employee.id)) || 0);
+    const displayedDesignation = normalizeDesignationKey(designation) ===
+      normalizeDesignationKey('Senior Manager, Delivery')
+      ? 'Senior Manager, Delivery'
+      : (employee.designation || designation);
+
+    return `
+      <button
+        type="button"
+        class="flex w-full items-center gap-3 border-b border-gray-100 px-5 py-3 text-left transition-colors last:border-0 hover:bg-gray-50"
+        data-action="edit-emp-side"
+        data-emp="${Number(employee.id)}"
+      >
+        <span class="w-6 flex-shrink-0 text-xs font-semibold text-gray-400">${index + 1}</span>
+        <span class="avatar-grad flex h-9 w-9 flex-shrink-0 items-center justify-center rounded-full text-xs">${esc(inits(employee.name))}</span>
+        <span class="min-w-0 flex-1">
+          <span class="block truncate text-sm font-semibold text-gray-900">${esc(employee.name)}</span>
+          <span class="block truncate text-xs text-gray-500">${esc(displayedDesignation)}</span>
+        </span>
+        <span class="hidden min-w-0 flex-1 md:block">
+          <span class="block truncate text-xs text-gray-600">${esc(employee.dept || '—')}</span>
+          <span class="block truncate text-xs text-gray-400">${esc(employee.email || '—')}</span>
+        </span>
+        <span class="flex-shrink-0 rounded-full px-2 py-0.5 text-xs font-semibold ${ub(utilization)}">${utilization.toFixed(1)}%</span>
+      </button>`;
+  }).join('');
+
+  openModal(`
+    ${mHdr(
+      designation,
+      `${resources.length} active resource${resources.length === 1 ? '' : 's'} · click a resource to edit`,
+    )}
+    <div class="nice-scroll modal-scroll-body">
+      ${rows || '<div class="px-6 py-12 text-center text-sm text-gray-400">No active resources in this designation</div>'}
+    </div>
+    <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+      <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+    </div>
+  `, 'max-w-3xl');
 }
 
 function formatRunningProjectRevenue(value) {
@@ -92,17 +161,20 @@ function formatRunningProjectRevenue(value) {
 function renderRunningProjectSummary(s) {
   const rows = [
     {
+      key: 'delayed',
       label: 'Delayed Projects',
       value: (Number(s.delayed_running_projects) || 0).toLocaleString(),
       tone: 'delayed',
     },
     {
+      key: 'on-time',
       label: 'On-Time Projects',
       value: (Number(s.on_time_running_projects) || 0).toLocaleString(),
       tone: 'on-time',
     },
     {
-      label: 'Running Revenue',
+      key: 'revenue',
+      label: 'PS Revenue',
       value: formatRunningProjectRevenue(s.running_project_revenue),
       tone: 'revenue',
     },
@@ -115,10 +187,16 @@ function renderRunningProjectSummary(s) {
       </div>
       <div class="running-project-health__list">
         ${rows.map(row => `
-          <div class="running-project-health__item running-project-health__item--${row.tone}">
+          <button
+            type="button"
+            class="running-project-health__item running-project-health__item--${row.tone}"
+            data-action="open-running-project-metric"
+            data-running-project-metric="${esc(row.key)}"
+            aria-label="Open ${esc(row.label)} project list"
+          >
             <span class="running-project-health__label">${esc(row.label)}</span>
             <span class="running-project-health__value">${esc(String(row.value))}</span>
-          </div>
+          </button>
         `).join('')}
       </div>
     </section>`;
@@ -148,16 +226,19 @@ function formatUtilizationMetric(value) {
 function renderUtilizationBreakdown(s) {
   const rows = [
     {
-      label: 'Intrasourcing Utilization',
+      key: 'intrasourcing',
+      label: 'Avg. Intrasourcing Utilization',
       value: formatUtilizationMetric(s.avg_intrasourcing_utilization),
       tone: 'intrasourcing',
     },
     {
+      key: 'billable',
       label: 'Billable Utilization',
       value: formatUtilizationMetric(s.billable_utilization),
       tone: 'billable',
     },
     {
+      key: 'project',
       label: 'Project Utilization',
       value: formatUtilizationMetric(s.project_utilization),
       tone: 'project',
@@ -171,13 +252,118 @@ function renderUtilizationBreakdown(s) {
       </div>
       <div class="utilization-breakdown__list">
         ${rows.map(row => `
-          <div class="utilization-breakdown__item utilization-breakdown__item--${row.tone}">
+          <button
+            type="button"
+            class="utilization-breakdown__item utilization-breakdown__item--${row.tone}"
+            data-action="open-utilization-details"
+            data-utilization-metric="${esc(row.key)}"
+            aria-label="Open ${esc(row.label)} calculation details"
+          >
             <span class="utilization-breakdown__label">${esc(row.label)}</span>
             <span class="utilization-breakdown__value">${esc(row.value)}</span>
-          </div>
+          </button>
         `).join('')}
       </div>
     </section>`;
+}
+
+const UTILIZATION_DETAIL_CONFIG = Object.freeze({
+  intrasourcing: Object.freeze({
+    title: 'Avg. Intrasourcing Utilization',
+    formula: 'Average of each eligible resource’s Intrasourcing allocation over that resource’s available fiscal-year weeks.',
+    included: 'Intrasourcing',
+  }),
+  billable: Object.freeze({
+    title: 'Billable Utilization',
+    formula: 'Average of each eligible resource’s Intrasourcing + Local + Pre Sale allocation.',
+    included: 'Intrasourcing + Local + Pre Sale',
+  }),
+  project: Object.freeze({
+    title: 'Project Utilization',
+    formula: 'Average of each eligible resource’s Intrasourcing + Local + Pre Sale + Training allocation.',
+    included: 'Intrasourcing + Local + Pre Sale + Training',
+  }),
+});
+
+async function openUtilizationDetailsModal(metric) {
+  const config = UTILIZATION_DETAIL_CONFIG[metric];
+  if (!config) return;
+
+  openModal(`
+    ${mHdr(config.title, 'Loading calculation details…')}
+    <div class="p-8 text-center text-sm text-gray-400">Loading…</div>
+    <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+      <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+    </div>
+  `, 'max-w-6xl');
+
+  try {
+    const result = await api(
+      'GET',
+      `/api/dashboard/utilization-details?fiscalYear=${encodeURIComponent(S.fiscalYear)}&metric=${encodeURIComponent(metric)}`,
+    );
+    const resources = Array.isArray(result.resources) ? result.resources : [];
+    const rows = resources.map((resource, index) => `
+      <tr class="border-b border-gray-100 last:border-0">
+        <td class="px-3 py-2 text-xs text-gray-400">${index + 1}</td>
+        <td class="px-3 py-2">
+          <div class="text-sm font-semibold text-gray-900">${esc(resource.name)}</div>
+          <div class="text-xs text-gray-400">${esc(resource.designation || 'No designation')}</div>
+        </td>
+        <td class="px-3 py-2 text-right text-xs text-gray-600">${Number(resource.available_weeks)} / 48</td>
+        <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.intrasourcing)}</td>
+        <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.local)}</td>
+        <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.preSale)}</td>
+        <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.training)}</td>
+        <td class="px-3 py-2 text-right text-sm font-semibold text-gray-900">${formatUtilizationMetric(resource.metrics[metric])}</td>
+      </tr>`).join('');
+
+    openModal(`
+      ${mHdr(config.title, `FY${Number(result.fiscal_year) + 1} · ${result.eligible_resources} eligible resources`)}
+      <div class="modal-scroll-body nice-scroll">
+        <div class="grid gap-3 border-b border-gray-100 bg-gray-50 p-5 md:grid-cols-3">
+          <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Displayed average</div>
+            <div class="mt-1 text-2xl font-semibold text-gray-900">${formatUtilizationMetric(result.average)}</div>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Included allocation</div>
+            <div class="mt-1 text-sm font-semibold text-gray-800">${esc(config.included)}</div>
+          </div>
+          <div class="rounded-xl border border-gray-200 bg-white p-4">
+            <div class="text-xs font-semibold uppercase tracking-wide text-gray-400">Availability denominator</div>
+            <div class="mt-1 text-sm font-semibold text-gray-800">${Number(result.total_available_weeks).toLocaleString()} resource-weeks</div>
+          </div>
+          <div class="md:col-span-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
+            ${esc(config.formula)} N/A weeks are removed only for the affected resource-week; General Admin is excluded from these three metrics.
+          </div>
+        </div>
+        <div class="overflow-x-auto">
+          <table class="w-full min-w-[900px] border-collapse text-left">
+            <thead class="sticky top-0 bg-white shadow-sm">
+              <tr>
+                <th class="px-3 py-2 text-xs font-semibold text-gray-500">#</th>
+                <th class="px-3 py-2 text-xs font-semibold text-gray-500">Resource</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Available weeks</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Intrasourcing</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Local</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Pre Sale</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Training</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-700">${esc(config.title)}</th>
+              </tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </div>
+      </div>
+      <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+        <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+      </div>
+    `, 'max-w-6xl');
+  } catch (error) {
+    closeModal();
+    toast(error.message, 'error');
+  }
 }
 
 function renderUtilizationCard(c, td, s) {
@@ -198,16 +384,19 @@ function renderUtilizationCard(c, td, s) {
 function renderAssignedProjectBreakdown(s) {
   const rows = [
     {
+      key: 'running',
       label: 'Running Project',
       value: (Number(s.running_projects) || 0).toLocaleString(),
       tone: 'running',
     },
     {
+      key: 'weighted',
       label: 'Weighted Prospect',
       value: (Number(s.weighted_prospect_projects) || 0).toLocaleString(),
       tone: 'weighted',
     },
     {
+      key: 'prospect',
       label: 'Prospect',
       value: (Number(s.prospect_projects) || 0).toLocaleString(),
       tone: 'prospect',
@@ -221,10 +410,16 @@ function renderAssignedProjectBreakdown(s) {
       </div>
       <div class="assigned-project-breakdown__list">
         ${rows.map(row => `
-          <div class="assigned-project-breakdown__item assigned-project-breakdown__item--${row.tone}">
+          <button
+            type="button"
+            class="assigned-project-breakdown__item assigned-project-breakdown__item--${row.tone}"
+            data-action="open-project-portfolio-metric"
+            data-project-portfolio-metric="${esc(row.key)}"
+            aria-label="Open ${esc(row.label)} project list"
+          >
             <span class="assigned-project-breakdown__label">${esc(row.label)}</span>
             <span class="assigned-project-breakdown__value">${esc(row.value)}</span>
-          </div>
+          </button>
         `).join('')}
       </div>
     </section>`;
@@ -245,7 +440,7 @@ function renderAssignedProjectsCard(c, td, s) {
     </div>`;
 }
 
-function getCommittedTargetSummary() {
+function getCalculatedCommittedTargetSummary() {
   const totals = {
     intrasourcing: 0,
     local: 0,
@@ -284,6 +479,30 @@ function getCommittedTargetSummary() {
   };
 }
 
+function getCommittedTargetRecord(targetKey) {
+  return (S.committedTargets || []).find(target => (
+    target?.target_key === targetKey
+  )) || null;
+}
+
+function getCommittedTargetSummary() {
+  const calculated = getCalculatedCommittedTargetSummary();
+  const savedIntrasourcing = getCommittedTargetRecord('intrasourcing');
+  const savedLocal = getCommittedTargetRecord('local');
+  const intrasourcing = savedIntrasourcing?.updated_at
+    ? Number(savedIntrasourcing.amount) || 0
+    : calculated.intrasourcing;
+  const local = savedLocal?.updated_at
+    ? Number(savedLocal.amount) || 0
+    : calculated.local;
+
+  return {
+    intrasourcing: +intrasourcing.toFixed(2),
+    local: +local.toFixed(2),
+    total: +(intrasourcing + local).toFixed(2),
+  };
+}
+
 function formatCommittedTargetRevenue(value) {
   return typeof formatRevenueViewValue === 'function'
     ? formatRevenueViewValue(value)
@@ -295,11 +514,13 @@ function formatCommittedTargetRevenue(value) {
 function renderCommittedTargetBreakdown(summary) {
   const rows = [
     {
+      key: 'intrasourcing',
       label: 'Intrasourcing Revenue Target',
       value: formatCommittedTargetRevenue(summary.intrasourcing),
       tone: 'intrasourcing',
     },
     {
+      key: 'local',
       label: 'Local PS Revenue Target',
       value: formatCommittedTargetRevenue(summary.local),
       tone: 'local',
@@ -313,10 +534,16 @@ function renderCommittedTargetBreakdown(summary) {
       </div>
       <div class="committed-target-breakdown__list">
         ${rows.map(row => `
-          <div class="committed-target-breakdown__item committed-target-breakdown__item--${row.tone}">
+          <button
+            type="button"
+            class="committed-target-breakdown__item committed-target-breakdown__item--${row.tone}"
+            data-action="edit-committed-target"
+            data-target-key="${esc(row.key)}"
+            aria-label="Edit ${esc(row.label)}"
+          >
             <span class="committed-target-breakdown__label">${esc(row.label)}</span>
             <span class="committed-target-breakdown__value">${esc(row.value)}</span>
-          </div>
+          </button>
         `).join('')}
       </div>
     </section>`;
@@ -384,7 +611,7 @@ function renderStats(s) {
       action: 'view-projects',
       bg: 'bg-purple-100',
       fg: 'text-purple-600',
-      formula: 'Closed Won Professional Services projects only. Delayed means the Close Won Date passed six months ago and progress remains below 100%. Revenue uses Product Amount, falling back to Opportunity Amount or Budget.',
+      formula: 'Closed Won Professional Services projects dated March 1, 2025 or later and below 100% progress. Delayed means the Close Won Date passed six months ago. PS Revenue is the direct sum of Product Amount (USD) for those running projects.',
       icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
       detailType: 'running-project-breakdown',
     },
@@ -412,7 +639,7 @@ function renderStats(s) {
       label: 'Committed Target',
       bg: 'bg-amber-100',
       fg: 'text-amber-600',
-      formula: 'Planned Resource Assignment revenue for the dashboard fiscal year. Committed Target equals Intrasourcing revenue plus Local PS revenue. Pre Sale, Training, General Admin and unavailable N/A resource-weeks are excluded.',
+      formula: 'Committed Target equals the saved Intrasourcing Revenue Target plus the saved Local PS Revenue Target. Click either target row to edit and persist its amount.',
       icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
       detailType: 'committed-target-breakdown',
     },

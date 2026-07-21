@@ -9,7 +9,7 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=budget-running-tooltip-v1" />
+    <link rel="stylesheet" href="/css/style.css?v=clickable-kpi-details-v1" />
   </head>
   <body>
     <div data-fragment="/views/header.html"></div>
@@ -17,7 +17,7 @@
       <div id="dashboard-canvas" class="space-y-6">
         <div data-fragment="/views/sections/stats.html"></div>
         <div data-fragment="/views/sections/resource-matrix.html?v=resource-header-row-v1"></div>
-        <div data-fragment="/views/sections/allocation-charts.html?v=project-combobox-v1"></div>
+        <div data-fragment="/views/sections/allocation-charts.html?v=planned-actual-combobox-v2"></div>
         <div data-fragment="/views/sections/work-summary.html?v=work-summary-original-v2"></div>
         <div data-fragment="/views/sections/sales-charts.html"></div>
         <div data-fragment="/views/sections/insights.html"></div>
@@ -32,22 +32,22 @@
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
-    <script src="/js/modules/core/state.js?v=workmix-fy-v2"></script>
+    <script src="/js/modules/core/state.js?v=committed-target-storage-v1"></script>
     <script src="/js/modules/core/person-identity.js?v=person-alias-v1"></script>
     <script src="/js/modules/core/designations.js"></script>
     <script src="/js/modules/core/work-schedule.js?v=workweek-36-66-v1"></script>
     <script src="/js/modules/core/availability.js?v=workmix-fy-v2"></script>
     <script src="/js/modules/dashboard/insights.js?v=na-availability-v1"></script>
     <script src="/js/modules/core/api.js"></script>
-    <script src="/js/modules/core/data.js?v=person-alias-v1"></script>
+    <script src="/js/modules/core/data.js?v=committed-target-storage-v1"></script>
     <script src="/js/modules/dashboard/resource-summary-metrics.js?v=matrix-fy-v1"></script>
     <script src="/js/modules/dashboard/resource-summary-totals.js?v=matrix-fy-v1"></script>
     <script src="/js/modules/dashboard/resource-summary.js?v=matrix-fy-v1"></script>
-    <script src="/js/modules/dashboard/overview.js?v=committed-target-v1"></script>
-    <script src="/js/modules/dashboard/monthly-planned-work.js?v=table-tooltip-v1"></script>
+    <script src="/js/modules/dashboard/overview.js?v=future-closed-won-v1"></script>
+    <script src="/js/modules/dashboard/monthly-planned-work.js?v=planned-vs-actual-tooltip-v2"></script>
     <script src="/js/modules/timesheets/model.js?v=actual-burn-charts-v1"></script>
     <script src="/js/modules/timesheets/planned-actual-model.js?v=budget-v1"></script>
-    <script src="/js/modules/timesheets/planned-actual-chart.js?v=budget-v1"></script>
+    <script src="/js/modules/timesheets/planned-actual-chart.js?v=project-combobox-v2"></script>
     <script src="/js/modules/timesheets/charts.js?v=work-summary-original-v2"></script>
     <script src="/js/modules/timesheets/ui.js"></script>
     <script src="/js/modules/imports/projects.js?v=matrix-fy-v1"></script>
@@ -58,13 +58,14 @@
     <script src="/js/modules/dashboard/sales-acquisition.js"></script>
     <script src="/js/modules/dashboard/sales-revenue.js"></script>
     <script src="/js/modules/dashboard/sales-ps-type.js"></script>
-    <script src="/js/modules/projects/lists.js?v=project-closing-date-v1"></script>
-    <script src="/js/modules/ui/modal-shell.js?v=four-revenue-modal-v1"></script>
+    <script src="/js/modules/projects/lists.js?v=future-closed-won-v1"></script>
+    <script src="/js/modules/ui/modal-shell.js?v=modal-scroll-fix-v1"></script>
     <script src="/js/modules/ui/assignment-modal.js?v=matrix-fy-v1"></script>
     <script src="/js/modules/ui/revenue-breakdown-modal.js?v=four-revenue-modal-v1"></script>
     <script src="/js/modules/ui/revenue-rates-modal.js?v=committed-target-v1"></script>
+    <script src="/js/modules/ui/committed-targets-modal.js?v=target-storage-v1"></script>
     <script src="/js/modules/ui/resource-project-modals.js"></script>
-    <script src="/js/modules/ui/events.js?v=matrix-fy-v1"></script>
+    <script src="/js/modules/ui/events.js?v=clickable-kpi-details-v1"></script>
     <script src="/js/modules/projects/resources.js?v=na-availability-v1"></script>
     <script src="/js/app.js?v=workweek-36-66-v1"></script>
   </body>

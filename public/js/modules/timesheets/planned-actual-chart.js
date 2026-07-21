@@ -2,6 +2,7 @@
 
 let plannedActualFlowResizeTimer = null;
 let plannedActualProjectInputTimer = null;
+let plannedActualProjectMenuCloseTimer = null;
 
 function normalizePlannedActualProjectInput(value) {
   return String(value || '')
@@ -27,17 +28,73 @@ function getPlannedActualSelection(data) {
   return resolved || (!String(input?.value || '').trim() ? data.projects[0] || null : null);
 }
 
+function closePlannedActualProjectMenu() {
+  const input = document.getElementById('plannedActualProjectFilter');
+  const toggle = document.getElementById('plannedActualProjectToggle');
+  const menu = document.getElementById('plannedActualProjectMenu');
+  if (!menu) return;
+
+  menu.classList.add('hidden');
+  input?.setAttribute('aria-expanded', 'false');
+  toggle?.setAttribute('aria-expanded', 'false');
+}
+
+function renderPlannedActualProjectMenu(data, query = '', showAll = false) {
+  const menu = document.getElementById('plannedActualProjectMenu');
+  if (!menu) return;
+
+  const normalizedQuery = normalizePlannedActualProjectInput(query);
+  const matches = (data.projects || []).filter(project => {
+    if (showAll || !normalizedQuery) return true;
+    return (
+      normalizePlannedActualProjectInput(project.label).includes(normalizedQuery) ||
+      normalizePlannedActualProjectInput(project.key).includes(normalizedQuery)
+    );
+  }).slice(0, 100);
+
+  menu.innerHTML = matches.length
+    ? matches.map(project => `
+        <button
+          type="button"
+          class="planned-actual-project-option"
+          role="option"
+          data-project-key="${esc(project.key)}"
+          data-project-label="${esc(project.label)}"
+        >${esc(project.label)}</button>
+      `).join('')
+    : '<div class="planned-actual-project-option-empty">No matching projects</div>';
+}
+
+function openPlannedActualProjectMenu({ showAll = false } = {}) {
+  clearTimeout(plannedActualProjectMenuCloseTimer);
+  const input = document.getElementById('plannedActualProjectFilter');
+  const toggle = document.getElementById('plannedActualProjectToggle');
+  const menu = document.getElementById('plannedActualProjectMenu');
+  if (!input || !menu) return;
+
+  const data = buildPlannedActualEffortData();
+  renderPlannedActualProjectMenu(data, input.value, showAll);
+  menu.classList.remove('hidden');
+  input.setAttribute('aria-expanded', 'true');
+  toggle?.setAttribute('aria-expanded', 'true');
+}
+
+function selectPlannedActualProjectOption(projectKey, projectLabel) {
+  const input = document.getElementById('plannedActualProjectFilter');
+  if (!input) return;
+
+  input.value = projectLabel;
+  input.dataset.projectKey = projectKey;
+  closePlannedActualProjectMenu();
+  renderPlannedActualEffortChart();
+}
+
 function populatePlannedActualProjectFilter(data) {
   const input = document.getElementById('plannedActualProjectFilter');
-  const options = document.getElementById('plannedActualProjectOptions');
-  if (!input || !options) return;
+  if (!input) return;
 
   const current = input.value;
   const resolved = resolvePlannedActualProject(data, current);
-
-  options.innerHTML = data.projects.map(project => (
-    `<option value="${esc(project.label)}"></option>`
-  )).join('');
 
   if (resolved) {
     input.value = resolved.label;
@@ -47,6 +104,11 @@ function populatePlannedActualProjectFilter(data) {
     input.dataset.projectKey = data.projects[0].key;
   } else {
     delete input.dataset.projectKey;
+  }
+
+  const menu = document.getElementById('plannedActualProjectMenu');
+  if (menu && !menu.classList.contains('hidden')) {
+    renderPlannedActualProjectMenu(data, input.value);
   }
 }
 
@@ -510,11 +572,20 @@ function renderPlannedActualEffortChart() {
 
 function initPlannedActualEffortEvents() {
   const projectInput = document.getElementById('plannedActualProjectFilter');
+  const projectToggle = document.getElementById('plannedActualProjectToggle');
+  const projectMenu = document.getElementById('plannedActualProjectMenu');
+  const projectCombobox = document.getElementById('plannedActualProjectCombobox');
+
   if (projectInput && projectInput.dataset.bound !== '1') {
     projectInput.dataset.bound = '1';
 
+    projectInput.addEventListener('focus', () => {
+      openPlannedActualProjectMenu({ showAll: true });
+    });
+
     projectInput.addEventListener('input', () => {
       clearTimeout(plannedActualProjectInputTimer);
+      openPlannedActualProjectMenu();
       plannedActualProjectInputTimer = setTimeout(() => {
         const data = buildPlannedActualEffortData();
         if (resolvePlannedActualProject(data, projectInput.value)) {
@@ -524,12 +595,77 @@ function initPlannedActualEffortEvents() {
     });
 
     projectInput.addEventListener('change', renderPlannedActualEffortChart);
+    projectInput.addEventListener('blur', () => {
+      plannedActualProjectMenuCloseTimer = setTimeout(() => {
+        closePlannedActualProjectMenu();
+        renderPlannedActualEffortChart();
+      }, 160);
+    });
     projectInput.addEventListener('keydown', event => {
       if (event.key === 'Enter') {
         event.preventDefault();
         clearTimeout(plannedActualProjectInputTimer);
+        closePlannedActualProjectMenu();
         renderPlannedActualEffortChart();
+      } else if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        openPlannedActualProjectMenu({ showAll: true });
+        projectMenu?.querySelector('.planned-actual-project-option')?.focus();
+      } else if (event.key === 'Escape') {
+        closePlannedActualProjectMenu();
       }
+    });
+  }
+
+  if (projectToggle && projectToggle.dataset.bound !== '1') {
+    projectToggle.dataset.bound = '1';
+    projectToggle.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      if (projectMenu?.classList.contains('hidden')) {
+        openPlannedActualProjectMenu({ showAll: true });
+        projectInput?.focus();
+      } else {
+        closePlannedActualProjectMenu();
+      }
+    });
+  }
+
+  if (projectMenu && projectMenu.dataset.bound !== '1') {
+    projectMenu.dataset.bound = '1';
+    projectMenu.addEventListener('mousedown', event => event.preventDefault());
+    projectMenu.addEventListener('click', event => {
+      const option = event.target.closest('.planned-actual-project-option');
+      if (!option) return;
+      selectPlannedActualProjectOption(
+        option.dataset.projectKey,
+        option.dataset.projectLabel,
+      );
+    });
+    projectMenu.addEventListener('keydown', event => {
+      const options = [...projectMenu.querySelectorAll('.planned-actual-project-option')];
+      const index = options.indexOf(document.activeElement);
+      if (event.key === 'ArrowDown') {
+        event.preventDefault();
+        options[Math.min(index + 1, options.length - 1)]?.focus();
+      } else if (event.key === 'ArrowUp') {
+        event.preventDefault();
+        if (index <= 0) projectInput?.focus();
+        else options[index - 1]?.focus();
+      } else if (event.key === 'Enter' && document.activeElement?.matches('.planned-actual-project-option')) {
+        event.preventDefault();
+        document.activeElement.click();
+      } else if (event.key === 'Escape') {
+        closePlannedActualProjectMenu();
+        projectInput?.focus();
+      }
+    });
+  }
+
+  if (projectCombobox && document.documentElement.dataset.plannedActualProjectOutsideBound !== '1') {
+    document.documentElement.dataset.plannedActualProjectOutsideBound = '1';
+    document.addEventListener('click', event => {
+      if (!projectCombobox.contains(event.target)) closePlannedActualProjectMenu();
     });
   }
 

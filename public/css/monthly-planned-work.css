@@ -174,8 +174,8 @@
 .monthly-planned-work-tooltip {
   position: fixed;
   z-index: 90;
-  width: min(660px, calc(100vw - 20px));
-  padding: 12px;
+  width: min(380px, calc(100vw - 20px));
+  padding: 9px;
   border: 1px solid rgba(148, 163, 184, 0.34);
   border-radius: 12px;
   background: rgba(15, 23, 42, 0.96);
@@ -188,9 +188,9 @@
 }
 
 .monthly-planned-work-tooltip__title {
-  margin-bottom: 8px;
+  margin-bottom: 6px;
   color: #ffffff;
-  font-size: 12px;
+  font-size: 11px;
   font-weight: 700;
 }
 
@@ -201,13 +201,13 @@
   overflow: hidden;
   border: 1px solid rgba(148, 163, 184, 0.22);
   border-radius: 8px;
-  font-size: 10.5px;
+  font-size: 9px;
   table-layout: fixed;
 }
 
 .monthly-planned-work-tooltip__table th,
 .monthly-planned-work-tooltip__table td {
-  padding: 6px 8px;
+  padding: 4px 5px;
   border-right: 1px solid rgba(148, 163, 184, 0.16);
   border-bottom: 1px solid rgba(148, 163, 184, 0.16);
   text-align: right;
@@ -215,7 +215,7 @@
 }
 
 .monthly-planned-work-tooltip__table th:first-child {
-  width: 46%;
+  width: 48%;
   text-align: left;
 }
 
@@ -232,7 +232,7 @@
 .monthly-planned-work-tooltip__table thead th {
   background: rgba(30, 41, 59, 0.92);
   color: #cbd5e1;
-  font-size: 9.5px;
+  font-size: 8.5px;
   font-weight: 700;
   letter-spacing: 0.05em;
   text-transform: uppercase;
@@ -241,6 +241,8 @@
 .monthly-planned-work-tooltip__table tbody th {
   color: #e2e8f0;
   font-weight: 600;
+  line-height: 1.15;
+  white-space: normal;
 }
 
 .monthly-planned-work-tooltip__table tbody td {
@@ -253,7 +255,7 @@
   display: block;
   margin-top: 1px;
   color: #94a3b8;
-  font-size: 9px;
+  font-size: 8px;
   font-weight: 500;
 }
 
@@ -276,8 +278,8 @@
 .monthly-planned-work-tooltip__meta {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 8px;
-  margin-top: 8px;
+  gap: 5px;
+  margin-top: 6px;
   color: #cbd5e1;
   font-size: 9.5px;
 }

@@ -31,11 +31,11 @@ function runningProjectRowHtml(d) {
           ${dealStatusBadge(d.deal_status)}
           ${d.opportunity_owner ? `<span class="text-xs text-gray-500 truncate">${esc(d.opportunity_owner)}</span>` : ''}
         </div>
-        ${d.end_date ? `<span class="text-xs text-gray-500 flex-shrink-0">Close: <span class="font-medium text-gray-700">${esc(d.end_date)}</span></span>` : ''}
+        ${d.end_date ? `<span class="text-xs text-gray-500 flex-shrink-0">Closed Won Date: <span class="font-medium text-gray-700">${esc(d.end_date)}</span></span>` : ''}
       </div>
       ${closingDate ? `<div class="flex items-center gap-1.5 text-xs mb-2">
         <svg class="w-3 h-3 flex-shrink-0 text-gray-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/></svg>
-        <span class="text-gray-500">${esc(closingDate)}</span>
+        <span class="text-gray-500">Project Closing Date: <span class="font-medium text-gray-700">${esc(closingDate)}</span></span>
         <span class="font-semibold ${daysColor}">${daysLabel}</span>
         <span class="ml-auto font-semibold ${statC}">${status}</span>
       </div>` : '<div class="mb-2"></div>'}
@@ -55,6 +55,125 @@ function applyAndRenderRunning() {
 }
 
 function renderRunningProjects(data) { S.lastRunningData = data; applyAndRenderRunning(); }
+
+
+const RUNNING_PROJECT_METRIC_MODAL_CONFIG = Object.freeze({
+  delayed: Object.freeze({
+    title: 'Delayed Professional Services Projects',
+    empty: 'No delayed Professional Services projects',
+  }),
+  'on-time': Object.freeze({
+    title: 'On-Time Professional Services Projects',
+    empty: 'No on-time Professional Services projects',
+  }),
+  revenue: Object.freeze({
+    title: 'Professional Services Revenue Projects',
+    empty: 'No Professional Services running projects',
+  }),
+});
+
+async function openRunningProjectMetricModal(metric) {
+  const config = RUNNING_PROJECT_METRIC_MODAL_CONFIG[metric];
+  if (!config) return;
+
+  openModal(`
+    ${mHdr(config.title, 'Loading project list…')}
+    <div class="p-8 text-center text-sm text-gray-400">Loading…</div>
+    <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+      <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+    </div>
+  `, 'max-w-4xl');
+
+  try {
+    const result = await api(
+      'GET',
+      `/api/dashboard/running-project-metrics?metric=${encodeURIComponent(metric)}`,
+    );
+    const projects = Array.isArray(result.projects) ? result.projects : [];
+    const revenueText = metric === 'revenue'
+      ? ` · ${fmtUsd(result.total_product_amount || 0)} PS Revenue`
+      : '';
+
+    openModal(`
+      ${mHdr(
+        config.title,
+        `${projects.length} project${projects.length === 1 ? '' : 's'} · Closed Won Mar 1, 2025 or later${revenueText}`,
+      )}
+      <div class="nice-scroll overflow-y-auto" style="max-height:68vh">
+        ${projects.length
+          ? projects.map(runningProjectRowHtml).join('')
+          : `<div class="px-6 py-12 text-center text-sm text-gray-400">${esc(config.empty)}</div>`}
+      </div>
+      <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+        <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+      </div>
+    `, 'max-w-4xl');
+  } catch (error) {
+    closeModal();
+    toast(error.message, 'error');
+  }
+}
+
+
+const PROJECT_PORTFOLIO_MODAL_CONFIG = Object.freeze({
+  running: Object.freeze({
+    title: 'Running Professional Services Projects',
+    empty: 'No running Professional Services projects in the Closed Won date window',
+    subtitle: 'Closed Won from March 1, 2025 onward · progress below 100%',
+  }),
+  weighted: Object.freeze({
+    title: 'Weighted Prospects',
+    empty: 'No non-Closed Won projects with probability at or above 75%',
+    subtitle: 'Stage is not Closed Won · probability ≥ 75%',
+  }),
+  prospect: Object.freeze({
+    title: 'Prospects',
+    empty: 'No non-Closed Won projects with probability below 75%',
+    subtitle: 'Stage is not Closed Won · probability < 75%',
+  }),
+});
+
+async function openProjectPortfolioMetricModal(metric) {
+  const config = PROJECT_PORTFOLIO_MODAL_CONFIG[metric];
+  if (!config) return;
+
+  openModal(`
+    ${mHdr(config.title, 'Loading project list…')}
+    <div class="p-8 text-center text-sm text-gray-400">Loading…</div>
+    <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+      <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+    </div>
+  `, 'max-w-4xl');
+
+  try {
+    const result = await api(
+      'GET',
+      `/api/dashboard/project-portfolio-metrics?metric=${encodeURIComponent(metric)}`,
+    );
+    const projects = Array.isArray(result.projects) ? result.projects : [];
+    const rowRenderer = metric === 'running'
+      ? runningProjectRowHtml
+      : servicePipelineRowHtml;
+
+    openModal(`
+      ${mHdr(
+        config.title,
+        `${projects.length.toLocaleString()} project${projects.length === 1 ? '' : 's'} · ${config.subtitle}`,
+      )}
+      <div class="nice-scroll modal-scroll-body">
+        ${projects.length
+          ? projects.map(rowRenderer).join('')
+          : `<div class="px-6 py-12 text-center text-sm text-gray-400">${esc(config.empty)}</div>`}
+      </div>
+      <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+        <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+      </div>
+    `, 'max-w-4xl');
+  } catch (error) {
+    closeModal();
+    toast(error.message, 'error');
+  }
+}
 
 /* ================================================================ SERVICE PIPELINE */
 function servicePipelineRowHtml(p) {

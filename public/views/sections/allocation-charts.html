@@ -185,7 +185,7 @@
                     </svg>
                   </div>
                   <div>
-                    <h3 class="font-semibold text-gray-900">Monthly Preplanned Work Mix</h3>
+                    <h3 class="font-semibold text-gray-900">Planned vs Actual</h3>
                     <p class="text-xs text-gray-500 mt-0.5">Resource Assignment plan with Work Summary Time Sheet comparison</p>
                   </div>
                 </div>
@@ -196,7 +196,7 @@
                       <select
                         id="monthlyPlannedWorkFiscalYearFilter"
                         class="field-input"
-                        aria-label="Monthly Preplanned Work Mix fiscal year"
+                        aria-label="Planned vs Actual fiscal year"
                         onchange="setMonthlyPlannedWorkFiscalYear(this.value)"
                       >
                         <option value="">All</option>
@@ -287,37 +287,36 @@
                 </div>
                 <div class="planned-actual-filter-group">
                   <div class="planned-actual-filter is-project">
-                    <label for="plannedActualProjectFilter">Project</label>
-                    <div id="plannedActualProjectCombobox" class="planned-actual-combobox">
+                    <span>Project</span>
+                    <div class="planned-actual-combobox" id="plannedActualProjectCombobox">
                       <input
                         id="plannedActualProjectFilter"
-                        class="field-input planned-actual-combobox-input"
+                        class="field-input"
                         type="text"
+                        placeholder="Select or type a project"
+                        autocomplete="off"
                         role="combobox"
+                        aria-label="Project"
                         aria-autocomplete="list"
                         aria-expanded="false"
-                        aria-controls="plannedActualProjectOptions"
-                        autocomplete="off"
-                        placeholder="Select or type a project"
-                      >
+                        aria-controls="plannedActualProjectMenu"
+                      />
                       <button
                         id="plannedActualProjectToggle"
-                        class="planned-actual-combobox-toggle"
                         type="button"
+                        class="planned-actual-combobox-toggle"
                         aria-label="Show project options"
-                        aria-controls="plannedActualProjectOptions"
-                        tabindex="-1"
+                        aria-controls="plannedActualProjectMenu"
+                        aria-expanded="false"
                       >
-                        <svg viewBox="0 0 20 20" aria-hidden="true">
-                          <path d="m6 8 4 4 4-4" />
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="6 9 12 15 18 9"></polyline>
                         </svg>
                       </button>
                       <div
-                        id="plannedActualProjectOptions"
-                        class="planned-actual-combobox-options"
+                        id="plannedActualProjectMenu"
+                        class="planned-actual-project-menu hidden"
                         role="listbox"
-                        aria-label="Plan-to-Execution projects"
-                        hidden
                       ></div>
                     </div>
                   </div>
