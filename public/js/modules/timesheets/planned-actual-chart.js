@@ -291,7 +291,7 @@ function renderPlannedActualTeam(project, mode) {
     ? 'Resource Assignment'
     : 'Work Summary Time Sheet';
   const showPreSaleAmount = Boolean(project.preSaleContext);
-  const amount = planned ? project.plannedBudget : project.preSaleProductAmount;
+  const amount = planned ? project.plannedBudget : project.actualBudget;
 
   return `
     <section class="planned-actual-team is-${mode}">
@@ -352,6 +352,11 @@ function renderPlannedActualFlow(project) {
       <section class="planned-actual-execution is-${statusKey}" id="plannedActualExecutionNode">
         <span class="planned-actual-status">${esc(status)}</span>
         <div class="planned-actual-project-name">${esc(project.label)}</div>
+        ${project.preSaleContext ? `
+          <div class="planned-actual-impact" title="${esc(formatPlannedActualBudgetExact(project.preSaleProductAmount))}">
+            Impact: ${esc(formatPlannedActualBudget(project.preSaleProductAmount))}
+          </div>
+        ` : ''}
         <div class="planned-actual-variance-value">
           ${esc(formatPlannedActualVariance(project.varianceHours, project.variancePct))}
         </div>

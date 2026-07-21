@@ -817,9 +817,14 @@ function renderMaximumCapacityDetails(details) {
           <div class="text-sm font-semibold text-gray-900">${esc(row.name)}</div>
           <div class="text-xs text-gray-400">${esc(row.designation)}</div>
         </td>
-        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityDays(row.baseWorkdays).replace(' days', ''))}</td>
+        <td class="px-3 py-3">
+          <div class="workdays-inline-editor workdays-inline-editor--capacity">
+            <input id="capacityWorkdays-${row.id}" type="number" min="0" step="1" value="${esc(String(row.baseWorkdays))}" aria-label="Base Workdays for ${esc(row.name)}">
+            <button type="button" onclick="saveEmployeeWorkdays(${row.id}, 'capacityWorkdays-${row.id}', 'maximum')">Save</button>
+          </div>
+        </td>
         <td class="px-3 py-3 text-right text-sm text-amber-700">${row.unavailableMonthCount ? `${esc(String(row.unavailableMonthCount))} × ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)}` : '—'}</td>
-        <td class="px-3 py-3 text-right text-sm font-semibold text-teal-700">${esc(formatCapacityDays(row.workdays).replace(' days', ''))}</td>
+        <td class="px-3 py-3 text-right"><span class="adjusted-workdays-badge">${esc(formatCapacityDays(row.workdays).replace(' days', ''))}</span></td>
         <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString('en-US', { maximumFractionDigits: 2 }))}h</td>
         <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityRate(row.hourlyRate))}</td>
         <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900">${esc(formatExactRevenueValue(row.maximumAmount))}</td>
@@ -869,9 +874,14 @@ function renderAvailableCapacityDetails(details) {
           <div class="text-sm font-semibold text-gray-900">${esc(row.name)}</div>
           <div class="text-xs text-gray-400">${esc(row.designation)}</div>
         </td>
-        <td class="px-4 py-3 text-right text-sm text-gray-600">${esc(formatCapacityDays(row.baseWorkdays))}</td>
+        <td class="px-4 py-3">
+          <div class="workdays-inline-editor workdays-inline-editor--capacity">
+            <input id="availableWorkdays-${row.id}" type="number" min="0" step="1" value="${esc(String(row.baseWorkdays))}" aria-label="Base Workdays for ${esc(row.name)}">
+            <button type="button" onclick="saveEmployeeWorkdays(${row.id}, 'availableWorkdays-${row.id}', 'days')">Save</button>
+          </div>
+        </td>
         <td class="px-4 py-3 text-right text-sm text-amber-700">${row.unavailableMonthCount ? `${esc(String(row.unavailableMonthCount))} month${row.unavailableMonthCount === 1 ? '' : 's'} / ${esc(formatCapacityDays(row.workdayDeduction))}` : '—'}</td>
-        <td class="px-4 py-3 text-right text-sm font-semibold text-teal-700">${esc(formatCapacityDays(row.workdays))}</td>
+        <td class="px-4 py-3 text-right"><span class="adjusted-workdays-badge">${esc(formatCapacityDays(row.workdays))}</span></td>
         <td class="px-4 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString('en-US', { maximumFractionDigits: 2 }))}h</td>
       </tr>`).join('');
 

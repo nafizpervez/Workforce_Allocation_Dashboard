@@ -118,6 +118,24 @@ router.put('/api/employees/:id', (req, res) => {
   res.json(employee);
 });
 
+router.patch('/api/employees/:id/workdays', (req, res) => {
+  const id = Number(req.params.id);
+  const workdays = Number(req.body?.workdays);
+  const existing = db.prepare('SELECT id FROM employees WHERE id = ?').get(id);
+
+  if (!existing) {
+    return res.status(404).json({ error: 'not found' });
+  }
+
+  if (!Number.isInteger(workdays) || workdays < 0) {
+    return res.status(400).json({ error: 'workdays must be a non-negative whole number' });
+  }
+
+  db.prepare('UPDATE employees SET workdays = ? WHERE id = ?').run(workdays, id);
+  const employee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id);
+  res.json(employee);
+});
+
 router.patch('/api/employees/:id/active', (req, res) => {
   const id = Number(req.params.id);
   const employee = db.prepare(`
