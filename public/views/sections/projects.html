@@ -1,0 +1,261 @@
+        <!-- [5] RUNNING PROJECTS (LEFT) + SERVICE PIPELINE (RIGHT) -->
+        <div class="ds" data-section="pipeline">
+          <div class="drag-handle" title="Drag row">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="5" cy="3" r="1.4" />
+              <circle cx="11" cy="3" r="1.4" />
+              <circle cx="5" cy="8" r="1.4" />
+              <circle cx="11" cy="8" r="1.4" />
+              <circle cx="5" cy="13" r="1.4" />
+              <circle cx="11" cy="13" r="1.4" />
+            </svg>
+          </div>
+          <div class="grid grid-cols-2 gap-6 pb-4">
+            <!-- Running Projects (LEFT) -->
+            <div class="dc flex flex-col">
+              <div class="dc-handle">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 12 12"
+                  fill="currentColor"
+                >
+                  <circle cx="4" cy="3" r="1" />
+                  <circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" />
+                  <circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" />
+                  <circle cx="8" cy="9" r="1" />
+                </svg>
+              </div>
+              <div
+                class="bg-white rounded-xl overflow-hidden flex flex-col h-full"
+                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
+              >
+                <div class="px-6 py-4 border-b border-gray-200">
+                  <div class="flex items-center gap-3 card-title-pad">
+                    <div
+                      class="w-8 h-8 bg-emerald-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                    >
+                      <svg
+                        class="w-4 h-4 text-emerald-600"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <circle cx="12" cy="12" r="10" />
+                        <path d="m9 12 2 2 4-4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 class="font-semibold text-gray-900">
+                        Running Projects
+                      </h3>
+                      <p class="text-xs text-gray-500">
+                        Closed Won · sorted by delivery date
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-filter-bar filter-bar-run">
+                  <div class="relative flex-shrink-0 filter-control-wrap">
+                    <input
+                      id="runSearch"
+                      type="text"
+                      placeholder="Search name / SA no."
+                      class="flt-select pl-7 w-44"
+                      style="background: white"
+                    />
+                  </div>
+                  <select id="runAmountFilt" class="flt-select">
+                    <option value="">All Amounts</option>
+                    <option value="0-10000">Under $10K</option>
+                    <option value="10000-50000">$10K–$50K</option>
+                    <option value="50000-100000">$50K–$100K</option>
+                    <option value="100000+">Over $100K</option>
+                  </select>
+                  <select id="runCloseFilt" class="flt-select">
+                    <option value="">All Dates</option>
+                    <option value="overdue">PS Work Begun</option>
+                    <option value="thismonth">This Month</option>
+                    <option value="next3months">Next 3 Months</option>
+                  </select>
+                  <select id="runProjCloseFilt" class="flt-select">
+                    <option value="">All Proj Closes</option>
+                    <option value="overdue">Overdue</option>
+                    <option value="thismonth">This Month</option>
+                    <option value="next3months">Next 3 Months</option>
+                  </select>
+                  <select id="runProdFamilyFilt" class="flt-select">
+                    <option value="">All Families</option>
+                  </select>
+                  <select id="runProductTypeFilt" class="flt-select">
+                    <option value="">All Product Name</option>
+                  </select>
+                  <button id="runSortAssignedBtn" class="flt-sort-btn">
+                    Most Assigned
+                  </button>
+                </div>
+                <div
+                  id="runningProjectsList"
+                  class="overflow-y-auto nice-scroll"
+                  style="height: 560px; min-height: 0"
+                ></div>
+                <div
+                  class="px-6 py-3 border-t border-gray-200 flex justify-end"
+                >
+                  <button class="btn-viewall" data-view-all="running">
+                    View All
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Service Pipeline (RIGHT) -->
+            <div class="dc flex flex-col">
+              <div class="dc-handle">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 12 12"
+                  fill="currentColor"
+                >
+                  <circle cx="4" cy="3" r="1" />
+                  <circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" />
+                  <circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" />
+                  <circle cx="8" cy="9" r="1" />
+                </svg>
+              </div>
+              <div
+                class="bg-white rounded-xl overflow-hidden flex flex-col h-full"
+                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
+              >
+                <div class="px-6 py-4 border-b border-gray-200">
+                  <div class="flex items-center gap-3 card-title-pad">
+                    <div
+                      class="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                    >
+                      <svg
+                        class="w-4 h-4 text-purple-600"
+                        viewBox="0 0 24 24"
+                        fill="none"
+                        stroke="currentColor"
+                        stroke-width="2"
+                        stroke-linecap="round"
+                        stroke-linejoin="round"
+                      >
+                        <polygon
+                          points="22 3 2 3 10 12.46 10 19 14 21 14 12.46 22 3"
+                        />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3 class="font-semibold text-gray-900">
+                        Service Pipeline
+                      </h3>
+                      <p class="text-xs text-gray-500 mt-0.5">
+                        Active opportunities overview
+                      </p>
+                    </div>
+                  </div>
+                </div>
+                <div class="card-filter-bar filter-bar-pipe">
+                  <div class="filter-row pipe-row-1">
+                    <div class="relative flex-shrink-0 filter-control-wrap">
+                      <input
+                        id="pipeSearch"
+                        type="text"
+                        placeholder="Search name / SA no."
+                        class="flt-select pl-7 w-44"
+                        style="background: white"
+                      />
+                    </div>
+                    <select id="pipeStageFilt" class="flt-select">
+                      <option value="">All Stages</option>
+                    </select>
+                    <select id="pipeDealStatusFilt" class="flt-select">
+                      <option value="">All Deal Types</option>
+                      <option value="NEW LOGO">⭐ NEW LOGO</option>
+                      <option value="REPEAT">↺ REPEAT</option>
+                      <option value="REACTIVE">⚡ REACTIVE</option>
+                    </select>
+                    <select id="pipeAmountFilt" class="flt-select">
+                      <option value="">All Amounts</option>
+                      <option value="0-10000">Under $10K</option>
+                      <option value="10000-50000">$10K–$50K</option>
+                      <option value="50000-100000">$50K–$100K</option>
+                      <option value="100000+">Over $100K</option>
+                    </select>
+                    <select id="pipeCloseFilt" class="flt-select">
+                      <option value="">All Close Dates</option>
+                      <option value="overdue">Overdue</option>
+                      <option value="thismonth">This Month</option>
+                      <option value="next3months">Next 3 Months</option>
+                      <option value="thisyear">This Year</option>
+                    </select>
+                    <select id="pipeProjCloseFilt" class="flt-select">
+                      <option value="">All Proj Closes</option>
+                      <option value="overdue">Overdue</option>
+                      <option value="thismonth">This Month</option>
+                      <option value="next3months">Next 3 Months</option>
+                    </select>
+                  </div>
+                  <div class="filter-row pipe-row-2">
+                    <select id="pipeProdFamilyFilt" class="flt-select">
+                      <option value="">All Families</option>
+                    </select>
+                    <select id="pipeProductTypeFilt" class="flt-select">
+                      <option value="">All Product Name</option>
+                    </select>
+                    <button id="pipeSortAssignedBtn" class="flt-sort-btn">
+                      Most Assigned
+                    </button>
+                  </div>
+                </div>
+                <div
+                  id="pipelineList"
+                  class="overflow-y-auto nice-scroll"
+                  style="height: 560px; min-height: 0"
+                ></div>
+                <div
+                  class="px-6 py-3 border-t border-gray-200 flex justify-end"
+                >
+                  <button class="btn-viewall" data-view-all="pipeline">
+                    View All
+                    <svg
+                      width="13"
+                      height="13"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="5" y1="12" x2="19" y2="12" />
+                      <polyline points="12 5 19 12 12 19" />
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>

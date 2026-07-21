@@ -1,0 +1,304 @@
+/* ================================================================
+   Resource Assignment Matrix / Yearly Work / Project-wise People tabs
+   Restored tab pill styling after assignment backup update
+   ================================================================ */
+.resource-matrix-tab-btn,
+.resource-matrix-action-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.35rem;
+  height: 30px;
+  padding: 0 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #ffffff;
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.resource-matrix-tab-btn:hover,
+.resource-matrix-action-btn:hover {
+  border-color: #c7d2fe;
+  color: #1d4ed8;
+  background: #eef2ff;
+}
+
+.resource-matrix-tab-btn.active {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  color: #ffffff;
+}
+
+.resource-matrix-tab-content.hidden {
+  display: none;
+}
+
+.project-people-chart-wrap {
+  height: 430px;
+  min-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.project-people-chart-wrap canvas {
+  min-width: 1180px;
+}
+
+/* ==============================================================
+   Resource Assignment Matrix filter layout
+   ============================================================== */
+
+.matrix-filter-bar {
+  display: block;
+  box-sizing: border-box;
+  overflow-x: auto;
+}
+
+.matrix-filter-main-row {
+  display: grid;
+  grid-template-columns:
+    minmax(210px, 0.85fr)
+    minmax(210px, 0.85fr)
+    minmax(125px, 0.5fr)
+    minmax(150px, 0.65fr)
+    minmax(115px, 0.48fr)
+    minmax(145px, 0.6fr)
+    minmax(145px, 0.6fr)
+    max-content;
+  gap: 8px;
+  align-items: center;
+  width: 100%;
+}
+
+.matrix-filter-control {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr);
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+}
+
+.matrix-filter-control label {
+  white-space: nowrap;
+}
+
+.matrix-filter-control select {
+  width: 100%;
+  height: 30px;
+  min-width: 0;
+  max-width: 100%;
+  box-sizing: border-box;
+}
+
+.matrix-project-filter-control {
+  max-width: 250px;
+}
+
+.assignment-download-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 13px;
+  border: 1px solid #93c5fd;
+  background: #eff6ff;
+  color: #1d4ed8;
+  border-radius: 999px;
+  font-size: 12px;
+  font-weight: 700;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.assignment-download-btn:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.matrix-download-btn {
+  flex-shrink: 0;
+}
+
+.matrix-filter-sort-row {
+  display: flex;
+  justify-content: flex-end;
+  align-items: center;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+@media (max-width: 1400px) {
+  .matrix-filter-main-row {
+    grid-template-columns:
+      240px
+      230px
+      135px
+      160px
+      125px
+      150px
+      150px
+      180px;
+    min-width: 1390px;
+  }
+}
+
+
+
+.matrix-fiscal-year-control {
+  display: inline-flex;
+  align-items: stretch;
+  height: 30px;
+  overflow: hidden;
+  border: 1px solid #dbe3ef;
+  border-radius: 0.55rem;
+  background: #fff;
+  flex: 0 0 auto;
+}
+
+.matrix-fiscal-year-control > button {
+  width: 2rem;
+  border: 0;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 1.15rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.matrix-fiscal-year-control > button:hover {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.matrix-fiscal-year-control > button:disabled {
+  cursor: wait;
+  opacity: 0.55;
+}
+
+.matrix-fiscal-year-control > label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0 0.55rem;
+  border-right: 1px solid #e2e8f0;
+  border-left: 1px solid #e2e8f0;
+  color: #64748b;
+  font-size: 0.68rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.matrix-fiscal-year-value {
+  display: flex;
+  flex-direction: column;
+  line-height: 1;
+}
+
+.matrix-fiscal-year-value input {
+  width: 3.9rem;
+  border: 0;
+  padding: 0;
+  background: transparent;
+  color: #0f172a;
+  font-size: 0.78rem;
+  font-weight: 700;
+  outline: none;
+  -moz-appearance: textfield;
+}
+
+.matrix-fiscal-year-value input::-webkit-outer-spin-button,
+.matrix-fiscal-year-value input::-webkit-inner-spin-button {
+  margin: 0;
+  -webkit-appearance: none;
+}
+
+.matrix-fiscal-year-value small {
+  margin-top: 0.16rem;
+  color: #94a3b8;
+  font-size: 0.52rem;
+  font-weight: 500;
+}
+
+/* ================================================================
+   Resource Assignment card header
+   Keep the heading at left and all matrix actions in the same row.
+   ================================================================ */
+.resource-assignment-header-row {
+  display: grid;
+  grid-template-columns: minmax(330px, 1fr) max-content;
+  align-items: center;
+  gap: 1rem;
+  width: 100%;
+}
+
+.resource-assignment-heading,
+.resource-assignment-heading-copy {
+  min-width: 0;
+}
+
+.resource-assignment-heading-copy p {
+  max-width: 100%;
+}
+
+.resource-assignment-header-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  flex-wrap: nowrap;
+  gap: 0.5rem;
+  min-width: 0;
+  white-space: nowrap;
+}
+
+@media (max-width: 1550px) {
+  .resource-assignment-card-header {
+    padding-left: 1rem;
+    padding-right: 2.75rem;
+  }
+
+  .resource-assignment-header-row {
+    grid-template-columns: minmax(290px, 1fr) max-content;
+    gap: 0.7rem;
+  }
+
+  .resource-assignment-header-actions {
+    gap: 0.35rem;
+  }
+
+  .resource-assignment-header-actions .resource-matrix-tab-btn,
+  .resource-assignment-header-actions .resource-matrix-action-btn {
+    padding-right: 9px;
+    padding-left: 9px;
+    font-size: 11px;
+  }
+
+  .resource-assignment-header-actions .matrix-fiscal-year-control > label {
+    gap: 0.3rem;
+    padding-right: 0.4rem;
+    padding-left: 0.4rem;
+  }
+
+  .resource-assignment-header-actions .matrix-fiscal-year-control > button {
+    width: 1.75rem;
+  }
+}
+
+@media (max-width: 1180px) {
+  .resource-assignment-header-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .resource-assignment-header-actions {
+    justify-content: flex-start;
+    max-width: 100%;
+    overflow-x: auto;
+    padding-bottom: 0.2rem;
+  }
+}

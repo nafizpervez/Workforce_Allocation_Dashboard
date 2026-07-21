@@ -1,0 +1,35 @@
+            <div id="chartTab-revenue" class="chart-tab-content p-6 hidden">
+              <div class="flex items-center gap-3 mb-4">
+                <div
+                  class="w-8 h-8 bg-violet-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                >
+                  <svg
+                    class="w-4 h-4 text-violet-600"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    stroke-width="2"
+                    stroke-linecap="round"
+                    stroke-linejoin="round"
+                  >
+                    <line x1="12" y1="1" x2="12" y2="23" />
+                    <path
+                      d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"
+                    />
+                  </svg>
+                </div>
+                <div>
+                  <h3 class="font-semibold text-gray-900">
+                    PS Revenue Share by Fiscal Year
+                  </h3>
+                  <p class="text-xs text-gray-500 mt-0.5">
+                    Closed Won · PS Amount as % of Total Revenue · grouped by Fiscal Period
+                  </p>
+                </div>
+              </div>
+              <div style="height: 300px">
+                <canvas id="psRevenueChart"></canvas>
+              </div>
+            </div>
+
+            <!-- ── TAB 3: PS Engagement Breakdown ── -->

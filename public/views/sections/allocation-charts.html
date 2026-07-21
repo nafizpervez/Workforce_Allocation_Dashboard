@@ -1,0 +1,366 @@
+        <!-- [3] CHARTS -->
+        <div class="ds" data-section="charts">
+          <div class="drag-handle" title="Drag row">
+            <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+              <circle cx="5" cy="3" r="1.4" />
+              <circle cx="11" cy="3" r="1.4" />
+              <circle cx="5" cy="8" r="1.4" />
+              <circle cx="11" cy="8" r="1.4" />
+              <circle cx="5" cy="13" r="1.4" />
+              <circle cx="11" cy="13" r="1.4" />
+            </svg>
+          </div>
+          <div class="grid grid-cols-3 gap-6">
+            <div class="dc">
+              <div class="dc-handle">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 12 12"
+                  fill="currentColor"
+                >
+                  <circle cx="4" cy="3" r="1" />
+                  <circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" />
+                  <circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" />
+                  <circle cx="8" cy="9" r="1" />
+                </svg>
+              </div>
+              <div
+                class="bg-white rounded-xl p-6"
+                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
+              >
+                <div class="flex items-center gap-3 card-title-pad mb-4">
+                  <div
+                    class="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                  >
+                    <svg
+                      class="w-4 h-4 text-blue-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">
+                      Assignment Trends
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Last 12 months</p>
+                  </div>
+                </div>
+                <div style="height: 260px">
+                  <canvas id="trendsChart"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="dc">
+              <div class="dc-handle">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 12 12"
+                  fill="currentColor"
+                >
+                  <circle cx="4" cy="3" r="1" />
+                  <circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" />
+                  <circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" />
+                  <circle cx="8" cy="9" r="1" />
+                </svg>
+              </div>
+              <div
+                class="bg-white rounded-xl p-6"
+                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
+              >
+                <div class="flex items-center gap-3 card-title-pad mb-4">
+                  <div
+                    class="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                  >
+                    <svg
+                      class="w-4 h-4 text-purple-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <line x1="18" y1="20" x2="18" y2="10" />
+                      <line x1="12" y1="20" x2="12" y2="4" />
+                      <line x1="6" y1="20" x2="6" y2="14" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">
+                      Burndown Chart
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-0.5">
+                      Planned remaining effort versus actual Time Sheet delivery
+                    </p>
+                  </div>
+                </div>
+                <div style="height: 260px">
+                  <canvas id="burndownChart"></canvas>
+                </div>
+              </div>
+            </div>
+            <div class="dc">
+              <div class="dc-handle">
+                <svg
+                  width="11"
+                  height="11"
+                  viewBox="0 0 12 12"
+                  fill="currentColor"
+                >
+                  <circle cx="4" cy="3" r="1" />
+                  <circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" />
+                  <circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" />
+                  <circle cx="8" cy="9" r="1" />
+                </svg>
+              </div>
+              <div
+                class="bg-white rounded-xl p-6"
+                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
+              >
+                <div class="flex items-center gap-3 card-title-pad mb-4">
+                  <div
+                    class="w-8 h-8 bg-teal-100 rounded-xl flex items-center justify-center flex-shrink-0"
+                  >
+                    <svg
+                      class="w-4 h-4 text-teal-600"
+                      viewBox="0 0 24 24"
+                      fill="none"
+                      stroke="currentColor"
+                      stroke-width="2"
+                      stroke-linecap="round"
+                      stroke-linejoin="round"
+                    >
+                      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
+                      <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">
+                      Burnup Chart
+                    </h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Cumulative planned effort versus actual Time Sheet delivery</p>
+                  </div>
+                </div>
+                <div style="height: 260px">
+                  <canvas id="burnupChart"></canvas>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="dc monthly-planned-work-card mt-6">
+            <div class="dc-handle" title="Drag card">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                <circle cx="4" cy="3" r="1" />
+                <circle cx="8" cy="3" r="1" />
+                <circle cx="4" cy="6" r="1" />
+                <circle cx="8" cy="6" r="1" />
+                <circle cx="4" cy="9" r="1" />
+                <circle cx="8" cy="9" r="1" />
+              </svg>
+            </div>
+            <div class="bg-white rounded-xl p-6 monthly-planned-work-surface">
+              <div class="monthly-planned-work-header card-title-pad">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-sky-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg class="w-4 h-4 text-sky-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 20V10" />
+                      <path d="M10 20V4" />
+                      <path d="M16 20v-7" />
+                      <path d="M22 20H2" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">Planned vs Actual</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">Resource Assignment plan with Work Summary Time Sheet comparison</p>
+                  </div>
+                </div>
+                <div class="monthly-planned-work-side-meta">
+                  <div class="monthly-planned-work-controls">
+                    <label class="monthly-planned-work-fy-filter" for="monthlyPlannedWorkFiscalYearFilter">
+                      <span>FY</span>
+                      <select
+                        id="monthlyPlannedWorkFiscalYearFilter"
+                        class="field-input"
+                        aria-label="Planned vs Actual fiscal year"
+                        onchange="setMonthlyPlannedWorkFiscalYear(this.value)"
+                      >
+                        <option value="">All</option>
+                      </select>
+                    </label>
+                    <div
+                      class="monthly-planned-work-tabs"
+                      role="tablist"
+                      aria-label="Monthly work mix metric"
+                    >
+                      <button
+                        id="monthlyPlannedPercentTab"
+                        type="button"
+                        class="monthly-planned-work-tab is-active"
+                        data-monthly-work-mode="percent"
+                        role="tab"
+                        aria-selected="true"
+                        onclick="setMonthlyPlannedWorkMode('percent')"
+                      >
+                        Percent Wise
+                      </button>
+                      <button
+                        id="monthlyPlannedRevenueTab"
+                        type="button"
+                        class="monthly-planned-work-tab"
+                        data-monthly-work-mode="revenue"
+                        role="tab"
+                        aria-selected="false"
+                        tabindex="-1"
+                        onclick="setMonthlyPlannedWorkMode('revenue')"
+                      >
+                        Revenue Wise
+                      </button>
+                    </div>
+                  </div>
+                  <div id="monthlyPlannedWorkMeta" class="monthly-planned-work-meta"></div>
+                  <div class="monthly-planned-work-source-key" aria-label="Bar position key">
+                    <span class="monthly-planned-work-source-item">
+                      <span class="monthly-planned-work-source-marker planned" aria-hidden="true"></span>
+                      Planned (left bar)
+                    </span>
+                    <span class="monthly-planned-work-source-item">
+                      <span class="monthly-planned-work-source-marker actual" aria-hidden="true"></span>
+                      Actual (right bar)
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+              <div class="monthly-planned-work-chart">
+                <canvas id="monthlyPlannedWorkChart"></canvas>
+              </div>
+
+              <p id="monthlyPlannedWorkNote" class="monthly-planned-work-note">
+                Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.
+              </p>
+            </div>
+          </div>
+
+          <div class="dc planned-actual-card mt-6">
+            <div class="dc-handle" title="Drag card">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                <circle cx="4" cy="3" r="1" />
+                <circle cx="8" cy="3" r="1" />
+                <circle cx="4" cy="6" r="1" />
+                <circle cx="8" cy="6" r="1" />
+                <circle cx="4" cy="9" r="1" />
+                <circle cx="8" cy="9" r="1" />
+              </svg>
+            </div>
+            <div class="bg-white rounded-xl p-6 planned-actual-surface">
+              <div class="planned-actual-header card-title-pad">
+                <div class="flex items-center gap-3">
+                  <div class="w-8 h-8 bg-indigo-100 rounded-xl flex items-center justify-center flex-shrink-0">
+                    <svg class="w-4 h-4 text-indigo-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M4 6h5" />
+                      <path d="M15 6h5" />
+                      <path d="M8 6l4 6 4-6" />
+                      <path d="M4 18h5" />
+                      <path d="M15 18h5" />
+                      <path d="M8 18l4-6 4 6" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 class="font-semibold text-gray-900">Plan-to-Execution Map</h3>
+                    <p class="text-xs text-gray-500 mt-0.5">How planned assignments changed into recorded delivery effort</p>
+                  </div>
+                </div>
+                <div class="planned-actual-filter-group">
+                  <div class="planned-actual-filter is-project">
+                    <span>Project</span>
+                    <div class="planned-actual-combobox" id="plannedActualProjectCombobox">
+                      <input
+                        id="plannedActualProjectFilter"
+                        class="field-input"
+                        type="text"
+                        placeholder="Select or type a project"
+                        autocomplete="off"
+                        role="combobox"
+                        aria-label="Project"
+                        aria-autocomplete="list"
+                        aria-expanded="false"
+                        aria-controls="plannedActualProjectMenu"
+                      />
+                      <button
+                        id="plannedActualProjectToggle"
+                        type="button"
+                        class="planned-actual-combobox-toggle"
+                        aria-label="Show project options"
+                        aria-controls="plannedActualProjectMenu"
+                        aria-expanded="false"
+                      >
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+                          <polyline points="6 9 12 15 18 9"></polyline>
+                        </svg>
+                      </button>
+                      <div
+                        id="plannedActualProjectMenu"
+                        class="planned-actual-project-menu hidden"
+                        role="listbox"
+                      ></div>
+                    </div>
+                  </div>
+                  <label class="planned-actual-filter is-month">
+                    <span>Month</span>
+                    <select id="plannedActualMonthFilter" class="field-input">
+                      <option value="">All Months</option>
+                    </select>
+                  </label>
+                  <label id="plannedActualProductFilterWrap" class="planned-actual-filter is-product hidden">
+                    <span>Product</span>
+                    <select id="plannedActualProductFilter" class="field-input">
+                      <option value="">All Products</option>
+                    </select>
+                  </label>
+                </div>
+              </div>
+
+              <div id="plannedActualSummary" class="planned-actual-summary" aria-live="polite"></div>
+
+              <div id="plannedActualContent">
+                <div id="plannedActualFlow" class="planned-actual-flow" aria-live="polite"></div>
+
+                <section id="plannedActualTrendPanel" class="planned-actual-trend-panel">
+                  <div class="planned-actual-trend-header">
+                    <div>
+                      <h4>Monthly effort progression</h4>
+                      <p>Planned assignment hours compared with actual Time Sheet hours across the fiscal year.</p>
+                    </div>
+                    <div class="planned-actual-trend-key" aria-label="Trend chart legend">
+                      <span><i class="is-planned"></i> Planned</span>
+                      <span><i class="is-actual"></i> Actual</span>
+                    </div>
+                  </div>
+                  <div class="planned-actual-trend-chart">
+                    <canvas id="plannedActualMonthlyChart"></canvas>
+                  </div>
+                </section>
+              </div>
+
+              <div id="plannedActualEmpty" class="planned-actual-empty hidden">
+                No planned assignments or Work Summary Time Sheet hours are available for this fiscal year.
+              </div>
+              <p id="plannedActualProjectNote" class="planned-actual-note"></p>
+            </div>
+          </div>
+        </div>
