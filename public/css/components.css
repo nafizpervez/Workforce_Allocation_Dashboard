@@ -250,13 +250,13 @@
 #statsRow {
   display: grid;
   grid-template-columns:
-    minmax(340px, 1.19fr)
-    minmax(325px, 1.14fr)
-    minmax(305px, 1.02fr)
-    minmax(300px, 1fr)
-    minmax(315px, 1.05fr)
-    minmax(0, 0.78fr);
-  gap: 18px;
+    minmax(0, 1.2fr)
+    minmax(0, 1.15fr)
+    minmax(0, 1.05fr)
+    minmax(0, 1.05fr)
+    minmax(0, 1.1fr)
+    minmax(0, 1.15fr);
+  gap: 12px;
   overflow: visible;
   padding: 1px;
 }
@@ -268,6 +268,7 @@
 #statsRow .stat-card-inner {
   height: 180px;
   min-height: 180px;
+  padding: 16px !important;
 }
 
 .stat-card-trend {
@@ -941,6 +942,167 @@
   border-color: #fcd34d;
 }
 
+
+.capacity-allocation-card {
+  display: grid;
+  grid-template-columns: 96px minmax(0, 1fr);
+  gap: 10px;
+  height: 138px;
+  min-height: 138px;
+}
+
+.capacity-allocation-card__summary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  padding-right: 10px;
+  border-right: 1px solid #dfe3f5;
+}
+
+.capacity-allocation-card__amount {
+  max-width: 100%;
+  overflow: hidden;
+  color: #111827;
+  font-size: 22px;
+  font-weight: 600;
+  line-height: 1.05;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capacity-allocation-card__title {
+  margin-top: 5px;
+  color: #64748b;
+  font-size: 13px;
+  line-height: 1.15;
+}
+
+.capacity-allocation-breakdown {
+  min-width: 0;
+  padding: 1px 0;
+}
+
+.capacity-allocation-breakdown__heading {
+  display: flex;
+  min-height: 12px;
+  align-items: center;
+  justify-content: flex-end;
+  margin-bottom: 6px;
+}
+
+.capacity-allocation-breakdown__hint {
+  color: #94a3b8;
+  font-size: 8px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.capacity-allocation-breakdown__list {
+  display: grid;
+  gap: 6px;
+}
+
+.capacity-allocation-breakdown__item {
+  display: flex;
+  width: 100%;
+  cursor: pointer;
+  text-align: left;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+  min-width: 0;
+  height: 32px;
+  align-items: center;
+  justify-content: space-between;
+  gap: 6px;
+  padding: 4px 7px 4px 8px;
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+
+.capacity-allocation-breakdown__item:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.08);
+}
+
+.capacity-allocation-breakdown__item:focus-visible {
+  outline: 2px solid #6366f1;
+  outline-offset: 2px;
+}
+
+.capacity-allocation-breakdown__label {
+  min-width: 0;
+  overflow: hidden;
+  color: #475569;
+  font-size: 8.5px;
+  font-weight: 600;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+}
+
+.capacity-allocation-breakdown__value {
+  display: inline-flex;
+  min-width: 46px;
+  height: 20px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  padding: 0 6px;
+  border: 1px solid #e5e7eb;
+  border-radius: 9999px;
+  background: #ffffff;
+  color: #334155;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.capacity-allocation-breakdown__item--maximum {
+  border-color: #c7d2fe;
+  background: #f5f7ff;
+}
+
+.capacity-allocation-breakdown__item--maximum .capacity-allocation-breakdown__label,
+.capacity-allocation-breakdown__item--maximum .capacity-allocation-breakdown__value {
+  color: #4338ca;
+}
+
+.capacity-allocation-breakdown__item--maximum .capacity-allocation-breakdown__value {
+  border-color: #a5b4fc;
+}
+
+.capacity-allocation-breakdown__item--days {
+  border-color: #99f6e4;
+  background: #f0fdfa;
+}
+
+.capacity-allocation-breakdown__item--days .capacity-allocation-breakdown__label,
+.capacity-allocation-breakdown__item--days .capacity-allocation-breakdown__value {
+  color: #0f766e;
+}
+
+.capacity-allocation-breakdown__item--days .capacity-allocation-breakdown__value {
+  border-color: #5eead4;
+}
+
+.capacity-allocation-breakdown__item--allocated {
+  border-color: #fde68a;
+  background: #fffbeb;
+}
+
+.capacity-allocation-breakdown__item--allocated .capacity-allocation-breakdown__label,
+.capacity-allocation-breakdown__item--allocated .capacity-allocation-breakdown__value {
+  color: #b45309;
+}
+
+.capacity-allocation-breakdown__item--allocated .capacity-allocation-breakdown__value {
+  border-color: #fcd34d;
+}
+
 @media (max-width: 1500px) {
   #statsRow {
     grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -957,7 +1119,8 @@
   #statsRow > .dc-stat--running-projects,
   #statsRow > .dc-stat--utilization,
   #statsRow > .dc-stat--assigned-projects,
-  #statsRow > .dc-stat--committed-target {
+  #statsRow > .dc-stat--committed-target,
+  #statsRow > .dc-stat--capacity-allocation {
     grid-column: 1 / -1;
   }
 }
@@ -971,7 +1134,8 @@
   #statsRow > .dc-stat--running-projects,
   #statsRow > .dc-stat--utilization,
   #statsRow > .dc-stat--assigned-projects,
-  #statsRow > .dc-stat--committed-target {
+  #statsRow > .dc-stat--committed-target,
+  #statsRow > .dc-stat--capacity-allocation {
     grid-column: auto;
   }
 
@@ -1020,11 +1184,21 @@
     padding-right: 10px;
   }
 
+  .capacity-allocation-card {
+    grid-template-columns: 100px minmax(0, 1fr);
+    gap: 10px;
+  }
+
+  .capacity-allocation-card__summary {
+    padding-right: 10px;
+  }
+
   .active-resource-composition__hint,
   .running-project-health__hint,
   .utilization-breakdown__hint,
   .assigned-project-breakdown__hint,
-  .committed-target-breakdown__hint {
+  .committed-target-breakdown__hint,
+  .capacity-allocation-breakdown__hint {
     display: none;
   }
 }

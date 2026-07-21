@@ -1,6 +1,24 @@
 /* Workforce Allocation Dashboard — dashboard/overview.js */
 
 /* ================================================================ STATS */
+function isSeniorManagerDeliveryResource(employee) {
+  const designation = normalizeDesignationKey(employee?.designation);
+  if (designation === normalizeDesignationKey('Senior Manager, Delivery')) {
+    return true;
+  }
+
+  const normalizedName = String(employee?.name || '')
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, '');
+
+  return normalizedName.includes('bhowm') && (
+    normalizedName.includes('debashish') ||
+    normalizedName.includes('debashsish') ||
+    normalizedName.includes('debasis') ||
+    normalizedName.includes('debasish')
+  );
+}
+
 function getActiveResourceDesignationSummary() {
   const designationCounts = new Map(
     (RESOURCE_DESIGNATIONS || []).map(designation => [designation, 0]),
@@ -12,9 +30,15 @@ function getActiveResourceDesignationSummary() {
     ['Junior Consultant', 'JC'],
     ['Analyst', 'A'],
   ]);
+  let seniorManagerCount = 0;
 
   for (const employee of S.employees || []) {
     if (Number(employee?.active ?? 1) === 0) continue;
+
+    if (isSeniorManagerDeliveryResource(employee)) {
+      seniorManagerCount += 1;
+      continue;
+    }
 
     const matchedDesignation = (RESOURCE_DESIGNATIONS || []).find(designation => (
       normalizeDesignationKey(designation) ===
@@ -32,7 +56,7 @@ function getActiveResourceDesignationSummary() {
     {
       label: 'SM',
       fullLabel: 'Senior Manager, Delivery',
-      count: 1,
+      count: seniorManagerCount,
       isManager: true,
     },
     ...(RESOURCE_DESIGNATIONS || []).map(designation => ({
@@ -78,10 +102,7 @@ function getDesignationModalResources(designation) {
   const normalizedDesignation = normalizeDesignationKey(designation);
 
   if (normalizedDesignation === normalizeDesignationKey('Senior Manager, Delivery')) {
-    return activeEmployees.filter(employee => (
-      personIdentityKey(employee.name) === personIdentityKey('Debashish Bhowmick') ||
-      /debashish/i.test(String(employee.name || ''))
-    ));
+    return activeEmployees.filter(isSeniorManagerDeliveryResource);
   }
 
   return activeEmployees.filter(employee => (
@@ -227,7 +248,7 @@ function renderUtilizationBreakdown(s) {
   const rows = [
     {
       key: 'intrasourcing',
-      label: 'Avg. Intrasourcing Utilization',
+      label: 'Intrasourcing Utilization',
       value: formatUtilizationMetric(s.avg_intrasourcing_utilization),
       tone: 'intrasourcing',
     },
@@ -269,7 +290,7 @@ function renderUtilizationBreakdown(s) {
 
 const UTILIZATION_DETAIL_CONFIG = Object.freeze({
   intrasourcing: Object.freeze({
-    title: 'Avg. Intrasourcing Utilization',
+    title: 'Intrasourcing Utilization',
     formula: 'Average of each eligible resource’s Intrasourcing allocation over that resource’s available fiscal-year weeks.',
     included: 'Intrasourcing',
   }),
@@ -563,6 +584,401 @@ function renderCommittedTargetCard(c, summary) {
     </div>`;
 }
 
+const CAPACITY_HOURS_PER_WORKDAY = 8;
+
+function getCapacityAllocationDetails() {
+  const activeEmployees = getActiveEmployees();
+  const employeeById = new Map(
+    activeEmployees.map(employee => [Number(employee.id), employee]),
+  );
+  const resourceRows = activeEmployees.map(employee => {
+    const workdays = Number(employee.workdays);
+    const normalizedWorkdays = Number.isFinite(workdays) && workdays >= 0
+      ? workdays
+      : 220;
+    const capacityHours = normalizedWorkdays * CAPACITY_HOURS_PER_WORKDAY;
+    const rateRecord = getRevenueRateForDesignation(employee.designation);
+    const hourlyRate = getRevenueRateValue(rateRecord, 'local');
+    const maximumAmount = hourlyRate === null
+      ? 0
+      : capacityHours * hourlyRate;
+
+    return {
+      id: Number(employee.id),
+      name: employee.name || '',
+      designation: employee.designation || 'No supported designation',
+      workdays: normalizedWorkdays,
+      capacityHours,
+      hourlyRate,
+      maximumAmount,
+      note: hourlyRate === null
+        ? 'Excluded from monetary capacity: no supported Local rate.'
+        : '',
+    };
+  });
+
+  const allocationByEmployee = new Map(
+    activeEmployees.map(employee => [Number(employee.id), {
+      id: Number(employee.id),
+      name: employee.name || '',
+      designation: employee.designation || 'No supported designation',
+      intrasourcingHours: 0,
+      localHours: 0,
+      intrasourcingRate: null,
+      localRate: null,
+      intrasourcingRevenue: 0,
+      localRevenue: 0,
+      assignmentCount: 0,
+      note: '',
+    }]),
+  );
+
+  for (const assignment of getEffectiveFiscalAssignments(
+    S.fiscalYear,
+    S.assignments,
+  )) {
+    const employee = employeeById.get(Number(assignment.employee_id));
+    if (!employee) continue;
+
+    const category = classifyAllocationProject(
+      getSummaryAssignmentProjectName(assignment),
+    );
+    if (category !== 'intrasourcing' && category !== 'local') continue;
+
+    const percentage = Number(assignment.percentage);
+    if (!Number.isFinite(percentage) || percentage <= 0) continue;
+
+    const row = allocationByEmployee.get(Number(employee.id));
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
+    row.assignmentCount += 1;
+
+    if (category === 'intrasourcing') row.intrasourcingHours += hours;
+    if (category === 'local') row.localHours += hours;
+  }
+
+  for (const employee of activeEmployees) {
+    const row = allocationByEmployee.get(Number(employee.id));
+    const rateRecord = getRevenueRateForDesignation(employee.designation);
+    row.intrasourcingRate = getRevenueRateValue(rateRecord, 'intrasourcing');
+    row.localRate = getRevenueRateValue(rateRecord, 'local');
+    row.intrasourcingRevenue = row.intrasourcingRate === null
+      ? 0
+      : row.intrasourcingHours * row.intrasourcingRate;
+    row.localRevenue = row.localRate === null
+      ? 0
+      : row.localHours * row.localRate;
+    row.totalRevenue = row.intrasourcingRevenue + row.localRevenue;
+
+    const missing = [];
+    if (row.intrasourcingHours > 0 && row.intrasourcingRate === null) {
+      missing.push('Intrasourcing rate missing');
+    }
+    if (row.localHours > 0 && row.localRate === null) {
+      missing.push('Local rate missing');
+    }
+    row.note = missing.join(' · ');
+  }
+
+  const allocatedRows = [...allocationByEmployee.values()]
+    .filter(row => row.assignmentCount > 0 || row.totalRevenue > 0)
+    .sort((a, b) => b.totalRevenue - a.totalRevenue || a.name.localeCompare(b.name));
+  const maximumCapacity = resourceRows.reduce(
+    (sum, row) => sum + row.maximumAmount,
+    0,
+  );
+  const availableCapacityDays = resourceRows.reduce(
+    (sum, row) => sum + row.workdays,
+    0,
+  );
+  const intrasourcingAllocated = allocatedRows.reduce(
+    (sum, row) => sum + row.intrasourcingRevenue,
+    0,
+  );
+  const localAllocated = allocatedRows.reduce(
+    (sum, row) => sum + row.localRevenue,
+    0,
+  );
+  const capacityAllocated = intrasourcingAllocated + localAllocated;
+
+  return {
+    resourceRows,
+    allocatedRows,
+    maximumCapacity: +maximumCapacity.toFixed(2),
+    availableCapacityDays: +availableCapacityDays.toFixed(2),
+    intrasourcingAllocated: +intrasourcingAllocated.toFixed(2),
+    localAllocated: +localAllocated.toFixed(2),
+    capacityAllocated: +capacityAllocated.toFixed(2),
+    remainingCapacity: +(maximumCapacity - capacityAllocated).toFixed(2),
+  };
+}
+
+function getCapacityAllocationSummary() {
+  const details = getCapacityAllocationDetails();
+  return {
+    maximumCapacity: details.maximumCapacity,
+    availableCapacityDays: details.availableCapacityDays,
+    capacityAllocated: details.capacityAllocated,
+    remainingCapacity: details.remainingCapacity,
+  };
+}
+
+function formatCapacityDays(value) {
+  const amount = Number(value) || 0;
+  return `${amount.toLocaleString('en-US', {
+    maximumFractionDigits: 1,
+  })} days`;
+}
+
+function renderCapacityAllocationBreakdown(summary) {
+  const rows = [
+    {
+      key: 'maximum',
+      label: 'Max Capacity Amount',
+      value: formatCommittedTargetRevenue(summary.maximumCapacity),
+      tone: 'maximum',
+    },
+    {
+      key: 'days',
+      label: 'Available Capacity',
+      value: formatCapacityDays(summary.availableCapacityDays),
+      tone: 'days',
+    },
+    {
+      key: 'allocated',
+      label: 'Capacity Allocated',
+      value: formatCommittedTargetRevenue(summary.capacityAllocated),
+      tone: 'allocated',
+    },
+  ];
+
+  return `
+    <section class="capacity-allocation-breakdown" aria-label="Allocated capacity totals">
+      <div class="capacity-allocation-breakdown__heading">
+        <span class="capacity-allocation-breakdown__hint">Annual capacity</span>
+      </div>
+      <div class="capacity-allocation-breakdown__list">
+        ${rows.map(row => `
+          <button
+            type="button"
+            class="capacity-allocation-breakdown__item capacity-allocation-breakdown__item--${row.tone}"
+            data-action="open-capacity-details"
+            data-capacity-metric="${esc(row.key)}"
+            aria-label="Open ${esc(row.label)} calculation details"
+          >
+            <span class="capacity-allocation-breakdown__label">${esc(row.label)}</span>
+            <span class="capacity-allocation-breakdown__value">${esc(row.value)}</span>
+          </button>
+        `).join('')}
+      </div>
+    </section>`;
+}
+
+function formatCapacityRate(value) {
+  return value === null
+    ? '—'
+    : `$${Number(value).toLocaleString('en-US', {
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    })}/h`;
+}
+
+function capacityDetailSummaryCards(cards) {
+  return `
+    <div class="grid gap-3 px-5 pt-5 sm:grid-cols-2" style="grid-template-columns:repeat(${Math.min(cards.length, 4)},minmax(0,1fr));">
+      ${cards.map(card => `
+        <div class="rounded-xl border border-gray-200 bg-gray-50 p-4">
+          <div class="text-[11px] font-semibold uppercase tracking-wide text-gray-400">${esc(card.label)}</div>
+          <div class="mt-1 text-lg font-semibold text-gray-900">${esc(card.value)}</div>
+          ${card.note ? `<div class="mt-1 text-xs text-gray-500">${esc(card.note)}</div>` : ''}
+        </div>
+      `).join('')}
+    </div>`;
+}
+
+function renderMaximumCapacityDetails(details) {
+  const excludedCount = details.resourceRows.filter(row => row.hourlyRate === null).length;
+  const rows = details.resourceRows
+    .sort((a, b) => b.maximumAmount - a.maximumAmount || a.name.localeCompare(b.name))
+    .map((row, index) => `
+      <tr class="border-b border-gray-100 last:border-0">
+        <td class="px-3 py-3 text-xs text-gray-400">${index + 1}</td>
+        <td class="px-3 py-3">
+          <div class="text-sm font-semibold text-gray-900">${esc(row.name)}</div>
+          <div class="text-xs text-gray-400">${esc(row.designation)}</div>
+        </td>
+        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(row.workdays.toLocaleString())}</td>
+        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString())}h</td>
+        <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityRate(row.hourlyRate))}</td>
+        <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900">${esc(formatExactRevenueValue(row.maximumAmount))}</td>
+        <td class="px-3 py-3 text-xs text-amber-700">${esc(row.note || 'Included')}</td>
+      </tr>`).join('');
+
+  return `
+    ${capacityDetailSummaryCards([
+      { label: 'Max Capacity Amount', value: formatExactRevenueValue(details.maximumCapacity) },
+      { label: 'Active Resources', value: String(details.resourceRows.length) },
+      { label: 'Available Capacity', value: formatCapacityDays(details.availableCapacityDays) },
+      { label: 'Resources Without Rate', value: String(excludedCount) },
+    ])}
+    <div class="mx-5 mt-4 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-800">
+      Formula per resource: Workdays × ${CAPACITY_HOURS_PER_WORKDAY} hours/day × saved Local / Pre Sale / Training hourly rate. Resources without a supported rate contribute $0.
+    </div>
+    <div class="nice-scroll mt-4 overflow-x-auto">
+      <table class="w-full min-w-[900px] border-collapse text-left">
+        <thead class="sticky top-0 z-10 bg-white shadow-sm">
+          <tr>
+            <th class="px-3 py-2 text-xs font-semibold text-gray-500">#</th>
+            <th class="px-3 py-2 text-xs font-semibold text-gray-500">Resource</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Workdays</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Capacity Hours</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Hourly Rate</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Capacity Amount</th>
+            <th class="px-3 py-2 text-xs font-semibold text-gray-500">Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderAvailableCapacityDetails(details) {
+  const averageDays = details.resourceRows.length
+    ? details.availableCapacityDays / details.resourceRows.length
+    : 0;
+  const rows = [...details.resourceRows]
+    .sort((a, b) => b.workdays - a.workdays || a.name.localeCompare(b.name))
+    .map((row, index) => `
+      <tr class="border-b border-gray-100 last:border-0">
+        <td class="px-4 py-3 text-xs text-gray-400">${index + 1}</td>
+        <td class="px-4 py-3">
+          <div class="text-sm font-semibold text-gray-900">${esc(row.name)}</div>
+          <div class="text-xs text-gray-400">${esc(row.designation)}</div>
+        </td>
+        <td class="px-4 py-3 text-right text-sm font-semibold text-teal-700">${esc(row.workdays.toLocaleString())} days</td>
+        <td class="px-4 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString())}h</td>
+      </tr>`).join('');
+
+  return `
+    ${capacityDetailSummaryCards([
+      { label: 'Available Capacity', value: formatCapacityDays(details.availableCapacityDays) },
+      { label: 'Active Resources', value: String(details.resourceRows.length) },
+      { label: 'Average Workdays', value: `${averageDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days` },
+      { label: 'Hours Per Workday', value: String(CAPACITY_HOURS_PER_WORKDAY) },
+    ])}
+    <div class="mx-5 mt-4 rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-xs text-teal-800">
+      Available Capacity is the sum of the editable Workdays value for every active resource. Capacity hours are shown for reference as Workdays × ${CAPACITY_HOURS_PER_WORKDAY}.
+    </div>
+    <div class="nice-scroll mt-4 overflow-x-auto">
+      <table class="w-full min-w-[620px] border-collapse text-left">
+        <thead class="sticky top-0 z-10 bg-white shadow-sm">
+          <tr>
+            <th class="px-4 py-2 text-xs font-semibold text-gray-500">#</th>
+            <th class="px-4 py-2 text-xs font-semibold text-gray-500">Resource</th>
+            <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Workdays</th>
+            <th class="px-4 py-2 text-right text-xs font-semibold text-gray-500">Capacity Hours</th>
+          </tr>
+        </thead>
+        <tbody>${rows}</tbody>
+      </table>
+    </div>`;
+}
+
+function renderAllocatedCapacityDetails(details) {
+  const rows = details.allocatedRows.map((row, index) => `
+    <tr class="border-b border-gray-100 last:border-0">
+      <td class="px-3 py-3 text-xs text-gray-400">${index + 1}</td>
+      <td class="px-3 py-3">
+        <div class="text-sm font-semibold text-gray-900">${esc(row.name)}</div>
+        <div class="text-xs text-gray-400">${esc(row.designation)}</div>
+      </td>
+      <td class="px-3 py-3 text-right text-sm text-gray-600">${row.intrasourcingHours.toFixed(1)}h</td>
+      <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityRate(row.intrasourcingRate))}</td>
+      <td class="px-3 py-3 text-right text-sm text-indigo-700">${esc(formatExactRevenueValue(row.intrasourcingRevenue))}</td>
+      <td class="px-3 py-3 text-right text-sm text-gray-600">${row.localHours.toFixed(1)}h</td>
+      <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityRate(row.localRate))}</td>
+      <td class="px-3 py-3 text-right text-sm text-amber-700">${esc(formatExactRevenueValue(row.localRevenue))}</td>
+      <td class="px-3 py-3 text-right text-sm font-semibold text-gray-900">${esc(formatExactRevenueValue(row.totalRevenue))}</td>
+      <td class="px-3 py-3 text-xs text-amber-700">${esc(row.note || 'Included')}</td>
+    </tr>`).join('');
+
+  return `
+    ${capacityDetailSummaryCards([
+      { label: 'Capacity Allocated', value: formatExactRevenueValue(details.capacityAllocated) },
+      { label: 'Intrasourcing Revenue', value: formatExactRevenueValue(details.intrasourcingAllocated) },
+      { label: 'Local Revenue', value: formatExactRevenueValue(details.localAllocated) },
+      { label: 'Contributing Resources', value: String(details.allocatedRows.length) },
+    ])}
+    <div class="mx-5 mt-4 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
+      Capacity Allocated = planned Intrasourcing revenue + planned Local revenue for active resources in FY${getFiscalYearEnd(S.fiscalYear)}. Hours use 36.66 × allocation percentage ÷ 100. N/A resource-weeks are excluded. Pre Sale and Training are not included.
+    </div>
+    <div class="nice-scroll mt-4 overflow-x-auto">
+      <table class="w-full min-w-[1180px] border-collapse text-left">
+        <thead class="sticky top-0 z-10 bg-white shadow-sm">
+          <tr>
+            <th class="px-3 py-2 text-xs font-semibold text-gray-500">#</th>
+            <th class="px-3 py-2 text-xs font-semibold text-gray-500">Resource</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Intra Hours</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Intra Rate</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Intra Revenue</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Local Hours</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Local Rate</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Local Revenue</th>
+            <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Total</th>
+            <th class="px-3 py-2 text-xs font-semibold text-gray-500">Status</th>
+          </tr>
+        </thead>
+        <tbody>${rows || '<tr><td colspan="10" class="px-6 py-12 text-center text-sm text-gray-400">No Intrasourcing or Local planned revenue is available.</td></tr>'}</tbody>
+      </table>
+    </div>`;
+}
+
+function openCapacityAllocationDetailsModal(metric) {
+  const details = getCapacityAllocationDetails();
+  const config = {
+    maximum: {
+      title: 'Maximum Capacity Amount',
+      subtitle: 'Workdays × 8 hours × designation Local rate',
+      body: renderMaximumCapacityDetails(details),
+    },
+    days: {
+      title: 'Available Capacity',
+      subtitle: 'Total active-resource Workdays',
+      body: renderAvailableCapacityDetails(details),
+    },
+    allocated: {
+      title: 'Capacity Allocated',
+      subtitle: 'Planned Intrasourcing and Local revenue',
+      body: renderAllocatedCapacityDetails(details),
+    },
+  }[metric];
+
+  if (!config) return;
+
+  openModal(`
+    ${mHdr(config.title, config.subtitle)}
+    <div class="modal-scroll-body nice-scroll">
+      ${config.body}
+    </div>
+    <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+      <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+    </div>
+  `, 'max-w-7xl');
+}
+
+function renderCapacityAllocationCard(c, summary) {
+  return `
+    <div class="capacity-allocation-card">
+      <div class="capacity-allocation-card__summary">
+        <div class="w-12 h-12 ${c.bg} ${c.fg} rounded-xl flex items-center justify-center mb-3">
+          <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
+        </div>
+        <div class="capacity-allocation-card__amount">${esc(formatCommittedTargetRevenue(summary.remainingCapacity))}</div>
+        <div class="capacity-allocation-card__title">Allocated Capacity</div>
+      </div>
+      ${renderCapacityAllocationBreakdown(summary)}
+    </div>`;
+}
+
 function renderStatTrend(td) {
   const up = td.up;
 
@@ -621,7 +1037,7 @@ function renderStats(s) {
       tk: 'utilization',
       bg: 'bg-teal-100',
       fg: 'text-teal-600',
-      formula: 'Available weekly allocation only; N/A resource-weeks are excluded. Avg. Intrasourcing uses the matrix Intrasourcing average. Billable adds Intrasourcing, Local and Pre Sale. Project Utilization also adds Training.',
+      formula: 'Available weekly allocation only; N/A resource-weeks are excluded. Intrasourcing Utilization uses the matrix Intrasourcing average. Billable adds Intrasourcing, Local and Pre Sale. Project Utilization also adds Training.',
       icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
       detailType: 'utilization-breakdown',
     },
@@ -643,10 +1059,18 @@ function renderStats(s) {
       icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
       detailType: 'committed-target-breakdown',
     },
-    { v: `${s.on_time_pct}%`, label: 'On-Time Completion', tk: 'on_time', bg: 'bg-emerald-100', fg: 'text-emerald-600', formula: 'On-track projects ÷ Total projects × 100', icon: '<circle cx="12" cy="12" r="10"/><path d="m9 12 2 2 4-4"/>' },
+    {
+      label: 'Allocated Capacity',
+      bg: 'bg-indigo-100',
+      fg: 'text-indigo-600',
+      formula: 'Remaining Capacity equals Maximum Capacity Amount minus Capacity Allocated. Maximum Capacity uses each active resource’s Workdays × 8 hours × saved Local / Pre Sale / Training designation rate. Capacity Allocated is planned Intrasourcing revenue plus planned Local revenue.',
+      icon: '<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19V3"/><path d="M2 19h22"/>',
+      detailType: 'capacity-allocation-breakdown',
+    },
   ];
 
   const committedTargetSummary = getCommittedTargetSummary();
+  const capacityAllocationSummary = getCapacityAllocationSummary();
 
   document.getElementById('statsRow').innerHTML = cards.map(c => {
     const td = t[c.tk] || { value: '—', up: true };
@@ -655,6 +1079,7 @@ function renderStats(s) {
     const isUtilizationCard = c.detailType === 'utilization-breakdown';
     const isAssignedProjectCard = c.detailType === 'assigned-project-breakdown';
     const isCommittedTargetCard = c.detailType === 'committed-target-breakdown';
+    const isCapacityAllocationCard = c.detailType === 'capacity-allocation-breakdown';
     const wrapperClass = [
       'dc',
       'dc-stat',
@@ -663,6 +1088,7 @@ function renderStats(s) {
       isUtilizationCard ? 'dc-stat--utilization' : '',
       isAssignedProjectCard ? 'dc-stat--assigned-projects' : '',
       isCommittedTargetCard ? 'dc-stat--committed-target' : '',
+      isCapacityAllocationCard ? 'dc-stat--capacity-allocation' : '',
     ].filter(Boolean).join(' ');
     const cardContent = isActiveResourceCard
       ? `
@@ -678,7 +1104,9 @@ function renderStats(s) {
             ? renderAssignedProjectsCard(c, td, s)
             : isCommittedTargetCard
               ? renderCommittedTargetCard(c, committedTargetSummary)
-              : renderStatSummary(c, td);
+              : isCapacityAllocationCard
+                ? renderCapacityAllocationCard(c, capacityAllocationSummary)
+                : renderStatSummary(c, td);
 
     return `
       <div class="${wrapperClass}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>

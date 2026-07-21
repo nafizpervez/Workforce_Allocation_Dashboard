@@ -11,6 +11,9 @@ function openEmployeeModal(opts = {}) {
     email: employee?.email || '',
     dept: employee?.dept || 'Professional Services',
     designation: employee?.designation || '',
+    workdays: Number.isInteger(Number(employee?.workdays))
+      ? Number(employee.workdays)
+      : 220,
   };
 
   const departments = [
@@ -103,6 +106,19 @@ function openEmployeeModal(opts = {}) {
           ${designationOptions.join('')}
         </select>
       </div>
+
+      <div>
+        <label class="field-label">Workdays</label>
+        <input
+          id="fe_workdays"
+          type="number"
+          class="field-input"
+          value="${esc(String(values.workdays))}"
+          min="0"
+          step="1"
+          inputmode="numeric"
+        >
+      </div>
     </div>
 
     ${mFtr(editing ? opts.id : null, 'saveEmployee', 'deleteEmployee')}
@@ -116,10 +132,16 @@ async function saveEmployee(id) {
     email: document.getElementById('fe_email').value.trim(),
     dept: document.getElementById('fe_dept').value,
     designation: document.getElementById('fe_designation').value.trim(),
+    workdays: Number(document.getElementById('fe_workdays').value),
   };
 
   if (!payload.name) {
     toast('Name is required', 'error');
+    return;
+  }
+
+  if (!Number.isInteger(payload.workdays) || payload.workdays < 0) {
+    toast('Workdays must be a non-negative whole number', 'error');
     return;
   }
 

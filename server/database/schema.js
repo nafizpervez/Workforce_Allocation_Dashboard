@@ -8,6 +8,7 @@ function createSchema(db) {
       name TEXT NOT NULL,
       dept TEXT NOT NULL,
       designation TEXT DEFAULT '',
+      workdays INTEGER NOT NULL DEFAULT 220,
       email TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );

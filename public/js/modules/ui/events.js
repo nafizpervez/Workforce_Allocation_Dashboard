@@ -192,6 +192,14 @@ function initEvents() {
       return;
     }
 
+    const capacityDetails = e.target.closest('[data-action="open-capacity-details"]');
+    if (capacityDetails) {
+      e.preventDefault();
+      e.stopPropagation();
+      openCapacityAllocationDetailsModal(capacityDetails.dataset.capacityMetric);
+      return;
+    }
+
     const committedTarget = e.target.closest('[data-action="edit-committed-target"]');
     if (committedTarget) {
       e.preventDefault();

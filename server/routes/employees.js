@@ -12,6 +12,7 @@ const EMPLOYEE_SELECT = `
     name,
     dept,
     designation,
+    COALESCE(workdays, 220) AS workdays,
     email,
     COALESCE(active, 1) AS active,
     created_at
@@ -29,13 +30,19 @@ router.post('/api/employees', (req, res) => {
     name,
     dept,
     designation,
+    workdays = 220,
     email,
   } = req.body || {};
 
   const canonicalName = canonicalPersonName(name);
+  const normalizedWorkdays = Number(workdays);
 
   if (!canonicalName || !dept) {
     return res.status(400).json({ error: 'name and dept are required' });
+  }
+
+  if (!Number.isInteger(normalizedWorkdays) || normalizedWorkdays < 0) {
+    return res.status(400).json({ error: 'workdays must be a non-negative whole number' });
   }
 
   const info = db.prepare(`
@@ -44,13 +51,15 @@ router.post('/api/employees', (req, res) => {
       name,
       dept,
       designation,
+      workdays,
       email
-    ) VALUES (?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?)
   `).run(
     employee_code || '',
     canonicalName,
     dept,
     designation || '',
+    normalizedWorkdays,
     email || null,
   );
 
@@ -71,8 +80,19 @@ router.put('/api/employees/:id', (req, res) => {
     name,
     dept,
     designation,
+    workdays,
     email,
   } = req.body || {};
+
+  const normalizedWorkdays = workdays === undefined || workdays === null
+    ? null
+    : Number(workdays);
+
+  if (normalizedWorkdays !== null && (
+    !Number.isInteger(normalizedWorkdays) || normalizedWorkdays < 0
+  )) {
+    return res.status(400).json({ error: 'workdays must be a non-negative whole number' });
+  }
 
   db.prepare(`
     UPDATE employees
@@ -81,6 +101,7 @@ router.put('/api/employees/:id', (req, res) => {
       name = COALESCE(?, name),
       dept = COALESCE(?, dept),
       designation = COALESCE(?, designation),
+      workdays = COALESCE(?, workdays),
       email = COALESCE(?, email)
     WHERE id = ?
   `).run(
@@ -88,6 +109,7 @@ router.put('/api/employees/:id', (req, res) => {
     name === undefined || name === null ? null : canonicalPersonName(name),
     dept ?? null,
     designation ?? null,
+    normalizedWorkdays,
     email ?? null,
     id,
   );
