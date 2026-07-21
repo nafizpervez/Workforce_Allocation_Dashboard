@@ -4,7 +4,7 @@ const REVENUE_RATE_MODAL_COLUMNS = Object.freeze([
   Object.freeze({ field: 'intrasourcing_rate', label: 'Intrasourcing' }),
   Object.freeze({
     field: 'local_rate',
-    label: 'Local / Pre Sale / Training',
+    label: 'Local / Pre-Sale / Training',
   }),
 ]);
 
@@ -50,14 +50,14 @@ function openRevenueRatesModal() {
   openModal(`
     ${mHdr(
       'Reserve Revenue',
-      'Set the Intrasourcing rate and the shared Local / Pre Sale / Training rate for each designation.',
+      'Set the Intrasourcing rate and the shared Local / Pre-Sale / Training rate for each designation.',
     )}
 
     <div class="p-6">
       <div class="mb-4 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
         One full assignment week equals ${WORK_HOURS_PER_WEEK.toFixed(2)} working hours.
         The Intrasourcing rate applies only to Intrasourcing assignments.
-        The Local / Pre Sale / Training rate is shared by those three revenue categories.
+        The Local / Pre-Sale / Training rate is shared by those three revenue categories.
         General Admin and Skill Development remain non-revenue.
       </div>
 

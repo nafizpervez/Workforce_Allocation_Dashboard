@@ -125,20 +125,53 @@ function populatePlannedActualMonthFilter(data) {
   select.value = (data.months || []).some(month => month.key === current) ? current : '';
 }
 
+function isPlannedActualPreSaleProject(project) {
+  return project?.key === 'work-type:pre-sale';
+}
+
+function populatePlannedActualProductFilter(project) {
+  const wrap = document.getElementById('plannedActualProductFilterWrap');
+  const select = document.getElementById('plannedActualProductFilter');
+  const visible = isPlannedActualPreSaleProject(project);
+  wrap?.classList.toggle('hidden', !visible);
+  if (!select) return;
+
+  if (!visible) {
+    select.innerHTML = '<option value="">All Products</option>';
+    select.value = '';
+    return;
+  }
+
+  const current = select.value;
+  const products = project.preSaleProducts || [];
+  select.innerHTML = '<option value="">All Products</option>' + products.map(product => (
+    `<option value="${esc(product.productName)}">${esc(product.productName)}</option>`
+  )).join('');
+  select.value = products.some(product => product.productName === current) ? current : '';
+}
+
+function getPlannedActualProductScope(project) {
+  if (!isPlannedActualPreSaleProject(project)) return project;
+  const selectedProduct = document.getElementById('plannedActualProductFilter')?.value || '';
+  if (!selectedProduct) return project;
+  return (project.preSaleProducts || []).find(product => product.productName === selectedProduct) || project;
+}
+
 function getPlannedActualScope(project) {
   if (!project) return null;
+  const parentLabel = project.label;
   const monthKey = document.getElementById('plannedActualMonthFilter')?.value || '';
   if (!monthKey) {
-    return { ...project, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
+    return { ...project, label: parentLabel, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
   }
 
   const month = project.monthly.find(item => item.key === monthKey);
-  if (!month) return { ...project, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
+  if (!month) return { ...project, label: parentLabel, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
 
   return {
     ...project,
     ...month,
-    label: project.label,
+    label: parentLabel,
     monthly: [month],
     selectedMonthKey: month.key,
     selectedMonthLabel: month.label,
@@ -257,6 +290,8 @@ function renderPlannedActualTeam(project, mode) {
   const subtitle = planned
     ? 'Resource Assignment'
     : 'Work Summary Time Sheet';
+  const showPreSaleAmount = Boolean(project.preSaleContext);
+  const amount = planned ? project.plannedBudget : project.preSaleProductAmount;
 
   return `
     <section class="planned-actual-team is-${mode}">
@@ -268,6 +303,7 @@ function renderPlannedActualTeam(project, mode) {
         <div class="planned-actual-team-total">
           <strong>${esc(formatPlannedActualHours(totalHours))}</strong>
           <span>${resources.length} resource${resources.length === 1 ? '' : 's'}</span>
+          ${showPreSaleAmount ? `<em title="${esc(formatPlannedActualBudgetExact(amount))}">Amount ${esc(formatPlannedActualBudget(amount))}</em>` : ''}
         </div>
       </header>
       <div class="planned-actual-people" data-flow-side="${mode}">
@@ -534,7 +570,15 @@ function renderPlannedActualEffortChart() {
   populatePlannedActualProjectFilter(data);
   populatePlannedActualMonthFilter(data);
   const selectedProject = getPlannedActualSelection(data);
-  const project = getPlannedActualScope(selectedProject);
+  populatePlannedActualProductFilter(selectedProject);
+  const productScopedProject = getPlannedActualProductScope(selectedProject);
+  const project = getPlannedActualScope(productScopedProject);
+  if (project && isPlannedActualPreSaleProject(selectedProject)) {
+    project.preSaleContext = true;
+    project.label = productScopedProject !== selectedProject
+      ? `Pre-Sale — ${productScopedProject.productName}`
+      : 'Pre-Sale';
+  }
   const hasData = Boolean(project && (project.plannedHours > 0 || project.actualHours > 0));
   const showMonthlyProgression = Boolean(hasData && !project?.selectedMonthKey);
 
@@ -673,6 +717,12 @@ function initPlannedActualEffortEvents() {
   if (monthSelect && monthSelect.dataset.bound !== '1') {
     monthSelect.dataset.bound = '1';
     monthSelect.addEventListener('change', renderPlannedActualEffortChart);
+  }
+
+  const productSelect = document.getElementById('plannedActualProductFilter');
+  if (productSelect && productSelect.dataset.bound !== '1') {
+    productSelect.dataset.bound = '1';
+    productSelect.addEventListener('change', renderPlannedActualEffortChart);
   }
 
   if (document.documentElement.dataset.plannedActualResizeBound !== '1') {

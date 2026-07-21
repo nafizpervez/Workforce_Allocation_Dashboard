@@ -5,14 +5,14 @@ const RESOURCE_SUMMARY_COLUMNS = Object.freeze({
   allocation: Object.freeze([
     Object.freeze({ key: 'intrasourcing', label: 'Intrasourcing' }),
     Object.freeze({ key: 'local', label: 'Local' }),
-    Object.freeze({ key: 'preSale', label: 'Pre Sale' }),
+    Object.freeze({ key: 'preSale', label: 'Pre-Sale' }),
     Object.freeze({ key: 'training', label: 'Training' }),
     Object.freeze({ key: 'generalAdmin', label: 'General Admin' }),
   ]),
   revenue: Object.freeze([
     Object.freeze({ key: 'intrasourcing', label: 'Intrasourcing' }),
     Object.freeze({ key: 'local', label: 'Local' }),
-    Object.freeze({ key: 'preSale', label: 'Pre Sale' }),
+    Object.freeze({ key: 'preSale', label: 'Pre-Sale' }),
     Object.freeze({ key: 'training', label: 'Training' }),
   ]),
 });
@@ -26,9 +26,9 @@ const RESOURCE_ALLOCATION_RULES = Object.freeze([
   }),
   Object.freeze({
     key: 'preSale',
-    label: 'Pre Sale',
+    label: 'Pre-Sale',
     pattern: /pre[\s-]*sale/i,
-    description: 'Project name contains “Pre Sale” or “Pre-Sale”.',
+    description: 'Project name contains “Pre-Sale” or “Pre-Sale”.',
   }),
   Object.freeze({
     key: 'training',
@@ -49,7 +49,7 @@ const RESOURCE_ALLOCATION_RULE_BY_KEY = Object.freeze(
 );
 
 /* The matrix keeps four separate revenue result columns. Intrasourcing uses
- * its own hourly rate; Local, Pre Sale and Training share the Local rate. */
+ * its own hourly rate; Local, Pre-Sale and Training share the Local rate. */
 const RESOURCE_REVENUE_RATE_FIELDS = Object.freeze({
   intrasourcing: 'intrasourcing_rate',
   local: 'local_rate',

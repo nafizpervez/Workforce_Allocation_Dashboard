@@ -815,7 +815,7 @@ function updateMonthlyPlannedWorkNote(mode) {
   if (!note) return;
 
   note.textContent = mode === 'revenue'
-    ? 'Revenue uses each resource’s saved designation rates: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre Sale / Training rate. Skill Development and General Admin are non-revenue.'
+    ? 'Revenue uses each resource’s saved designation rates: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre-Sale / Training rate. Skill Development and General Admin are non-revenue.'
     : 'Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.';
 }
 

@@ -24,7 +24,7 @@ const PLANNED_ACTUAL_PROJECT_ALIASES = Object.freeze([
 const PLANNED_ACTUAL_WORK_TYPE_BUCKETS = Object.freeze([
   Object.freeze({
     key: 'work-type:pre-sale',
-    label: 'Pre Sale',
+    label: 'Pre-Sale',
     workType: 'Pre - Sales',
     alwaysAggregate: true,
   }),
@@ -412,6 +412,9 @@ function getOrCreatePlannedActualProject(
       actualByMonth: new Map(),
       plannedBudgetByMonth: new Map(),
       actualBudgetByMonth: new Map(),
+      preSaleProductNames: new Set(),
+      preSaleProductNamesByMonth: new Map(),
+      preSaleProductScopes: new Map(),
       plannedHours: 0,
       actualHours: 0,
       plannedBudget: 0,
@@ -500,6 +503,71 @@ function buildPlannedActualScope(
   };
 }
 
+function getPreSaleProductAmountByName(name) {
+  const normalized = normalizePlannedActualText(name);
+  const product = (S.preSaleProducts || []).find(item => (
+    normalizePlannedActualText(item.name) === normalized
+  ));
+  const amount = Number(product?.amount);
+  return Number.isFinite(amount) && amount >= 0 ? amount : 0;
+}
+
+function addPlannedActualProductName(entry, productName, year, month) {
+  const name = String(productName || '').trim();
+  if (!name) return;
+  entry.preSaleProductNames.add(name);
+  const monthKey = plannedActualMonthKey(year, month);
+  if (!entry.preSaleProductNamesByMonth.has(monthKey)) {
+    entry.preSaleProductNamesByMonth.set(monthKey, new Set());
+  }
+  entry.preSaleProductNamesByMonth.get(monthKey).add(name);
+}
+
+function getOrCreatePlannedActualProductScope(entry, productName) {
+  const name = String(productName || '').trim();
+  if (!name) return null;
+  if (!entry.preSaleProductScopes.has(name)) {
+    entry.preSaleProductScopes.set(name, {
+      key: name,
+      label: name,
+      productName: name,
+      productAmount: getPreSaleProductAmountByName(name),
+      plannedByResource: new Map(),
+      actualByResource: new Map(),
+      plannedResourcesByMonth: new Map(),
+      actualResourcesByMonth: new Map(),
+      plannedByMonth: new Map(),
+      actualByMonth: new Map(),
+      plannedBudgetByMonth: new Map(),
+      actualBudgetByMonth: new Map(),
+      plannedHours: 0,
+      actualHours: 0,
+      plannedBudget: 0,
+      actualBudget: 0,
+    });
+  }
+  return entry.preSaleProductScopes.get(name);
+}
+
+function addPlannedActualProductPlanned(scope, assignment, employee, hours, budget) {
+  const resourceKey = `employee:${employee.id}`;
+  addPlannedActualHours(scope.plannedByResource, resourceKey, employee.name, hours);
+  addPlannedActualMonthResourceHours(scope.plannedResourcesByMonth, assignment.year, assignment.month, resourceKey, employee.name, hours);
+  addPlannedActualMonthHours(scope.plannedByMonth, assignment.year, assignment.month, hours);
+  addPlannedActualMonthAmount(scope.plannedBudgetByMonth, assignment.year, assignment.month, budget);
+  scope.plannedHours += hours;
+  scope.plannedBudget += budget;
+}
+
+function addPlannedActualProductActual(scope, parsedMonth, resourceKey, resourceName, hours, budget) {
+  addPlannedActualHours(scope.actualByResource, resourceKey, resourceName, hours);
+  addPlannedActualMonthResourceHours(scope.actualResourcesByMonth, parsedMonth.year, parsedMonth.month, resourceKey, resourceName, hours);
+  addPlannedActualMonthHours(scope.actualByMonth, parsedMonth.year, parsedMonth.month, hours);
+  addPlannedActualMonthAmount(scope.actualBudgetByMonth, parsedMonth.year, parsedMonth.month, budget);
+  scope.actualHours += hours;
+  scope.actualBudget += budget;
+}
+
 function buildPlannedActualEffortData() {
   // Plan-to-Execution remains on the dashboard's established FY27 scope.
   const fiscalYear = S.fiscalYear;
@@ -508,6 +576,7 @@ function buildPlannedActualEffortData() {
   const employeeByName = new Map();
   const projectMap = new Map();
   const activeWorkTypeBucketKeys = new Set();
+  const preSalePlanByEmployeeMonth = new Map();
   const resolveProject = buildPlannedActualProjectResolver(S.projects || []);
 
   for (const employee of S.employees || []) {
@@ -576,6 +645,19 @@ function buildPlannedActualEffortData() {
     );
     projectEntry.plannedHours += hours;
     projectEntry.plannedBudget += plannedBudget;
+
+    if (resolvedProject.key === 'work-type:pre-sale') {
+      const productName = String(assignment.product_name || '').trim();
+      if (productName) {
+        addPlannedActualProductName(projectEntry, productName, assignment.year, assignment.month);
+        const productScope = getOrCreatePlannedActualProductScope(projectEntry, productName);
+        addPlannedActualProductPlanned(productScope, assignment, employee, hours, plannedBudget);
+        const employeeMonthKey = `${employee.id}|${plannedActualMonthKey(assignment.year, assignment.month)}`;
+        if (!preSalePlanByEmployeeMonth.has(employeeMonthKey)) preSalePlanByEmployeeMonth.set(employeeMonthKey, new Map());
+        const productHours = preSalePlanByEmployeeMonth.get(employeeMonthKey);
+        productHours.set(productName, (productHours.get(productName) || 0) + hours);
+      }
+    }
   }
 
   for (const row of getVisibleTimesheetRows()) {
@@ -637,6 +719,21 @@ function buildPlannedActualEffortData() {
     );
     projectEntry.actualHours += hours;
     projectEntry.actualBudget += actualBudget;
+
+    if (resolvedProject.key === 'work-type:pre-sale' && matchedEmployee) {
+      const employeeMonthKey = `${matchedEmployee.id}|${plannedActualMonthKey(parsedMonth.year, parsedMonth.month)}`;
+      const productHours = preSalePlanByEmployeeMonth.get(employeeMonthKey);
+      const totalProductPlan = [...(productHours?.values() || [])].reduce((sum, value) => sum + value, 0);
+      if (productHours && totalProductPlan > 0) {
+        for (const [productName, productPlannedHours] of productHours.entries()) {
+          const share = productPlannedHours / totalProductPlan;
+          const allocatedHours = hours * share;
+          const allocatedBudget = actualBudget * share;
+          const productScope = getOrCreatePlannedActualProductScope(projectEntry, productName);
+          addPlannedActualProductActual(productScope, parsedMonth, resourceKey, resourceName, allocatedHours, allocatedBudget);
+        }
+      }
+    }
   }
 
   const projects = [...projectMap.values()].map(entry => {
@@ -671,10 +768,69 @@ function buildPlannedActualEffortData() {
       };
     });
 
+    const productNames = [...entry.preSaleProductNames];
+    const preSaleProductAmount = productNames.reduce(
+      (sum, name) => sum + getPreSaleProductAmountByName(name),
+      0,
+    );
+    const preSaleProducts = [...entry.preSaleProductScopes.values()].map(scope => {
+      const productAnnualScope = buildPlannedActualScope(
+        scope.plannedByResource,
+        scope.actualByResource,
+        scope.plannedHours,
+        scope.actualHours,
+        scope.plannedBudget,
+        scope.actualBudget,
+      );
+      const productMonthly = fiscalMonthList.map(({ y, m, label }) => {
+        const key = plannedActualMonthKey(y, m);
+        const planned = +(scope.plannedByMonth.get(key) || 0).toFixed(2);
+        const actual = +(scope.actualByMonth.get(key) || 0).toFixed(2);
+        const active = planned > 0 || actual > 0;
+        return {
+          key,
+          label,
+          year: y,
+          month: m,
+          ...buildPlannedActualScope(
+            scope.plannedResourcesByMonth.get(key),
+            scope.actualResourcesByMonth.get(key),
+            planned,
+            actual,
+            scope.plannedBudgetByMonth.get(key) || 0,
+            scope.actualBudgetByMonth.get(key) || 0,
+          ),
+          planned,
+          actual,
+          variance: +(actual - planned).toFixed(2),
+          preSaleProductAmount: active ? scope.productAmount : 0,
+        };
+      });
+      return {
+        ...scope,
+        ...productAnnualScope,
+        monthly: productMonthly,
+        preSaleProductAmount: scope.productAmount,
+      };
+    }).sort((a, b) => a.label.localeCompare(b.label));
+
+    const monthlyWithProducts = monthly.map(item => {
+      const names = [...(entry.preSaleProductNamesByMonth.get(item.key) || [])];
+      return {
+        ...item,
+        preSaleProductAmount: names.reduce(
+          (sum, name) => sum + getPreSaleProductAmountByName(name),
+          0,
+        ),
+      };
+    });
+
     return {
       ...entry,
       ...annualScope,
-      monthly,
+      monthly: monthlyWithProducts,
+      preSaleProducts,
+      preSaleProductAmount,
     };
   }).sort((a, b) => (
     Math.max(b.plannedHours, b.actualHours) - Math.max(a.plannedHours, a.actualHours) ||

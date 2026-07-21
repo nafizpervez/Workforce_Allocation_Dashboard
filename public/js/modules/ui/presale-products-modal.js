@@ -103,8 +103,8 @@ function openPreSaleProductsModal() {
 
   openModal(`
     ${mHdr(
-      'PreSale Product',
-      'Maintain the only Product Names and reference amounts allowed for Pre Sale assignments.',
+      'Pre-Sale Product',
+      'Maintain the only Product Names and reference amounts allowed for Pre-Sale assignments.',
     )}
     <div class="modal-scroll-body nice-scroll presale-products-modal__body">
       <div class="presale-product-table-header">
@@ -147,7 +147,7 @@ async function savePreSaleProducts() {
   for (const product of products) {
     const key = product.name.toLowerCase();
     if (duplicateNames.has(key)) {
-      toast(`Duplicate PreSale Product Name: ${product.name}`, 'error');
+      toast(`Duplicate Pre-Sale Product Name: ${product.name}`, 'error');
       return;
     }
     duplicateNames.add(key);
@@ -162,7 +162,7 @@ async function savePreSaleProducts() {
   try {
     S.preSaleProducts = await api('PUT', '/api/presale-products', { products });
     closeModal();
-    toast('PreSale Products saved');
+    toast('Pre-Sale Products saved');
   } catch (error) {
     if (saveButton) {
       saveButton.disabled = false;

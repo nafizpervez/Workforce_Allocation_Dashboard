@@ -94,7 +94,7 @@ function getAssignmentPreSaleProductOptions(selectedName) {
   const options = [];
 
   if (selectedName && !selectedProduct) {
-    options.push(`<option value="" selected disabled>${esc(selectedName)} — not in PreSale Product master</option>`);
+    options.push(`<option value="" selected disabled>${esc(selectedName)} — not in Pre-Sale Product master</option>`);
   } else {
     options.push(`<option value="" ${selectedProduct ? '' : 'selected'} disabled>Select a saved product…</option>`);
   }
@@ -144,7 +144,7 @@ function renderAssignmentProductField(project, assignment = {}) {
         ? `Saved amount: ${esc(formatPreSaleProductAmount(productOptions.selectedProduct.amount))}`
         : (productOptions.hasProducts
           ? 'Select a product to see its saved amount.'
-          : 'No products are saved. Use the PreSale Product button first.')}
+          : 'No products are saved. Use the Pre-Sale Product button first.')}
     </div>
   `;
 }
@@ -196,8 +196,8 @@ function assignmentProjectInfoBlock(selectedId, assignment, editing) {
     </div>
     <p id="fa_project_info_hint" class="text-xs ${preSale ? 'text-blue-600' : 'text-gray-400'} -mt-2">
       ${preSale
-        ? `Pre Sale assignment: Product Name is restricted to the saved PreSale Product master.${editing ? ' Customer Name remains editable.' : ''}`
-        : 'Customer Name and Product Name are read-only except for Pre Sale assignments.'}
+        ? `Pre-Sale assignment: Product Name is restricted to the saved Pre-Sale Product master.${editing ? ' Customer Name remains editable.' : ''}`
+        : 'Customer Name and Product Name are read-only except for Pre-Sale assignments.'}
     </p>
   `;
 }
@@ -433,8 +433,8 @@ function wireAssignmentProjectCombobox({ editing, assignment }) {
 
     if (hint) {
       hint.textContent = preSale
-        ? `Pre Sale assignment: Product Name is restricted to the saved PreSale Product master.${editing ? ' Customer Name remains editable.' : ''}`
-        : 'Customer Name and Product Name are read-only except for Pre Sale assignments.';
+        ? `Pre-Sale assignment: Product Name is restricted to the saved Pre-Sale Product master.${editing ? ' Customer Name remains editable.' : ''}`
+        : 'Customer Name and Product Name are read-only except for Pre-Sale assignments.';
       hint.className = `text-xs ${preSale ? 'text-blue-600' : 'text-gray-400'} -mt-2`;
     }
   }
@@ -583,7 +583,7 @@ async function saveAssignment(id) {
       document.getElementById('fa_product_name')?.value,
     );
     if (!getPreSaleProductByName(productName)) {
-      toast('Select a Product Name from the saved PreSale Product master.', 'error');
+      toast('Select a Product Name from the saved Pre-Sale Product master.', 'error');
       return;
     }
     payload.product_name = productName;

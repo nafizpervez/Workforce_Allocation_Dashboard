@@ -297,13 +297,13 @@ const UTILIZATION_DETAIL_CONFIG = Object.freeze({
   }),
   billable: Object.freeze({
     title: 'Billable Utilization',
-    formula: 'Average of each eligible resource’s Intrasourcing + Local + Pre Sale allocation.',
-    included: 'Intrasourcing + Local + Pre Sale',
+    formula: 'Average of each eligible resource’s Intrasourcing + Local + Pre-Sale allocation.',
+    included: 'Intrasourcing + Local + Pre-Sale',
   }),
   project: Object.freeze({
     title: 'Project Utilization',
-    formula: 'Average of each eligible resource’s Intrasourcing + Local + Pre Sale + Training allocation.',
-    included: 'Intrasourcing + Local + Pre Sale + Training',
+    formula: 'Average of each eligible resource’s Intrasourcing + Local + Pre-Sale + Training allocation.',
+    included: 'Intrasourcing + Local + Pre-Sale + Training',
   }),
 });
 
@@ -369,7 +369,7 @@ async function openUtilizationDetailsModal(metric) {
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Available weeks</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Intrasourcing</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Local</th>
-                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Pre Sale</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Pre-Sale</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Training</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-700">${esc(config.title)}</th>
               </tr>
@@ -834,7 +834,7 @@ function renderMaximumCapacityDetails(details) {
       { label: 'Resources Without Rate', value: String(excludedCount) },
     ])}
     <div class="mx-5 mt-4 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-800">
-      Formula per resource: adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY} hours/day × saved Local / Pre Sale / Training hourly rate. Each fiscal month containing one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)} days once for that resource, with a zero-day floor. Resources without a supported rate contribute $0.
+      Formula per resource: adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY} hours/day × saved Local / Pre-Sale / Training hourly rate. Each fiscal month containing one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)} days once for that resource, with a zero-day floor. Resources without a supported rate contribute $0.
     </div>
     <div class="nice-scroll mt-4 overflow-x-auto">
       <table class="w-full min-w-[900px] border-collapse text-left">
@@ -928,7 +928,7 @@ function renderAllocatedCapacityDetails(details) {
       { label: 'Contributing Resources', value: String(details.allocatedRows.length) },
     ])}
     <div class="mx-5 mt-4 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-      Capacity Allocated = planned Intrasourcing revenue + planned Local revenue for active resources in FY${getFiscalYearEnd(S.fiscalYear)}. Hours use 36.66 × allocation percentage ÷ 100. N/A resource-weeks are excluded. Pre Sale and Training are not included.
+      Capacity Allocated = planned Intrasourcing revenue + planned Local revenue for active resources in FY${getFiscalYearEnd(S.fiscalYear)}. Hours use 36.66 × allocation percentage ÷ 100. N/A resource-weeks are excluded. Pre-Sale and Training are not included.
     </div>
     <div class="nice-scroll mt-4 overflow-x-auto">
       <table class="w-full min-w-[1180px] border-collapse text-left">
@@ -995,7 +995,6 @@ function renderCapacityAllocationCard(c, summary) {
           class="capacity-allocation-card__amount"
           title="Exact Allocated Capacity: ${esc(formatExactRevenueValue(summary.remainingCapacity))}"
         >${esc(formatCommittedTargetRevenue(summary.remainingCapacity))}</div>
-        <div class="capacity-allocation-card__exact" title="Exact Allocated Capacity">${esc(formatExactRevenueValue(summary.remainingCapacity))}</div>
         <div class="capacity-allocation-card__title">Allocated Capacity</div>
       </div>
       ${renderCapacityAllocationBreakdown(summary)}
@@ -1060,7 +1059,7 @@ function renderStats(s) {
       tk: 'utilization',
       bg: 'bg-teal-100',
       fg: 'text-teal-600',
-      formula: 'Available weekly allocation only; N/A resource-weeks are excluded. Intrasourcing Utilization uses the matrix Intrasourcing average. Billable adds Intrasourcing, Local and Pre Sale. Project Utilization also adds Training.',
+      formula: 'Available weekly allocation only; N/A resource-weeks are excluded. Intrasourcing Utilization uses the matrix Intrasourcing average. Billable adds Intrasourcing, Local and Pre-Sale. Project Utilization also adds Training.',
       icon: '<path d="M22 12h-4l-3 9L9 3l-3 9H2"/>',
       detailType: 'utilization-breakdown',
     },
@@ -1086,7 +1085,7 @@ function renderStats(s) {
       label: 'Allocated Capacity',
       bg: 'bg-indigo-100',
       fg: 'text-indigo-600',
-      formula: 'Remaining Capacity equals Maximum Capacity Amount minus Capacity Allocated. Maximum Capacity uses each active resource’s adjusted Workdays × 8 hours × saved Local / Pre Sale / Training designation rate. Each affected N/A resource-month deducts 18.33 days once. Capacity Allocated is planned Intrasourcing revenue plus planned Local revenue.',
+      formula: 'Remaining Capacity equals Maximum Capacity Amount minus Capacity Allocated. Maximum Capacity uses each active resource’s adjusted Workdays × 8 hours × saved Local / Pre-Sale / Training designation rate. Each affected N/A resource-month deducts 18.33 days once. Capacity Allocated is planned Intrasourcing revenue plus planned Local revenue.',
       icon: '<path d="M4 19V9"/><path d="M10 19V5"/><path d="M16 19v-7"/><path d="M22 19V3"/><path d="M2 19h22"/>',
       detailType: 'capacity-allocation-breakdown',
     },

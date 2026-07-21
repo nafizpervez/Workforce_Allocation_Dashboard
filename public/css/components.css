@@ -1258,7 +1258,7 @@ button.committed-target-breakdown__item:focus-visible {
   outline-offset: 2px;
 }
 
-/* ── PreSale Product master ─────────────────────────────────── */
+/* ── Pre-Sale Product master ─────────────────────────────────── */
 .presale-products-modal-panel {
   height: min(720px, calc(100dvh - 2rem));
 }
@@ -1338,4 +1338,30 @@ button.committed-target-breakdown__item:focus-visible {
   line-height: 1.2;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+/* Stronger dashboard titles and more compact KPI numbers */
+.active-resource-card__title,
+.running-project-card__title,
+.utilization-card__title,
+.assigned-project-card__title,
+.committed-target-card__title,
+.capacity-allocation-card__title,
+.presale-products-modal-panel .modal-title,
+.presale-product-table-header,
+.presale-product-row .field-input {
+  color: #05070a;
+}
+
+.active-resource-card__count,
+.running-project-card__count,
+.utilization-card__value,
+.assigned-project-card__count,
+.committed-target-card__amount,
+.capacity-allocation-card__amount {
+  font-size: 19px;
+}
+
+.capacity-allocation-card__title {
+  margin-top: 6px;
 }

@@ -720,3 +720,39 @@
     min-width: 0;
   }
 }
+
+/* Readability and Pre-Sale product scope */
+.planned-actual-header h3,
+.planned-actual-filter > span,
+.planned-actual-team-header h4,
+.planned-actual-team-header > div:first-child > span,
+.planned-actual-metric span,
+.planned-actual-person-copy strong,
+.planned-actual-project-name {
+  color: #05070a;
+}
+
+.planned-actual-filter.is-product .field-input {
+  width: 180px;
+  min-width: 180px;
+}
+
+.planned-actual-metric strong {
+  font-size: 0.88rem;
+}
+
+.planned-actual-team-total strong {
+  font-size: 0.82rem;
+}
+
+.planned-actual-team-total em {
+  display: block;
+  margin-top: 0.22rem;
+  color: #111827;
+  font-size: 0.67rem;
+  font-style: normal;
+  font-weight: 700;
+  letter-spacing: normal;
+  text-transform: none;
+  white-space: nowrap;
+}
