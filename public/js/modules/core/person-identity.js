@@ -2,6 +2,13 @@
 
 const PERSON_IDENTITY_ALIASES = Object.freeze([
   Object.freeze({
+    canonicalName: 'Md Masud Iqbal',
+    aliases: Object.freeze([
+      'Masud Iqbal',
+      'Md Masud Iqbal',
+    ]),
+  }),
+  Object.freeze({
     canonicalName: 'Pervez Md Nafiz',
     aliases: Object.freeze([
       'Pervez Md Nafiz',
