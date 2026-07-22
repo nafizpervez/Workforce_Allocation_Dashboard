@@ -224,6 +224,20 @@
   cursor: default;
 }
 
+.matrix-total-week-allocation,
+.matrix-total-week-revenue {
+  display: block;
+  line-height: 1.15;
+  white-space: nowrap;
+}
+
+.matrix-total-week-revenue {
+  margin-top: 3px;
+  color: #0f766e;
+  font-size: 9px;
+  font-weight: 700;
+}
+
 .matrix-total-row .sticky-revenue-4 {
   box-shadow: 5px 0 7px rgba(15, 23, 42, 0.1);
 }

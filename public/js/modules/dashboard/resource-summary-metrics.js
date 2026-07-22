@@ -139,6 +139,86 @@ function getRevenueRateValue(rateRecord, revenueKey) {
   return Number.isFinite(value) && value >= 0 ? value : null;
 }
 
+
+const MATRIX_PLANNED_REVENUE_KEYS = new Set(['intrasourcing', 'local']);
+
+function getMatrixAssignmentPlannedRevenue(employee, assignment, unavailableSlots = null) {
+  const categoryKey = classifyAllocationProject(
+    getSummaryAssignmentProjectName(assignment),
+  );
+
+  if (!MATRIX_PLANNED_REVENUE_KEYS.has(categoryKey)) {
+    return { eligible: false, categoryKey, hours: 0, rate: 0, amount: 0, hasRate: true };
+  }
+
+  if (unavailableSlots && isEmployeeUnavailableForSlot(
+    employee.id,
+    Number(assignment.year),
+    Number(assignment.month),
+    Number(assignment.week),
+    unavailableSlots,
+  )) {
+    return { eligible: false, categoryKey, hours: 0, rate: 0, amount: 0, hasRate: true };
+  }
+
+  const percentage = Number(assignment.percentage);
+  const hours = Number.isFinite(percentage) && percentage > 0
+    ? WORK_HOURS_PER_WEEK * (percentage / 100)
+    : 0;
+  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const rate = getRevenueRateValue(rateRecord, categoryKey);
+
+  return {
+    eligible: true,
+    categoryKey,
+    hours,
+    rate,
+    amount: rate === null ? null : hours * rate,
+    hasRate: rate !== null,
+  };
+}
+
+function getMatrixWeekPlannedRevenue(employeeRows, month, week, unavailableSlots = null) {
+  let amount = 0;
+  let unpricedHours = 0;
+
+  for (const employee of employeeRows || []) {
+    const key = `${month.y}-${month.m}-${week}`;
+    const assignments = S.matrix[employee.id]?.[key] || [];
+
+    for (const assignment of assignments) {
+      const revenue = getMatrixAssignmentPlannedRevenue(
+        employee,
+        assignment,
+        unavailableSlots,
+      );
+      if (!revenue.eligible) continue;
+      if (!revenue.hasRate) unpricedHours += revenue.hours;
+      else amount += revenue.amount;
+    }
+  }
+
+  return { amount, unpricedHours };
+}
+
+function getMatrixMonthPlannedRevenue(employeeRows, month, unavailableSlots = null) {
+  let amount = 0;
+  let unpricedHours = 0;
+
+  for (let week = 1; week <= RESOURCE_SUMMARY_WEEKS_PER_MONTH; week += 1) {
+    const weeklyRevenue = getMatrixWeekPlannedRevenue(
+      employeeRows,
+      month,
+      week,
+      unavailableSlots,
+    );
+    amount += weeklyRevenue.amount;
+    unpricedHours += weeklyRevenue.unpricedHours;
+  }
+
+  return { amount, unpricedHours };
+}
+
 function getResourceSummaryViewData(employee) {
   const fiscalWeekCount = getEmployeeAvailableFiscalWeekCount(
     employee.id,

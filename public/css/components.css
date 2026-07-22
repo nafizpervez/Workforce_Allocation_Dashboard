@@ -1414,3 +1414,61 @@ button.committed-target-breakdown__item:focus-visible {
   font-size: 1rem;
   font-weight: 900;
 }
+
+/* HTML table tooltips for the Burnup and Burndown charts. */
+.burn-chart-table-tooltip {
+  position: absolute;
+  z-index: 30;
+  min-width: 250px;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.45);
+  border-radius: 10px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 12px 28px rgba(15, 23, 42, 0.24);
+  color: #f8fafc;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 80ms ease;
+}
+
+.burn-chart-table-title {
+  padding: 8px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.25);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.burn-chart-tooltip-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 10px;
+}
+
+.burn-chart-tooltip-table th,
+.burn-chart-tooltip-table td {
+  padding: 5px 10px;
+  border-bottom: 1px solid rgba(148, 163, 184, 0.15);
+}
+
+.burn-chart-tooltip-table tr:last-child th,
+.burn-chart-tooltip-table tr:last-child td {
+  border-bottom: 0;
+}
+
+.burn-chart-tooltip-table th {
+  color: #cbd5e1;
+  font-weight: 500;
+  text-align: left;
+}
+
+.burn-chart-tooltip-table td {
+  color: #ffffff;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  text-align: right;
+  white-space: nowrap;
+}
+
+.burn-chart-tooltip-table tr.is-emphasis {
+  background: rgba(37, 99, 235, 0.16);
+}

@@ -112,3 +112,72 @@ td.cell:hover .cell-add {
 .chip:hover .chip-del {
   display: inline-flex;
 }
+
+/* Planned revenue displayed beneath each weekly allocation percentage. */
+.chip .chip-values {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.chip .chip-revenue {
+  color: #0f766e;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.chip .chip-revenue.is-excluded {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+/* Planned revenue displayed beneath each weekly allocation percentage. */
+.chip .chip-values {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.chip .chip-revenue {
+  color: #0f766e;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.chip .chip-revenue.is-excluded {
+  color: #9ca3af;
+  font-weight: 600;
+}
+
+/* Planned revenue displayed beneath each weekly allocation percentage. */
+.chip .chip-values {
+  display: inline-flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-end;
+  justify-content: center;
+  gap: 1px;
+  white-space: nowrap;
+}
+
+.chip .chip-revenue {
+  color: #0f766e;
+  font-size: 8px;
+  font-weight: 700;
+  line-height: 1.05;
+}
+
+.chip .chip-revenue.is-excluded {
+  color: #9ca3af;
+  font-weight: 600;
+}

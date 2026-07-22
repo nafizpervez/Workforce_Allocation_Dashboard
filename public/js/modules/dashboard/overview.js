@@ -1320,6 +1320,100 @@ function burnChartLegendOptions() {
   };
 }
 
+
+function getBurnTableTooltipElement(chart) {
+  const parent = chart.canvas.parentNode;
+  parent.style.position = parent.style.position || 'relative';
+
+  let tooltip = parent.querySelector('.burn-chart-table-tooltip');
+  if (!tooltip) {
+    tooltip = document.createElement('div');
+    tooltip.className = 'burn-chart-table-tooltip';
+    tooltip.setAttribute('role', 'status');
+    parent.appendChild(tooltip);
+  }
+  return tooltip;
+}
+
+function signedBurnValue(value, formatter) {
+  const numeric = Number(value) || 0;
+  return `${numeric > 0 ? '+' : ''}${formatter(numeric)}`;
+}
+
+function renderBurnTableTooltip(context, title, rows) {
+  const { chart, tooltip } = context;
+  const element = getBurnTableTooltipElement(chart);
+
+  if (!tooltip || tooltip.opacity === 0) {
+    element.style.opacity = '0';
+    return;
+  }
+
+  element.innerHTML = `
+    <div class="burn-chart-table-title">${esc(title)}</div>
+    <table class="burn-chart-tooltip-table">
+      <tbody>
+        ${rows.map(row => `
+          <tr class="${row.emphasis ? 'is-emphasis' : ''}">
+            <th>${esc(row.label)}</th>
+            <td>${esc(row.value)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  const { offsetLeft, offsetTop } = chart.canvas;
+  const left = offsetLeft + tooltip.caretX;
+  const top = offsetTop + tooltip.caretY;
+  element.style.opacity = '1';
+  element.style.left = `${left}px`;
+  element.style.top = `${top}px`;
+  element.style.transform = left > chart.width * 0.65
+    ? 'translate(-100%, -108%)'
+    : 'translate(10px, -108%)';
+}
+
+function burnTableTooltipOptions(series, mode) {
+  return {
+    enabled: false,
+    external: context => {
+      const index = context.tooltip?.dataPoints?.[0]?.dataIndex;
+      if (index === undefined) {
+        renderBurnTableTooltip(context, '', []);
+        return;
+      }
+
+      const hasActual = index <= series.lastActualIndex;
+      if (mode === 'burndown') {
+        const cumulativeVariance = hasActual
+          ? (series.cumulativeActual[index] || 0) - (series.cumulativePlanned[index] || 0)
+          : null;
+        renderBurnTableTooltip(context, series.labels[index], [
+          { label: 'Planned this month', value: burnChartTooltipUnit(series.plannedHours[index]) },
+          { label: 'Actual this month', value: hasActual ? burnChartTooltipUnit(series.actualHours[index]) : 'Not reported' },
+          { label: 'Planned remaining', value: burnChartTooltipUnit(series.plannedRemaining[index]), emphasis: true },
+          { label: 'Actual remaining', value: hasActual ? burnChartTooltipUnit(series.actualRemaining[index]) : 'Not reported', emphasis: true },
+          { label: 'Actual vs plan to date', value: hasActual ? signedBurnValue(cumulativeVariance, burnChartTooltipUnit) : 'Not reported' },
+        ]);
+        return;
+      }
+
+      const variance = hasActual
+        ? (series.cumulativeActual[index] || 0) - (series.cumulativePlanned[index] || 0)
+        : null;
+      renderBurnTableTooltip(context, series.labels[index], [
+        { label: 'Planned this month', value: burnupRevenueTooltipUnit(series.plannedRevenue[index]) },
+        { label: 'Actual this month', value: hasActual ? burnupRevenueTooltipUnit(series.actualRevenue[index]) : 'Not reported' },
+        { label: 'Cumulative planned', value: burnupRevenueTooltipUnit(series.cumulativePlanned[index]), emphasis: true },
+        { label: 'Cumulative actual', value: hasActual ? burnupRevenueTooltipUnit(series.cumulativeActual[index]) : 'Not reported', emphasis: true },
+        { label: 'Actual vs plan to date', value: hasActual ? signedBurnValue(variance, burnupRevenueTooltipUnit) : 'Not reported' },
+        { label: 'Total planned revenue', value: burnupRevenueTooltipUnit(series.totalPlannedRevenue) },
+      ]);
+    },
+  };
+}
+
 function burnChartTooltipOptions(series) {
   return {
     bodyFont: { size: 11 },
@@ -1380,7 +1474,7 @@ function renderBurndownChart() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: burnChartLegendOptions(),
-        tooltip: burnChartTooltipOptions(series),
+        tooltip: burnTableTooltipOptions(series, 'burndown'),
       },
       scales: {
         x: {
@@ -1530,7 +1624,7 @@ function getAssignmentBurnRevenueSeries() {
     const categoryKey = typeof classifyMonthlyPlannedWorkType === 'function'
       ? classifyMonthlyPlannedWorkType(projectName)
       : null;
-    if (!categoryKey) continue;
+    if (!['serviceDeliveryIntrasourcing', 'serviceDeliveryLocalPs'].includes(categoryKey)) continue;
 
     const rateInfo = getMonthlyRevenueRate(categoryKey, employee);
     if (!rateInfo.eligible || !rateInfo.hasRate) continue;
@@ -1553,7 +1647,7 @@ function getAssignmentBurnRevenueSeries() {
     const categoryKey = typeof classifyMonthlyActualWorkType === 'function'
       ? classifyMonthlyActualWorkType(row.workType ?? row.work_type ?? row['Work Type'])
       : null;
-    if (!categoryKey) continue;
+    if (!['serviceDeliveryIntrasourcing', 'serviceDeliveryLocalPs'].includes(categoryKey)) continue;
 
     const workerKey = typeof normalizePersonName === 'function'
       ? normalizePersonName(row.worker)
@@ -1699,7 +1793,7 @@ function renderBurnupChart() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: burnChartLegendOptions(),
-        tooltip: burnupRevenueTooltipOptions(series),
+        tooltip: burnTableTooltipOptions(series, 'burnup'),
       },
       scales: {
         x: {
