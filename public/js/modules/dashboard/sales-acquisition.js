@@ -21,7 +21,8 @@ const centerLabelPlugin = {
 };
 
 function renderNewLogoChart(data, filter, prodFilter) {
-  if (data) S.newLogoChartData = data;
+  if (data && typeof data === 'object') S.newLogoChartData = data;
+  if (!S.newLogoChartData || typeof S.newLogoChartData !== 'object') S.newLogoChartData = { ALL: [] };
 
   const f = filter !== undefined ? filter : S.newLogoFilter;
   S.newLogoFilter = f;
@@ -40,14 +41,15 @@ function renderNewLogoChart(data, filter, prodFilter) {
     for (const fy of catData) {
       if (!fyMap[fy.fy]) fyMap[fy.fy] = { fy: fy.fy, label: fy.label, 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0, projects: { 'NEW LOGO': [], 'REPEAT': [], 'REACTIVE': [] } };
       const entry = fyMap[fy.fy];
+      const projects = fy?.projects && typeof fy.projects === 'object' ? fy.projects : {};
       for (const st of ['NEW LOGO', 'REPEAT', 'REACTIVE']) {
         if (isAllMode || cats.length === 1) {
-          entry[st] = fy[st];
-          entry.projects[st] = fy.projects[st];
+          entry[st] = Number(fy?.[st]) || 0;
+          entry.projects[st] = Array.isArray(projects[st]) ? projects[st] : [];
         } else {
           // Multi-category: deduplicate accounts across categories
           const existing = new Set(entry.projects[st].map(p => (p.name || '').toLowerCase()));
-          for (const proj of (fy.projects[st] || [])) {
+          for (const proj of (Array.isArray(projects[st]) ? projects[st] : [])) {
             const key = (proj.name || '').toLowerCase();
             if (!existing.has(key)) { existing.add(key); entry.projects[st].push(proj); }
           }

@@ -1,7 +1,7 @@
 const express = require('express');
 const { getAppDb } = require('../database');
 const { calcDealStatuses } = require('../services/project-analytics');
-const { fiscalMonths } = require('../services/fiscal');
+const { fiscalMonths, getProjectFiscalYear } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
 const {
   assignmentSlotKey,
@@ -363,12 +363,16 @@ router.get('/api/dashboard/stats', (req, res) => {
       progress,
       probability,
       end_date,
+      fiscal_period,
       product_family,
       product_amount,
       opp_amount,
       budget
     FROM projects
-  `).all().filter(project => !isUnavailableProjectName(project.name));
+  `).all().filter(project => (
+    !isUnavailableProjectName(project.name) &&
+    getProjectFiscalYear(project) === Number(fy) + 1
+  ));
   const activeProjects = analyticProjects.filter(project => project.stage !== 'Closed Won').length;
   const runningProjectSummary = getClosedWonProjectSummary(analyticProjects);
   const openProjectProbabilitySummary = getOpenProjectProbabilitySummary(
@@ -507,8 +511,23 @@ router.get('/api/dashboard/utilization', (req, res) => {
   });
 });
 
-router.get('/api/dashboard/pipeline', (_, res) => {
-  const rows = db.prepare(`SELECT stage,COUNT(*) AS count,SUM(budget) AS total_budget,AVG(progress) AS avg_progress FROM projects GROUP BY stage`).all();
+router.get('/api/dashboard/pipeline', (req, res) => {
+  const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
+  const projects = db.prepare('SELECT stage, budget, progress, fiscal_period, end_date FROM projects').all()
+    .filter(project => getProjectFiscalYear(project) === Number(fy) + 1);
+  const grouped = new Map();
+  for (const project of projects) {
+    const stage = project.stage || 'Unknown';
+    const current = grouped.get(stage) || { stage, count: 0, total_budget: 0, progress_total: 0 };
+    current.count += 1;
+    current.total_budget += Number(project.budget) || 0;
+    current.progress_total += Number(project.progress) || 0;
+    grouped.set(stage, current);
+  }
+  const rows = [...grouped.values()].map(row => ({
+    stage: row.stage, count: row.count, total_budget: row.total_budget,
+    avg_progress: row.count ? row.progress_total / row.count : 0,
+  }));
   const order = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won'];
   rows.sort((a, b) => order.indexOf(a.stage) - order.indexOf(b.stage));
   res.json(rows);
@@ -654,13 +673,14 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
 });
 
 /* Running Projects: Closed Won on or after March 1, 2025 */
-router.get('/api/dashboard/deadlines', (_, res) => {
+router.get('/api/dashboard/deadlines', (req, res) => {
+  const fy = safeNum(req.query.fiscalYear, new Date().getFullYear());
   const today = new Date();
   const runningProjectCutoff = RUNNING_CLOSED_WON_START_DATE;
 
   const rows = db.prepare(`
     SELECT id, code, name, end_date, project_closing_date, product_name, product_family,
-           progress, priority, opp_amount, product_amount, account_name, stage, color, opportunity_owner
+           progress, priority, opp_amount, product_amount, account_name, stage, color, opportunity_owner, fiscal_period
       FROM projects
      WHERE stage = 'Closed Won'
        AND COALESCE(progress, 0) < 100
@@ -676,7 +696,9 @@ router.get('/api/dashboard/deadlines', (_, res) => {
   const allProjects = db.prepare('SELECT id, code, name, account_name, client, end_date, fiscal_period, stage, product_name FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);
 
-  const enriched = rows.map(r => {
+  const fiscalRows = rows.filter(row => getProjectFiscalYear(row) === Number(fy) + 1);
+
+  const enriched = fiscalRows.map(r => {
     const closingDate = r.project_closing_date || null;
     const days = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
     const status = days === null ? '' : days < 0 ? 'PS Work Begins' : days < 14 ? 'Due Soon' : 'On Track';

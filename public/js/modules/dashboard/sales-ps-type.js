@@ -1,5 +1,6 @@
 /* ================================================================ PS TYPE CHART (Chart 3) */
 function renderPsTypeChart(data) {
+  const safeData = Array.isArray(data) ? data : [];
   if (S.charts.psType) S.charts.psType.destroy();
   const canvas = document.getElementById('psTypeChart');
   if (!canvas) return;
@@ -30,10 +31,10 @@ function renderPsTypeChart(data) {
     type: 'bar',
     plugins: [labelPlugin],
     data: {
-      labels: data.map(d => d.label),
+      labels: safeData.map(d => d.label),
       datasets: [
-        { label: 'PS System Support', data: data.map(d => d.support), backgroundColor: gradSupport, hoverBackgroundColor: '#2563eb', borderRadius: 5, borderSkipped: false, barPercentage: 0.85, categoryPercentage: 0.72 },
-        { label: 'PS Project Implementation', data: data.map(d => d.impl), backgroundColor: gradImpl, hoverBackgroundColor: '#059669', borderRadius: 5, borderSkipped: false, barPercentage: 0.85, categoryPercentage: 0.72 },
+        { label: 'PS System Support', data: safeData.map(d => Number(d?.support) || 0), backgroundColor: gradSupport, hoverBackgroundColor: '#2563eb', borderRadius: 5, borderSkipped: false, barPercentage: 0.85, categoryPercentage: 0.72 },
+        { label: 'PS Project Implementation', data: safeData.map(d => Number(d?.impl) || 0), backgroundColor: gradImpl, hoverBackgroundColor: '#059669', borderRadius: 5, borderSkipped: false, barPercentage: 0.85, categoryPercentage: 0.72 },
       ]
     },
     options: {

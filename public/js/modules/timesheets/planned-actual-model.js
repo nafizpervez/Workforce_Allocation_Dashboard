@@ -694,7 +694,7 @@ function buildPlannedActualAllProjects(projects, months) {
 }
 
 function buildPlannedActualEffortData() {
-  // Plan-to-Execution remains on the dashboard's established FY27 scope.
+  // Plan-to-Execution follows the global dashboard fiscal-year selection.
   const fiscalYear = S.fiscalYear;
   const fiscalMonthList = fiscalMonths(fiscalYear);
   const employeesById = new Map((S.employees || []).map(employee => [Number(employee.id), employee]));
