@@ -228,17 +228,13 @@ function monthlyPlannedWorkFiscalYearFromMonth(year, month) {
 }
 
 function getSelectedMonthlyPlannedWorkFiscalYear() {
-  const selected = Math.trunc(Number(S.monthlyPlannedWorkFiscalYear));
-  return Number.isFinite(selected) && selected >= 1900 && selected <= 9998
-    ? selected
-    : S.fiscalYear;
+  return S.fiscalYear;
 }
 
 function getMonthlyPlannedWorkAssignments(fiscalYear) {
   const normalizedYear = normalizeFiscalYearStart(fiscalYear, S.fiscalYear);
 
   if (normalizedYear === Number(S.fiscalYear)) return S.assignments || [];
-  if (normalizedYear === Number(S.matrixFiscalYear)) return S.matrixAssignments || [];
   if (monthlyPlannedWorkAssignmentCache.has(normalizedYear)) {
     return monthlyPlannedWorkAssignmentCache.get(normalizedYear);
   }
@@ -270,7 +266,7 @@ function ensureMonthlyPlannedWorkAssignments(fiscalYear) {
 function getMonthlyPlannedWorkFiscalYearOptions() {
   const years = new Set([
     Number(S.fiscalYear),
-    Number(S.matrixFiscalYear),
+    Number(S.fiscalYear),
     getCurrentFiscalYearStart(),
   ].filter(Number.isFinite));
 
@@ -297,7 +293,7 @@ function getMonthlyPlannedWorkFiscalYearOptions() {
   const maximum = Math.max(
     S.fiscalYear + 10,
     getCurrentFiscalYearStart() + 10,
-    Number(S.matrixFiscalYear) + 5,
+    Number(S.fiscalYear) + 5,
     ...finiteYears,
   );
 
@@ -321,13 +317,8 @@ function populateMonthlyPlannedWorkFiscalYearFilter() {
 }
 
 function setMonthlyPlannedWorkFiscalYear(value) {
-  const normalizedValue = String(value ?? '').trim();
-  S.monthlyPlannedWorkFiscalYear = normalizedValue === ''
-    ? ''
-    : normalizeFiscalYearStart(normalizedValue, S.fiscalYear);
-
-  populateMonthlyPlannedWorkFiscalYearFilter();
-  renderMonthlyPlannedWorkChart();
+  const fiscalYear = normalizeFiscalYearStart(value, S.fiscalYear);
+  changeGlobalFiscalYear(fiscalYear);
 }
 
 function classifyMonthlyPlannedWorkType(projectName) {

@@ -1,6 +1,7 @@
 /* ================================================================ PS REVENUE CHART */
 function renderPsRevenueChart(data, prodFilter) {
-  if (data) S.psRevenueData = data;
+  if (data && typeof data === 'object') S.psRevenueData = data;
+  if (!S.psRevenueData || typeof S.psRevenueData !== 'object') S.psRevenueData = { ALL: [] };
   if (prodFilter !== undefined) S.nlProductFilter = prodFilter instanceof Set ? prodFilter : new Set([prodFilter]);
   const pf = S.nlProductFilter;
 
@@ -16,11 +17,11 @@ function renderPsRevenueChart(data, prodFilter) {
       if (!fyMap[fy.fy]) fyMap[fy.fy] = { ...fy, total_amount: 0, ps_amount: 0, all_projects: [], ps_projects: [] };
       const entry = fyMap[fy.fy];
       if (isAllMode || cats.length === 1) {
-        entry.total_amount = fy.total_amount;
-        entry.ps_amount = fy.ps_amount;
-        entry.pct = fy.pct;
-        entry.all_projects = fy.all_projects;
-        entry.ps_projects = fy.ps_projects;
+        entry.total_amount = Number(fy?.total_amount) || 0;
+        entry.ps_amount = Number(fy?.ps_amount) || 0;
+        entry.pct = Number(fy?.pct) || 0;
+        entry.all_projects = Array.isArray(fy?.all_projects) ? fy.all_projects : [];
+        entry.ps_projects = Array.isArray(fy?.ps_projects) ? fy.ps_projects : [];
       } else {
         // Multi-category: sum amounts, dedup projects by code
         const seenAll = new Set(entry.all_projects.map(p => p.code));

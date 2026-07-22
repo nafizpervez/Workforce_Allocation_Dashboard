@@ -1,51 +1,49 @@
 /* Workforce Allocation Dashboard — core/data.js */
 
-let matrixFiscalYearLoadInProgress = false;
+let globalFiscalYearLoadInProgress = false;
 
-function syncMatrixFiscalYearControl() {
-  const input = document.getElementById('matrixFiscalYearInput');
-  const range = document.getElementById('matrixFiscalYearRange');
-  const control = document.getElementById('matrixFiscalYearControl');
-  const endYear = getFiscalYearEnd(S.matrixFiscalYear);
+function syncGlobalFiscalYearControl() {
+  const input = document.getElementById('globalFiscalYearInput');
+  const range = document.getElementById('globalFiscalYearRange');
+  const control = document.getElementById('globalFiscalYearControl');
+  const endYear = getFiscalYearEnd(S.fiscalYear);
 
   if (input) input.value = String(endYear);
-  if (range) range.textContent = fiscalYearRangeLabel(S.matrixFiscalYear);
+  if (range) range.textContent = fiscalYearRangeLabel(S.fiscalYear);
   if (control) {
     control.setAttribute(
       'aria-label',
-      `${fiscalYearDisplayLabel(S.matrixFiscalYear)}, ${fiscalYearRangeLabel(S.matrixFiscalYear)}`,
+      `${fiscalYearDisplayLabel(S.fiscalYear)}, ${fiscalYearRangeLabel(S.fiscalYear)}`,
     );
   }
 }
 
-function setMatrixFiscalYearControlBusy(isBusy) {
-  matrixFiscalYearLoadInProgress = Boolean(isBusy);
-  ['matrixFiscalYearInput', 'matrixFiscalYearPrevBtn', 'matrixFiscalYearNextBtn'].forEach(id => {
+function setGlobalFiscalYearControlBusy(isBusy) {
+  globalFiscalYearLoadInProgress = Boolean(isBusy);
+  ['globalFiscalYearInput', 'globalFiscalYearPrevBtn', 'globalFiscalYearNextBtn'].forEach(id => {
     const element = document.getElementById(id);
-    if (element) element.disabled = matrixFiscalYearLoadInProgress;
+    if (element) element.disabled = globalFiscalYearLoadInProgress;
   });
-  document.getElementById('matrixFiscalYearControl')?.classList.toggle(
+  document.getElementById('globalFiscalYearControl')?.classList.toggle(
     'opacity-60',
-    matrixFiscalYearLoadInProgress,
+    globalFiscalYearLoadInProgress,
   );
 }
 
-function resetMatrixFiscalYearFilters() {
+function resetGlobalFiscalYearFilters() {
   S.matrixProjectFilter = null;
   S.matrixMonthFilter = '';
+  S.individualSummaryMonthFilter = '';
+  S.monthlyPlannedWorkFiscalYear = S.fiscalYear;
 
   const projectFilter = document.getElementById('matrixProjectFilter');
   if (projectFilter) projectFilter.value = '';
-
   const monthFilter = document.getElementById('matrixMonthFilter');
   if (monthFilter) monthFilter.value = '';
 }
 
 function buildMatrixEmployeeUtilization() {
-  const effectiveAssignments = getEffectiveFiscalAssignments(
-    S.matrixFiscalYear,
-    S.matrixAssignments,
-  );
+  const effectiveAssignments = getEffectiveFiscalAssignments(S.fiscalYear, S.matrixAssignments);
   const percentageByEmployee = new Map();
 
   effectiveAssignments.forEach(assignment => {
@@ -59,9 +57,7 @@ function buildMatrixEmployeeUtilization() {
   S.matrixEmployeeUtil = new Map(
     getActiveEmployees().map(employee => {
       const availableWeeks = getEmployeeAvailableFiscalWeekCount(
-        employee.id,
-        S.matrixFiscalYear,
-        S.matrixAssignments,
+        employee.id, S.fiscalYear, S.matrixAssignments,
       );
       const utilization = availableWeeks
         ? (percentageByEmployee.get(Number(employee.id)) || 0) / availableWeeks
@@ -71,75 +67,108 @@ function buildMatrixEmployeeUtilization() {
   );
 }
 
-async function loadMatrixAssignments({ announce = false } = {}) {
-  const fiscalYear = S.matrixFiscalYear;
-  const assignments = await api('GET', `/api/assignments?fiscalYear=${fiscalYear}`);
+async function changeGlobalFiscalYear(fiscalStartYear, announce = true) {
+  if (globalFiscalYearLoadInProgress) return false;
 
-  // Ignore a stale response if the user selected another FY while this request was running.
-  if (fiscalYear !== S.matrixFiscalYear) return false;
-
-  S.matrixAssignments = assignments;
-  buildMatrix();
-  buildMatrixEmployeeUtilization();
-  populateMatrixFilter();
-  renderMatrix();
-  syncMatrixFiscalYearControl();
-
-  if (announce) {
-    const assignmentText = assignments.length
-      ? `${assignments.length} assignment row${assignments.length === 1 ? '' : 's'} loaded`
-      : 'new empty assignment cells are ready';
-    toast(`${fiscalYearDisplayLabel(fiscalYear)} matrix selected — ${assignmentText}`);
-  }
-
-  return true;
-}
-
-async function changeMatrixFiscalYear(fiscalStartYear, announce = true) {
-  if (matrixFiscalYearLoadInProgress) return false;
-
-  const nextFiscalYear = normalizeFiscalYearStart(fiscalStartYear, S.matrixFiscalYear);
-  if (nextFiscalYear === S.matrixFiscalYear) {
-    syncMatrixFiscalYearControl();
+  const nextFiscalYear = normalizeFiscalYearStart(fiscalStartYear, S.fiscalYear);
+  if (nextFiscalYear === S.fiscalYear) {
+    syncGlobalFiscalYearControl();
     return true;
   }
 
-  const previousFiscalYear = S.matrixFiscalYear;
-  S.matrixFiscalYear = nextFiscalYear;
-  resetMatrixFiscalYearFilters();
-  syncMatrixFiscalYearControl();
-  setMatrixFiscalYearControlBusy(true);
+  const previousFiscalYear = S.fiscalYear;
+  S.fiscalYear = nextFiscalYear;
+  try { localStorage.setItem('dashboardFiscalYear', String(nextFiscalYear)); } catch (_) {}
+  resetGlobalFiscalYearFilters();
+  syncGlobalFiscalYearControl();
+  setGlobalFiscalYearControlBusy(true);
 
   try {
-    await loadMatrixAssignments({ announce });
+    const loaded = await loadAll({ preserveTimesheet: true });
+    if (!loaded) throw new Error(`Unable to load ${fiscalYearDisplayLabel(nextFiscalYear)}.`);
+    if (announce) {
+      const assignmentText = S.assignments.length
+        ? `${S.assignments.length} assignment row${S.assignments.length === 1 ? '' : 's'} loaded`
+        : 'empty future/historical sheets are ready';
+      toast(`${fiscalYearDisplayLabel(nextFiscalYear)} selected — ${assignmentText}`);
+    }
     return true;
   } catch (error) {
-    S.matrixFiscalYear = previousFiscalYear;
-    syncMatrixFiscalYearControl();
+    S.fiscalYear = previousFiscalYear;
+    try { localStorage.setItem('dashboardFiscalYear', String(previousFiscalYear)); } catch (_) {}
+    syncGlobalFiscalYearControl();
+    await loadAll({ preserveTimesheet: true });
     toast(error.message, 'error');
     console.error(error);
     return false;
   } finally {
-    setMatrixFiscalYearControlBusy(false);
+    setGlobalFiscalYearControlBusy(false);
   }
 }
 
+
+function createEmptyFiscalChartRow(fiscalYearEnd, chartType = 'generic') {
+  const base = { fy: fiscalYearEnd, label: `FY ${fiscalYearEnd}` };
+  if (chartType === 'new-logo') {
+    return {
+      ...base,
+      'NEW LOGO': 0,
+      REPEAT: 0,
+      REACTIVE: 0,
+      projects: { 'NEW LOGO': [], REPEAT: [], REACTIVE: [] },
+    };
+  }
+  if (chartType === 'ps-revenue') {
+    return {
+      ...base,
+      total_amount: 0,
+      ps_amount: 0,
+      pct: 0,
+      all_projects: [],
+      ps_projects: [],
+    };
+  }
+  if (chartType === 'ps-type') {
+    return {
+      ...base,
+      support: 0,
+      impl: 0,
+      supportProjects: [],
+      implProjects: [],
+    };
+  }
+  return base;
+}
+
+function scopeFiscalChartData(data, fiscalYearEnd, chartType = 'generic') {
+  const emptyRow = createEmptyFiscalChartRow(fiscalYearEnd, chartType);
+  if (Array.isArray(data)) {
+    const rows = data.filter(row => Number(row?.fy) === Number(fiscalYearEnd));
+    return rows.length ? rows : [{ ...emptyRow }];
+  }
+
+  const source = data && typeof data === 'object' ? data : { ALL: [] };
+  const entries = Object.entries(source);
+  if (!entries.length) entries.push(['ALL', []]);
+
+  return Object.fromEntries(entries.map(([key, rows]) => {
+    if (!Array.isArray(rows)) return [key, rows];
+    const filtered = rows.filter(row => Number(row?.fy) === Number(fiscalYearEnd));
+    return [key, filtered.length ? filtered : [{ ...emptyRow }]];
+  }));
+}
+
 /* ================================================================ LOAD */
-async function loadAll() {
-  syncMatrixFiscalYearControl();
+async function loadAll({ preserveTimesheet = false } = {}) {
+  syncGlobalFiscalYearControl();
 
   try {
     const fy = S.fiscalYear;
-    const matrixFy = S.matrixFiscalYear;
-    const fixedAssignmentsRequest = api('GET', `/api/assignments?fiscalYear=${fy}`);
-    const matrixAssignmentsRequest = matrixFy === fy
-      ? fixedAssignmentsRequest
-      : api('GET', `/api/assignments?fiscalYear=${matrixFy}`);
+    const assignmentsRequest = api('GET', `/api/assignments?fiscalYear=${fy}`);
 
-    const [emps, projs, asgs, matrixAsgs, revenueRates, committedTargets, preSaleProducts, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
+    const [emps, projs, asgs, revenueRates, committedTargets, preSaleProducts, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
       api('GET', '/api/employees'), api('GET', '/api/projects'),
-      fixedAssignmentsRequest,
-      matrixAssignmentsRequest,
+      assignmentsRequest,
       api('GET', '/api/revenue-rates'),
       api('GET', '/api/committed-targets'),
       api('GET', '/api/presale-products'),
@@ -147,8 +176,8 @@ async function loadAll() {
       api('GET', `/api/dashboard/trends?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/workload?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/utilization?fiscalYear=${fy}`),
-      api('GET', '/api/dashboard/pipeline'),
-      api('GET', '/api/dashboard/deadlines'),
+      api('GET', `/api/dashboard/pipeline?fiscalYear=${fy}`),
+      api('GET', `/api/dashboard/deadlines?fiscalYear=${getOperationalFiscalYearStart()}`),
       api('GET', '/api/dashboard/new-logo-chart'),
       api('GET', '/api/dashboard/ps-revenue-chart'),
       api('GET', '/api/dashboard/ps-type-chart'),
@@ -159,7 +188,7 @@ async function loadAll() {
     }));
     S.projects = projs;
     S.assignments = asgs;
-    S.matrixAssignments = matrixAsgs;
+    S.matrixAssignments = asgs;
     S.revenueRates = revenueRates;
     S.committedTargets = committedTargets;
     S.preSaleProducts = preSaleProducts;
@@ -172,6 +201,8 @@ async function loadAll() {
     renderBurndownChart();
     renderBurnupChart();
     renderMonthlyPlannedWorkChart();
+    // Deal Acquisition, Revenue and PS Engagement are operational/all-history views.
+    // They intentionally do not follow the global Dashboard FY selector.
     renderNewLogoChart(nlChart);
     // Sync initial category button states
     document.querySelectorAll('.nl-prod-btn').forEach(b => {
@@ -190,7 +221,13 @@ async function loadAll() {
     populatePipelineStageFilter();
     populateProductFamilyDropdowns();
 
-    await loadSavedTimesheetFromDb();
+    if (!preserveTimesheet || !S.timesheetRows.length) await loadSavedTimesheetFromDb();
+    else {
+      if (typeof renderPlannedActualEffortChart === 'function') renderPlannedActualEffortChart();
+      if (typeof renderMonthlyPlannedWorkChart === 'function') renderMonthlyPlannedWorkChart();
+      if (typeof renderBurndownChart === 'function') renderBurndownChart();
+      if (typeof renderBurnupChart === 'function') renderBurnupChart();
+    }
 
     initCardDrag();
     return true;
@@ -249,7 +286,7 @@ function populateMatrixFilter() {
 
   const ms = document.getElementById('matrixMonthFilter');
   if (ms) {
-    const validMonths = fiscalMonths(S.matrixFiscalYear);
+    const validMonths = fiscalMonths(S.fiscalYear);
     const validValues = new Set(validMonths.map(month => `${month.y}-${month.m}`));
     if (S.matrixMonthFilter && !validValues.has(S.matrixMonthFilter)) S.matrixMonthFilter = '';
     ms.innerHTML =

@@ -204,7 +204,7 @@ function servicePipelineRowHtml(p) {
 
 function applyAndRenderPipeline() {
   const filtered = applyPipelineFilters(getServicePipelineBaseProjects());
-  document.getElementById('pipelineList').innerHTML = filtered.map(servicePipelineRowHtml).join('') || '<div class="px-6 py-8 text-center text-sm text-gray-400">No FY 2027 service pipeline projects</div>';
+  document.getElementById('pipelineList').innerHTML = filtered.map(servicePipelineRowHtml).join('') || '<div class="px-6 py-8 text-center text-sm text-gray-400">No service pipeline projects for the selected fiscal year</div>';
 }
 
 function renderServicePipeline(projects) { applyAndRenderPipeline(); }
