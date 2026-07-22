@@ -1,9 +1,15 @@
 const express = require('express');
 const { getAppDb } = require('../database');
 const { calcDealStatuses } = require('../services/project-analytics');
-const { normalizeFiscalPeriod } = require('../services/fiscal');
+const { getCurrentFiscalYearEnd, normalizeFiscalPeriod } = require('../services/fiscal');
 const { assignUniqueProjectColors, projectColorForIndex } = require('../services/project-colors');
-const { normalizeImportedProjectRows } = require('../services/project-import');
+const {
+  getProjectImportFiscalYearEnd,
+  normalizeImportedProjectRows,
+  normalizeProjectImportMode,
+  projectImportPartitionLabel,
+  projectMatchesImportMode,
+} = require('../services/project-import');
 const { safeNum } = require('../services/values');
 const router = express.Router();
 const db = getAppDb();
@@ -38,26 +44,116 @@ router.post('/api/projects', (req, res) => {
       safeNum(b.product_amount, 0), b.account_name || null, b.product_name || null,
       b.product_family || null,
       b.opportunity_owner || null, safeNum(b.opp_amount, 0), safeNum(b.probability, 0),
-      b.created_date || null, normalizeFiscalPeriod(b.fiscal_period) || null, b.project_closing_date || null, null
+      b.created_date || null, normalizeFiscalPeriod(b.fiscal_period) || null, b.project_closing_date || null, null,
     );
     res.status(201).json(db.prepare('SELECT * FROM projects WHERE id=?').get(info.lastInsertRowid));
   } catch (e) {
     if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'project code must be unique' });
     throw e;
   }
-
 });
+
+function normalizeProjectMatchValue(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[^a-z0-9]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function projectImportResultRow(project, extra = {}) {
+  return {
+    id: project.id ?? null,
+    code: project.code,
+    name: project.name,
+    product_name: project.product_name,
+    product_amount: safeNum(project.product_amount, 0),
+    fiscal_period: project.fiscal_period,
+    import_row_no: project.import_row_no || null,
+    ...extra,
+  };
+}
+
+function findProjectImportMatch(incoming, existingRows, consumedIds) {
+  const available = existingRows.filter(project => !consumedIds.has(Number(project.id)));
+  const incomingCode = normalizeProjectMatchValue(incoming.code);
+  const incomingName = normalizeProjectMatchValue(incoming.name);
+  const incomingProduct = normalizeProjectMatchValue(incoming.product_name);
+  const value = (project, field) => normalizeProjectMatchValue(project?.[field]);
+  const first = predicate => available.find(predicate) || null;
+
+  return (
+    first(project => (
+      value(project, 'code') === incomingCode &&
+      value(project, 'name') === incomingName &&
+      value(project, 'product_name') === incomingProduct
+    )) ||
+    (incomingProduct ? first(project => (
+      value(project, 'code') === incomingCode &&
+      value(project, 'product_name') === incomingProduct
+    )) : null) ||
+    first(project => (
+      value(project, 'code') === incomingCode &&
+      value(project, 'name') === incomingName
+    )) ||
+    (incomingProduct ? first(project => (
+      value(project, 'name') === incomingName &&
+      value(project, 'product_name') === incomingProduct
+    )) : null) ||
+    (() => {
+      const sameName = available.filter(project => value(project, 'name') === incomingName);
+      return sameName.length === 1 ? sameName[0] : null;
+    })()
+  );
+}
 
 router.post('/api/projects/import', (req, res) => {
   const incomingRows = Array.isArray(req.body?.rows) ? req.body.rows : [];
-  const rows = normalizeImportedProjectRows(incomingRows);
+  const normalizedRows = normalizeImportedProjectRows(incomingRows);
+  const importMode = normalizeProjectImportMode(req.body?.mode);
+  const currentFiscalYearEnd = getCurrentFiscalYearEnd();
+  const partitionLabel = projectImportPartitionLabel(importMode, currentFiscalYearEnd);
+
+  if (!normalizedRows.length) {
+    return res.status(400).json({ error: 'No valid project rows found in uploaded Excel.' });
+  }
+
+  const rows = [];
+  const excluded = [];
+  for (const project of normalizedRows) {
+    const fiscalYearEnd = getProjectImportFiscalYearEnd(project);
+    if (fiscalYearEnd === null) {
+      excluded.push(projectImportResultRow(project, {
+        reason: 'Fiscal Period or Close Date is required to determine the project fiscal year.',
+      }));
+    } else if (!projectMatchesImportMode(project, importMode, currentFiscalYearEnd)) {
+      excluded.push(projectImportResultRow(project, {
+        reason: importMode === 'historical'
+          ? `FY${fiscalYearEnd} belongs to the current FY${currentFiscalYearEnd} forecast partition.`
+          : `FY${fiscalYearEnd} is outside the current FY${currentFiscalYearEnd} forecast partition.`,
+      }));
+    } else {
+      rows.push(project);
+    }
+  }
 
   if (!rows.length) {
-    return res.status(400).json({ error: 'No valid project rows found in uploaded Excel.' });
+    return res.status(400).json({
+      error: `No rows matched ${partitionLabel}. Check the Fiscal Period or Close Date values in the Excel file.`,
+      mode: importMode,
+      current_fiscal_year: currentFiscalYearEnd,
+      excluded_count: excluded.length,
+      excluded,
+    });
   }
 
   const beforeProjectCount = db.prepare('SELECT COUNT(*) AS c FROM projects').get().c || 0;
   const beforeAssignmentCount = db.prepare('SELECT COUNT(*) AS c FROM assignments').get().c || 0;
+  const allExistingProjects = db.prepare('SELECT * FROM projects ORDER BY id').all();
+  const existingPartitionRows = allExistingProjects.filter(project => (
+    projectMatchesImportMode(project, importMode, currentFiscalYearEnd)
+  ));
 
   const insertProject = db.prepare(`
     INSERT INTO projects (code,name,client,budget,spent_pct,end_date,stage,progress,color,priority,
@@ -65,73 +161,104 @@ router.post('/api/projects/import', (req, res) => {
       created_date,fiscal_period,project_closing_date,import_row_no)
     VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
+  const updateProject = db.prepare(`
+    UPDATE projects SET
+      code=?, name=?, client=?, budget=?, spent_pct=?, end_date=?, stage=?, progress=?, priority=?,
+      product_amount=?, account_name=?, product_name=?, product_family=?, opportunity_owner=?, opp_amount=?, probability=?,
+      created_date=?, fiscal_period=?, project_closing_date=?, import_row_no=?
+    WHERE id=?
+  `);
+  const assignmentCountForProject = db.prepare('SELECT COUNT(*) AS c FROM assignments WHERE project_id=?');
+  const deleteProject = db.prepare('DELETE FROM projects WHERE id=?');
 
   const inserted = [];
+  const updated = [];
+  const deletedUnassigned = [];
+  const retainedAssigned = [];
   const failed = [];
-  let deletedProjectCount = 0;
-  let deletedAssignmentCount = 0;
+  const consumedExistingIds = new Set();
+
+  const projectValues = project => [
+    project.code,
+    project.name,
+    project.client || project.account_name || null,
+    safeNum(project.budget ?? project.opp_amount, 0),
+    safeNum(project.spent_pct, 0),
+    project.end_date || null,
+    project.stage || 'Prospect',
+    safeNum(project.progress, 0),
+    project.priority || 'Medium',
+    safeNum(project.product_amount, 0),
+    project.account_name || null,
+    project.product_name || null,
+    project.product_family || null,
+    project.opportunity_owner || null,
+    safeNum(project.opp_amount, 0),
+    safeNum(project.probability, 0),
+    project.created_date || null,
+    project.fiscal_period || null,
+    project.project_closing_date || null,
+    project.import_row_no || null,
+  ];
 
   const txn = db.transaction(() => {
-    // Full replacement mode:
-    // Project IDs are regenerated from the uploaded Excel. Existing assignments
-    // reference old project IDs, so they must be removed to avoid orphaned data.
-    const deletedAssignments = db.prepare('DELETE FROM assignments').run();
-    deletedAssignmentCount = deletedAssignments.changes || 0;
+    for (const project of rows) {
+      const existing = findProjectImportMatch(project, existingPartitionRows, consumedExistingIds);
+      if (existing) consumedExistingIds.add(Number(existing.id));
 
-    const deletedProjects = db.prepare('DELETE FROM projects').run();
-    deletedProjectCount = deletedProjects.changes || 0;
-
-    // Reset autoincrement counters when sqlite_sequence exists.
-    try {
-      db.prepare("DELETE FROM sqlite_sequence WHERE name IN ('projects', 'assignments')").run();
-    } catch (_) { /* sqlite_sequence may not exist in older DBs */ }
-
-    for (const p of rows) {
       try {
-        const info = insertProject.run(
-          p.code,
-          p.name,
-          p.client || p.account_name || null,
-          safeNum(p.budget ?? p.opp_amount, 0),
-          safeNum(p.spent_pct, 0),
-          p.end_date || null,
-          p.stage || 'Prospect',
-          safeNum(p.progress, 0),
-          p.color || '#8B5CF6',
-          p.priority || 'Medium',
-          safeNum(p.product_amount, 0),
-          p.account_name || null,
-          p.product_name || null,
-          p.product_family || null,
-          p.opportunity_owner || null,
-          safeNum(p.opp_amount, 0),
-          safeNum(p.probability, 0),
-          p.created_date || null,
-          p.fiscal_period || null,
-          p.project_closing_date || null,
-          p.import_row_no || null
-        );
+        if (existing) {
+          updateProject.run(...projectValues(project), Number(existing.id));
+          updated.push(projectImportResultRow(project, {
+            id: Number(existing.id),
+            previous_code: existing.code,
+            previous_name: existing.name,
+          }));
+        } else {
+          const info = insertProject.run(
+            project.code,
+            project.name,
+            project.client || project.account_name || null,
+            safeNum(project.budget ?? project.opp_amount, 0),
+            safeNum(project.spent_pct, 0),
+            project.end_date || null,
+            project.stage || 'Prospect',
+            safeNum(project.progress, 0),
+            project.color || '#8B5CF6',
+            project.priority || 'Medium',
+            safeNum(project.product_amount, 0),
+            project.account_name || null,
+            project.product_name || null,
+            project.product_family || null,
+            project.opportunity_owner || null,
+            safeNum(project.opp_amount, 0),
+            safeNum(project.probability, 0),
+            project.created_date || null,
+            project.fiscal_period || null,
+            project.project_closing_date || null,
+            project.import_row_no || null,
+          );
+          inserted.push(projectImportResultRow(project, { id: info.lastInsertRowid }));
+        }
+      } catch (error) {
+        failed.push(projectImportResultRow(project, {
+          error: error.message,
+          reason: error.message || 'Database import failed.',
+        }));
+      }
+    }
 
-        inserted.push({
-          id: info.lastInsertRowid,
-          code: p.code,
-          name: p.name,
-          product_name: p.product_name,
-          product_amount: p.product_amount,
-          fiscal_period: p.fiscal_period,
-          import_row_no: p.import_row_no || null,
-        });
-      } catch (e) {
-        failed.push({
-          code: p.code,
-          name: p.name,
-          product_name: p.product_name,
-          product_amount: p.product_amount,
-          fiscal_period: p.fiscal_period,
-          import_row_no: p.import_row_no || null,
-          error: e.message,
-          reason: e.message || 'Database insert failed.',
-        });
+    for (const existing of existingPartitionRows) {
+      if (consumedExistingIds.has(Number(existing.id))) continue;
+      const assignmentCount = assignmentCountForProject.get(Number(existing.id)).c || 0;
+      if (assignmentCount > 0) {
+        retainedAssigned.push(projectImportResultRow(existing, {
+          assignment_count: assignmentCount,
+          reason: 'Retained because existing assignments still reference this project.',
+        }));
+      } else {
+        deleteProject.run(Number(existing.id));
+        deletedUnassigned.push(projectImportResultRow(existing));
       }
     }
   });
@@ -139,29 +266,38 @@ router.post('/api/projects/import', (req, res) => {
   txn();
 
   const recoloredProjectCount = assignUniqueProjectColors();
+  const afterProjectCount = db.prepare('SELECT COUNT(*) AS c FROM projects').get().c || 0;
+  const afterAssignmentCount = db.prepare('SELECT COUNT(*) AS c FROM assignments').get().c || 0;
 
   res.status(201).json({
     ok: true,
-    mode: 'replace_all_projects',
+    mode: 'replace_project_partition',
+    import_mode: importMode,
+    partition_label: partitionLabel,
+    current_fiscal_year: currentFiscalYearEnd,
     parsed_rows: incomingRows.length,
+    normalized_rows: normalizedRows.length,
     project_rows_ready: rows.length,
+    excluded_count: excluded.length,
     before_project_count: beforeProjectCount,
+    after_project_count: afterProjectCount,
     before_assignment_count: beforeAssignmentCount,
-    deleted_project_count: deletedProjectCount,
-    deleted_assignment_count: deletedAssignmentCount,
+    after_assignment_count: afterAssignmentCount,
+    deleted_project_count: deletedUnassigned.length,
+    deleted_assignment_count: 0,
     inserted_count: inserted.length,
-    recolored_project_count: recoloredProjectCount,
-    skipped_existing_count: 0,
-    updated_existing_count: 0,
+    updated_existing_count: updated.length,
+    retained_assigned_count: retainedAssigned.length,
     failed_count: failed.length,
+    recolored_project_count: recoloredProjectCount,
     inserted,
-    import_behavior: 'No project de-duplication. Every valid Excel row is inserted, including duplicate rows. Each imported project receives a unique chart color.',
-    skipped_existing: [],
-    failed: failed.map(p => ({
-      ...p,
-      reason: p.reason || p.error || 'Database insert failed.',
-    })),
-    note: 'Existing project rows were deleted and replaced by the uploaded Excel. Existing assignments were also deleted because they referenced old project IDs. Use Bulk Assign Assignment to restore assignments from backup Excel.',
+    updated,
+    deleted_unassigned: deletedUnassigned,
+    retained_assigned: retainedAssigned,
+    excluded,
+    failed,
+    import_behavior: 'Only the selected fiscal-year partition is refreshed. Matching projects are updated in place so project IDs and assignment relationships remain stable. Unmatched assigned projects are retained; unmatched unassigned projects in the selected partition are removed.',
+    note: 'No assignments were deleted. Projects outside the selected fiscal-year partition were not changed.',
   });
 });
 
@@ -175,7 +311,10 @@ router.put('/api/projects/:id', (req, res) => {
       params.push(f === 'fiscal_period' ? (normalizeFiscalPeriod(req.body[f]) || null) : req.body[f]);
     }
   }
-  if (updates.length) { params.push(id); db.prepare(`UPDATE projects SET ${updates.join(',')} WHERE id=?`).run(...params); }
+  if (updates.length) {
+    params.push(id);
+    db.prepare(`UPDATE projects SET ${updates.join(',')} WHERE id=?`).run(...params);
+  }
   res.json(db.prepare('SELECT * FROM projects WHERE id=?').get(id));
 });
 

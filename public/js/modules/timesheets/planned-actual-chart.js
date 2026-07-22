@@ -3,6 +3,30 @@
 let plannedActualFlowResizeTimer = null;
 let plannedActualProjectInputTimer = null;
 let plannedActualProjectMenuCloseTimer = null;
+let plannedActualSelectedResourceKey = '';
+
+function setPlannedActualSelectedResource(resourceKey = '') {
+  plannedActualSelectedResourceKey = String(resourceKey || '');
+  applyPlannedActualResourceSelection();
+}
+
+function applyPlannedActualResourceSelection() {
+  const layout = document.getElementById('plannedActualFlowLayout');
+  if (!layout) return;
+
+  const selectedKey = plannedActualSelectedResourceKey;
+  layout.classList.toggle('has-resource-selection', Boolean(selectedKey));
+
+  layout.querySelectorAll('.planned-actual-person').forEach(card => {
+    const selected = Boolean(selectedKey) && card.dataset.resourceKey === selectedKey;
+    card.classList.toggle('is-selected-resource', selected);
+    card.setAttribute('aria-pressed', selected ? 'true' : 'false');
+  });
+
+  layout.querySelectorAll('.planned-actual-flow-link').forEach(path => {
+    path.classList.toggle('is-selected-resource', Boolean(selectedKey) && path.dataset.resourceKey === selectedKey);
+  });
+}
 
 function normalizePlannedActualProjectInput(value) {
   return String(value || '')
@@ -232,7 +256,9 @@ function renderPlannedActualSummary(data, project) {
     const monthText = project.selectedMonthKey ? ` · ${project.selectedMonthLabel}` : ' · All Months';
     const actualSource = project.actualMatchMode === 'work-type' && project.workType
       ? `actual hours use Time Sheet Work Type “${project.workType}”`
-      : 'actual hours use matching Time Sheet project names';
+      : project.actualMatchMode === 'aggregate-projects'
+        ? `the view aggregates ${project.includedProjectCount || 0} projects and matching Time Sheet project names while excluding Pre-Sale, Intrasourcing / Intrasource, Training Delivery and General Admin`
+        : 'actual hours use matching Time Sheet project names';
     note.textContent = `FY${data.fiscalYear + 1}${monthText}: planned hours and budget come from weekly Resource Assignments; ${actualSource}. Budgets use each matched resource’s saved designation rate.`;
   }
 }
@@ -280,6 +306,9 @@ function renderPlannedActualResourceCard(project, resource, mode, totalHours) {
       data-hours="${Number(resource.hours) || 0}"
       style="--resource-color:${color}"
       title="${esc(resource.name)} · ${esc(formatPlannedActualHours(resource.hours))} · ${esc(deltaText)}"
+      role="button"
+      tabindex="0"
+      aria-pressed="false"
     >
       <div class="planned-actual-avatar">${esc(plannedActualInitials(resource.name))}</div>
       <div class="planned-actual-person-copy">
@@ -388,7 +417,10 @@ function renderPlannedActualFlow(project) {
     </div>
   `;
 
-  requestAnimationFrame(drawPlannedActualFlowLinks);
+  requestAnimationFrame(() => {
+    drawPlannedActualFlowLinks();
+    applyPlannedActualResourceSelection();
+  });
 }
 
 function plannedActualSvgPath(startX, startY, endX, endY) {
@@ -459,6 +491,8 @@ function drawPlannedActualFlowLinks() {
       const strokeWidth = Math.max(1.5, Math.min(9, 1.5 + (share * 13)));
       const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
 
+      path.classList.add('planned-actual-flow-link');
+      path.dataset.resourceKey = card.dataset.resourceKey || '';
       path.setAttribute('d', plannedActualSvgPath(startX, startY, endX, endY));
       path.setAttribute('fill', 'none');
       path.setAttribute('stroke', plannedActualColorWithAlpha(color, 0.38));
@@ -467,6 +501,8 @@ function drawPlannedActualFlowLinks() {
       svg.appendChild(path);
     });
   }
+
+  applyPlannedActualResourceSelection();
 }
 
 function renderPlannedActualMonthlyChart(project) {
@@ -579,6 +615,7 @@ function renderPlannedActualMonthlyChart(project) {
 }
 
 function renderPlannedActualEffortChart() {
+  plannedActualSelectedResourceKey = '';
   const empty = document.getElementById('plannedActualEmpty');
   const content = document.getElementById('plannedActualContent');
   const trendPanel = document.getElementById('plannedActualTrendPanel');
@@ -741,6 +778,39 @@ function initPlannedActualEffortEvents() {
   if (productSelect && productSelect.dataset.bound !== '1') {
     productSelect.dataset.bound = '1';
     productSelect.addEventListener('change', renderPlannedActualEffortChart);
+  }
+
+
+  const flowRoot = document.getElementById('plannedActualFlow');
+  if (flowRoot && flowRoot.dataset.resourceSelectionBound !== '1') {
+    flowRoot.dataset.resourceSelectionBound = '1';
+
+    const activateResource = card => {
+      const resourceKey = card?.dataset.resourceKey || '';
+      setPlannedActualSelectedResource(
+        plannedActualSelectedResourceKey === resourceKey ? '' : resourceKey,
+      );
+    };
+
+    flowRoot.addEventListener('click', event => {
+      const card = event.target.closest('.planned-actual-person');
+      if (card) {
+        event.stopPropagation();
+        activateResource(card);
+        return;
+      }
+
+      if (event.target.closest('#plannedActualFlowLayout')) {
+        setPlannedActualSelectedResource('');
+      }
+    });
+
+    flowRoot.addEventListener('keydown', event => {
+      const card = event.target.closest('.planned-actual-person');
+      if (!card || !['Enter', ' '].includes(event.key)) return;
+      event.preventDefault();
+      activateResource(card);
+    });
   }
 
   if (document.documentElement.dataset.plannedActualResizeBound !== '1') {

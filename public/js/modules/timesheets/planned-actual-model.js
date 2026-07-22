@@ -575,6 +575,124 @@ function addPlannedActualProductActual(scope, parsedMonth, resourceKey, resource
   scope.actualBudget += budget;
 }
 
+
+const PLANNED_ACTUAL_ALL_PROJECTS_KEY = 'aggregate:all-projects';
+
+function isPlannedActualAllProjectsExcluded(project) {
+  const classification = normalizePlannedActualText([
+    project?.key,
+    project?.label,
+    project?.project?.name,
+    project?.workType,
+  ].filter(Boolean).join(' '));
+
+  return (
+    /\bpre sales?\b/.test(classification) ||
+    /\bintrasourc/.test(classification) ||
+    /\btraining delivery\b/.test(classification) ||
+    /\bgeneral admin\b/.test(classification)
+  );
+}
+
+function mergePlannedActualResourceMap(target, source) {
+  for (const resource of (source || new Map()).values()) {
+    addPlannedActualHours(
+      target,
+      resource.key,
+      resource.name,
+      resource.hours,
+    );
+  }
+}
+
+function buildPlannedActualAllProjects(projects, months) {
+  const includedProjects = (projects || []).filter(project => (
+    !isPlannedActualAllProjectsExcluded(project)
+  ));
+  const plannedByResource = new Map();
+  const actualByResource = new Map();
+
+  for (const project of includedProjects) {
+    mergePlannedActualResourceMap(plannedByResource, project.plannedByResource);
+    mergePlannedActualResourceMap(actualByResource, project.actualByResource);
+  }
+
+  const plannedHours = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.plannedHours) || 0),
+    0,
+  );
+  const actualHours = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.actualHours) || 0),
+    0,
+  );
+  const plannedBudget = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.plannedBudget) || 0),
+    0,
+  );
+  const actualBudget = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.actualBudget) || 0),
+    0,
+  );
+
+  const annualScope = buildPlannedActualScope(
+    plannedByResource,
+    actualByResource,
+    plannedHours,
+    actualHours,
+    plannedBudget,
+    actualBudget,
+  );
+
+  const monthly = (months || []).map(month => {
+    const monthPlannedByResource = new Map();
+    const monthActualByResource = new Map();
+    let monthPlannedHours = 0;
+    let monthActualHours = 0;
+    let monthPlannedBudget = 0;
+    let monthActualBudget = 0;
+
+    for (const project of includedProjects) {
+      const projectMonth = (project.monthly || []).find(item => item.key === month.key);
+      if (!projectMonth) continue;
+      mergePlannedActualResourceMap(monthPlannedByResource, projectMonth.plannedByResource);
+      mergePlannedActualResourceMap(monthActualByResource, projectMonth.actualByResource);
+      monthPlannedHours += Number(projectMonth.plannedHours) || 0;
+      monthActualHours += Number(projectMonth.actualHours) || 0;
+      monthPlannedBudget += Number(projectMonth.plannedBudget) || 0;
+      monthActualBudget += Number(projectMonth.actualBudget) || 0;
+    }
+
+    return {
+      ...month,
+      ...buildPlannedActualScope(
+        monthPlannedByResource,
+        monthActualByResource,
+        monthPlannedHours,
+        monthActualHours,
+        monthPlannedBudget,
+        monthActualBudget,
+      ),
+      planned: +monthPlannedHours.toFixed(2),
+      actual: +monthActualHours.toFixed(2),
+      variance: +(monthActualHours - monthPlannedHours).toFixed(2),
+    };
+  });
+
+  return {
+    key: PLANNED_ACTUAL_ALL_PROJECTS_KEY,
+    project: null,
+    label: 'All Projects',
+    actualMatchMode: 'aggregate-projects',
+    workType: '',
+    includedProjectCount: includedProjects.length,
+    includedProjectKeys: includedProjects.map(project => project.key),
+    ...annualScope,
+    monthly,
+    preSaleProducts: [],
+    preSaleProductAmount: 0,
+  };
+}
+
 function buildPlannedActualEffortData() {
   // Plan-to-Execution remains on the dashboard's established FY27 scope.
   const fiscalYear = S.fiscalYear;
@@ -846,15 +964,18 @@ function buildPlannedActualEffortData() {
     a.label.localeCompare(b.label)
   ));
 
+  const months = fiscalMonthList.map(({ y, m, label }) => ({
+    key: plannedActualMonthKey(y, m),
+    label,
+    year: y,
+    month: m,
+  }));
+  const allProjects = buildPlannedActualAllProjects(projects, months);
+
   return {
     fiscalYear,
-    months: fiscalMonthList.map(({ y, m, label }) => ({
-      key: plannedActualMonthKey(y, m),
-      label,
-      year: y,
-      month: m,
-    })),
-    projects,
+    months,
+    projects: [allProjects, ...projects],
     plannedHours: +projects.reduce((sum, project) => sum + project.plannedHours, 0).toFixed(2),
     actualHours: +projects.reduce((sum, project) => sum + project.actualHours, 0).toFixed(2),
     plannedBudget: +projects.reduce((sum, project) => sum + project.plannedBudget, 0).toFixed(2),

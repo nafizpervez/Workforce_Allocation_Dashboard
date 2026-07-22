@@ -201,6 +201,43 @@
   gap: 0.48rem;
 }
 
+
+.planned-actual-person {
+  cursor: pointer;
+  transition: opacity 160ms ease, transform 160ms ease, box-shadow 160ms ease, border-color 160ms ease;
+}
+
+.planned-actual-person:focus-visible {
+  outline: 3px solid rgba(37, 99, 235, 0.28);
+  outline-offset: 2px;
+}
+
+.planned-actual-flow-layout.has-resource-selection .planned-actual-person:not(.is-selected-resource) {
+  opacity: 0.28;
+}
+
+.planned-actual-person.is-selected-resource {
+  z-index: 2;
+  transform: translateY(-1px) scale(1.012);
+  border-color: var(--resource-color, #2563eb);
+  box-shadow: 0 0 0 3px color-mix(in srgb, var(--resource-color, #2563eb) 20%, transparent),
+    0 10px 24px rgba(15, 23, 42, 0.16);
+  opacity: 1;
+}
+
+.planned-actual-flow-link {
+  transition: opacity 160ms ease, stroke-width 160ms ease;
+}
+
+.planned-actual-flow-layout.has-resource-selection .planned-actual-flow-link:not(.is-selected-resource) {
+  opacity: 0.08;
+}
+
+.planned-actual-flow-link.is-selected-resource {
+  opacity: 1;
+  filter: drop-shadow(0 0 3px rgba(15, 23, 42, 0.24));
+}
+
 .planned-actual-person {
   position: relative;
   display: grid;

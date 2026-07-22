@@ -44,11 +44,11 @@ function normalizeProjectImportNumber(value) {
 function parseProjectExcelRows(sheetRows) {
   return (sheetRows || []).map((row, idx) => {
     const code = String(getProjectImportCellValue(row, [
-      'Opportunity Number', 'Opportunity No', 'Opportunity #', 'SA Number', 'SA No', 'Code'
+      'Opportunity Number', 'Opportunity No', 'Opportunity #', 'SA Number', 'SA No', 'Code',
     ]) || '').trim().toUpperCase();
 
     const name = String(getProjectImportCellValue(row, [
-      'Opportunity Name', 'Project Name', 'Name'
+      'Opportunity Name', 'Project Name', 'Name',
     ]) || '').trim();
 
     return {
@@ -64,7 +64,7 @@ function parseProjectExcelRows(sheetRows) {
         'Product Description',
         'Product Desc',
         'Product Detail',
-        'Item Description'
+        'Item Description',
       ]) || '').trim(),
       stage: String(getProjectImportCellValue(row, ['Stage']) || '').trim(),
       fiscal_period: String(getProjectImportCellValue(row, ['Fiscal Period', 'Fiscal Year', 'Fiscal Quarter']) || '').trim(),
@@ -76,80 +76,91 @@ function parseProjectExcelRows(sheetRows) {
   }).filter(r => r.code && r.name);
 }
 
+function projectImportModeLabel(mode) {
+  return mode === 'historical' ? 'Historical Projects' : 'Forecasted Projects';
+}
+
 function openProjectImportResultModal(result, fileName) {
   const inserted = result.inserted || [];
-  const skipped = result.skipped_existing || [];
+  const updated = result.updated || [];
+  const deleted = result.deleted_unassigned || [];
+  const retained = result.retained_assigned || [];
+  const excluded = result.excluded || [];
   const failed = result.failed || [];
-  const isReplaceMode = result.mode === 'replace_all_projects';
 
-  const row = (p, badgeCls, badgeText) => `
+  const row = (project, badgeCls, badgeText) => `
     <div class="flex items-start justify-between gap-3 py-2 border-b border-gray-100 last:border-0">
       <div class="min-w-0">
-        <div class="text-xs font-bold text-blue-600 mono">${esc(p.code || '—')}</div>
-        <div class="text-sm font-semibold text-gray-900 truncate">${esc(p.name || '—')}</div>
-        ${(p.product_name || p.product_amount !== undefined) ? `<div class="text-xs text-gray-500 mt-0.5 truncate">${esc(p.product_name || '—')} · ${Number(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD${p.fiscal_period ? ' · ' + esc(p.fiscal_period) : ''}</div>` : ''}
-        ${p.reason ? `<div class="text-xs text-gray-500 mt-0.5">${esc(p.reason)}</div>` : ''}
-        ${p.error ? `<div class="text-xs text-red-500 mt-0.5">${esc(p.error)}</div>` : ''}
+        <div class="text-xs font-bold text-blue-600 mono">${esc(project.code || '—')}</div>
+        <div class="text-sm font-semibold text-gray-900 truncate">${esc(project.name || '—')}</div>
+        ${(project.product_name || project.product_amount !== undefined) ? `<div class="text-xs text-gray-500 mt-0.5 truncate">${esc(project.product_name || '—')} · ${Number(project.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })} USD${project.fiscal_period ? ' · ' + esc(project.fiscal_period) : ''}</div>` : ''}
+        ${project.previous_code && project.previous_code !== project.code ? `<div class="text-xs text-indigo-600 mt-0.5">Opportunity Number updated from ${esc(project.previous_code)}</div>` : ''}
+        ${project.assignment_count ? `<div class="text-xs text-amber-700 mt-0.5">${project.assignment_count} assignment${project.assignment_count === 1 ? '' : 's'} preserved</div>` : ''}
+        ${project.reason ? `<div class="text-xs text-gray-500 mt-0.5">${esc(project.reason)}</div>` : ''}
+        ${project.error ? `<div class="text-xs text-red-500 mt-0.5">${esc(project.error)}</div>` : ''}
       </div>
       <span class="px-2 py-0.5 rounded-full text-xs font-semibold ${badgeCls} flex-shrink-0">${badgeText}</span>
     </div>`;
 
+  const list = (title, rows, badgeCls, badgeText, emptyText) => `
+    <section>
+      <div class="text-sm font-semibold text-gray-700 mb-2">${esc(title)}</div>
+      <div class="rounded-xl border border-gray-100 bg-white max-h-64 overflow-y-auto nice-scroll px-3">
+        ${rows.length ? rows.map(project => row(project, badgeCls, badgeText)).join('') : `<p class="text-sm text-gray-400 text-center py-6">${esc(emptyText)}</p>`}
+      </div>
+    </section>`;
+
   openModal(
     mHdr(
-      isReplaceMode ? 'Project Excel Replacement Completed' : 'Project Excel Import Completed',
-      `${fileName || 'Uploaded Excel'} · ${(result.project_rows_ready ?? result.normalized_projects) || 0} valid project row${(((result.project_rows_ready ?? result.normalized_projects) || 0) === 1) ? '' : 's'} inserted as provided; duplicates kept`
+      `${projectImportModeLabel(result.import_mode)} Import Completed`,
+      `${fileName || 'Uploaded Excel'} · ${result.partition_label || ''}`,
     )
-    + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
-        ${isReplaceMode ? `
-          <div class="rounded-xl bg-amber-50 border border-amber-100 p-3 mb-5 text-xs text-amber-800 leading-relaxed">
-            Existing project data was fully replaced from this Excel. Existing assignment rows were deleted because they referenced old project IDs. Use <span class="font-semibold">Bulk Assign Assignment</span> to restore assignment data from your assignment backup Excel. Duplicate project rows from Excel are kept.
-          </div>` : ''}
+    + `<div class="p-6 overflow-y-auto nice-scroll" style="max-height:68vh">
+        <div class="rounded-xl bg-blue-50 border border-blue-100 p-3 mb-5 text-xs text-blue-800 leading-relaxed">
+          Only the selected fiscal-year partition was refreshed. Matching projects were updated in place, so project IDs and assignment relationships were preserved. No assignments were deleted.
+        </div>
 
-        <div class="grid grid-cols-4 gap-3 mb-5">
-          <div class="rounded-xl bg-slate-50 border border-slate-100 p-4 text-center">
-            <div class="text-2xl font-bold text-slate-700">${result.deleted_project_count || 0}</div>
-            <div class="text-xs text-slate-500 mt-1">Deleted Projects</div>
-          </div>
-          <div class="rounded-xl bg-orange-50 border border-orange-100 p-4 text-center">
-            <div class="text-2xl font-bold text-orange-700">${result.deleted_assignment_count || 0}</div>
-            <div class="text-xs text-orange-600 mt-1">Deleted Assignments</div>
-          </div>
+        <div class="grid grid-cols-2 md:grid-cols-5 gap-3 mb-5">
           <div class="rounded-xl bg-emerald-50 border border-emerald-100 p-4 text-center">
             <div class="text-2xl font-bold text-emerald-700">${result.inserted_count || 0}</div>
-            <div class="text-xs text-emerald-700 mt-1">Inserted Projects</div>
+            <div class="text-xs text-emerald-700 mt-1">Inserted</div>
           </div>
-          <div class="rounded-xl bg-red-50 border border-red-100 p-4 text-center">
-            <div class="text-2xl font-bold text-red-700">${result.failed_count || 0}</div>
-            <div class="text-xs text-red-600 mt-1">Failed</div>
+          <div class="rounded-xl bg-indigo-50 border border-indigo-100 p-4 text-center">
+            <div class="text-2xl font-bold text-indigo-700">${result.updated_existing_count || 0}</div>
+            <div class="text-xs text-indigo-700 mt-1">Updated</div>
+          </div>
+          <div class="rounded-xl bg-slate-50 border border-slate-100 p-4 text-center">
+            <div class="text-2xl font-bold text-slate-700">${result.deleted_project_count || 0}</div>
+            <div class="text-xs text-slate-600 mt-1">Removed Unassigned</div>
+          </div>
+          <div class="rounded-xl bg-amber-50 border border-amber-100 p-4 text-center">
+            <div class="text-2xl font-bold text-amber-700">${result.retained_assigned_count || 0}</div>
+            <div class="text-xs text-amber-700 mt-1">Retained Assigned</div>
+          </div>
+          <div class="rounded-xl bg-gray-50 border border-gray-100 p-4 text-center">
+            <div class="text-2xl font-bold text-gray-700">${result.excluded_count || 0}</div>
+            <div class="text-xs text-gray-600 mt-1">Outside Partition</div>
           </div>
         </div>
 
-        <div class="grid grid-cols-2 gap-4">
-          <div>
-            <div class="text-sm font-semibold text-gray-700 mb-2">Inserted / Replaced Projects</div>
-            <div class="rounded-xl border border-gray-100 bg-white max-h-72 overflow-y-auto nice-scroll px-3">
-              ${inserted.length ? inserted.map(p => row(p, 'bg-emerald-100 text-emerald-700', 'Inserted')).join('') : '<p class="text-sm text-gray-400 text-center py-6">No projects inserted.</p>'}
-            </div>
-          </div>
-          <div>
-            <div class="text-sm font-semibold text-gray-700 mb-2">Failed Rows</div>
-            <div class="rounded-xl border border-gray-100 bg-white max-h-72 overflow-y-auto nice-scroll px-3">
-              
-              ${failed.map(p => row(p, 'bg-red-100 text-red-700', 'Failed')).join('')}
-              ${!failed.length ? '<p class="text-sm text-gray-400 text-center py-6">No failed rows.</p>' : ''}
-            </div>
-          </div>
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          ${list('Inserted Projects', inserted, 'bg-emerald-100 text-emerald-700', 'Inserted', 'No projects inserted.')}
+          ${list('Updated Existing Projects', updated, 'bg-indigo-100 text-indigo-700', 'Updated', 'No existing projects updated.')}
+          ${list('Retained Assigned Projects', retained, 'bg-amber-100 text-amber-700', 'Retained', 'No unmatched assigned projects required retention.')}
+          ${list('Removed Unassigned Projects', deleted, 'bg-slate-100 text-slate-700', 'Removed', 'No unmatched unassigned projects removed.')}
+          ${list('Rows Outside Selected Partition', excluded, 'bg-gray-100 text-gray-700', 'Skipped', 'No rows were outside the selected partition.')}
+          ${list('Failed Rows', failed, 'bg-red-100 text-red-700', 'Failed', 'No failed rows.')}
         </div>
       </div>
-      <div class="px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-2xl">
+      <div class="modal-footer px-6 py-4 border-t border-gray-100 flex justify-end gap-2 bg-gray-50 rounded-b-2xl">
         <button onclick="openProjectsModal()" class="btn-blue">View Projects</button>
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>`,
-    'max-w-4xl'
+    'max-w-5xl',
   );
 }
 
-async function handleProjectExcelUpload(file) {
+async function handleProjectExcelUpload(file, mode = 'forecast') {
   if (!file) return;
 
   if (typeof XLSX === 'undefined') {
@@ -173,17 +184,14 @@ async function handleProjectExcelUpload(file) {
       return;
     }
 
-    const result = await api('POST', '/api/projects/import', { rows });
-
+    const result = await api('POST', '/api/projects/import', { rows, mode });
     await loadAll();
 
-    toast(`Replaced project list with ${result.inserted_count || 0} project${(result.inserted_count || 0) === 1 ? '' : 's'}`);
+    const changedCount = (result.inserted_count || 0) + (result.updated_existing_count || 0);
+    toast(`${projectImportModeLabel(mode)} import updated ${changedCount} project${changedCount === 1 ? '' : 's'}`);
     openProjectImportResultModal(result, file.name);
-  } catch (e) {
-    console.error(e);
-    toast('Failed to import projects from Excel', 'error');
+  } catch (error) {
+    console.error(error);
+    toast(error.message || 'Failed to import projects from Excel', 'error');
   }
 }
-
-
-

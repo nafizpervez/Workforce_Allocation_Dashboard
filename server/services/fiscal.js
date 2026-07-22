@@ -12,6 +12,13 @@ function fiscalMonths(fiscalYear) {
   ];
 }
 
+
+function getCurrentFiscalYearEnd(date = new Date()) {
+  const year = date.getFullYear();
+  const month = date.getMonth() + 1;
+  return month >= 4 ? year + 1 : year;
+}
+
 function getRunningProjectCutoffDate() {
   return `${new Date().getFullYear() - 2}-01-01`;
 }
@@ -68,6 +75,7 @@ module.exports = {
   fiscalParams,
   fiscalSortValue,
   fyLabel,
+  getCurrentFiscalYearEnd,
   getFiscalYear,
   getFiscalYearFromPeriod,
   getProjectFiscalYear,
