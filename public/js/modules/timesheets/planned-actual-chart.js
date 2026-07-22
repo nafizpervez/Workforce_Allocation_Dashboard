@@ -12,7 +12,15 @@ function normalizePlannedActualProjectInput(value) {
     .replace(/\s+/g, ' ');
 }
 
-function resolvePlannedActualProject(data, value) {
+function resolvePlannedActualProject(data, value, preferredKey = '') {
+  const normalizedKey = normalizePlannedActualProjectInput(preferredKey);
+  if (normalizedKey) {
+    const keyedProject = data.projects.find(project => (
+      normalizePlannedActualProjectInput(project.key) === normalizedKey
+    ));
+    if (keyedProject) return keyedProject;
+  }
+
   const normalized = normalizePlannedActualProjectInput(value);
   if (!normalized) return null;
 
@@ -24,7 +32,11 @@ function resolvePlannedActualProject(data, value) {
 
 function getPlannedActualSelection(data) {
   const input = document.getElementById('plannedActualProjectFilter');
-  const resolved = resolvePlannedActualProject(data, input?.value);
+  const resolved = resolvePlannedActualProject(
+    data,
+    input?.value,
+    input?.dataset.projectKey,
+  );
   return resolved || (!String(input?.value || '').trim() ? data.projects[0] || null : null);
 }
 
@@ -94,7 +106,7 @@ function populatePlannedActualProjectFilter(data) {
   if (!input) return;
 
   const current = input.value;
-  const resolved = resolvePlannedActualProject(data, current);
+  const resolved = resolvePlannedActualProject(data, current, input.dataset.projectKey);
 
   if (resolved) {
     input.value = resolved.label;
@@ -633,6 +645,7 @@ function initPlannedActualEffortEvents() {
     });
 
     projectInput.addEventListener('input', () => {
+      delete projectInput.dataset.projectKey;
       clearTimeout(plannedActualProjectInputTimer);
       openPlannedActualProjectMenu();
       plannedActualProjectInputTimer = setTimeout(() => {

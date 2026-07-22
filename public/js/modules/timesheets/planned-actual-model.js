@@ -11,9 +11,11 @@ const PLANNED_ACTUAL_RESOURCE_COLORS = [
 const PLANNED_ACTUAL_PROJECT_ALIASES = Object.freeze([
   Object.freeze({
     sourceNames: Object.freeze(['2023 JUPEM GDAS3-PR']),
-    targetCode: 'SA123456',
-    targetName: 'Esri Malaysia Intrasourcing',
-    fallbackTokens: Object.freeze(['jupem', 'intrasource']),
+    // Opportunity Numbers are editable. Resolve this historical Time Sheet
+    // name to the current project by stable name characteristics instead of
+    // pinning the relationship to a mutable project code.
+    targetNameTokens: Object.freeze(['esri', 'malaysia', 'intrasourc']),
+    fallbackLabel: '2023 JUPEM GDAS3-PR',
   }),
 ]);
 
@@ -206,41 +208,52 @@ function plannedActualProjectLabel(project) {
   return code && name ? `${code} — ${name}` : (name || code || 'Unnamed project');
 }
 
-function buildPlannedActualProjectResolver(projects) {
-  const records = (projects || []).map(project => {
-    const code = normalizePlannedActualText(project.code);
-    const name = normalizePlannedActualText(project.name);
-    const full = normalizePlannedActualText(plannedActualProjectLabel(project));
+function plannedActualProjectResolution(project) {
+  if (!project) return null;
 
-    return {
-      project,
-      key: `project:${project.id}`,
-      code,
-      name,
-      full,
-      label: plannedActualProjectLabel(project),
-    };
-  });
+  const code = normalizePlannedActualText(project.code);
+  const name = normalizePlannedActualText(project.name);
+  const label = plannedActualProjectLabel(project);
+
+  return {
+    project,
+    key: `project:${project.id}`,
+    code,
+    name,
+    full: normalizePlannedActualText(label),
+    label,
+  };
+}
+
+function buildPlannedActualProjectResolver(projects) {
+  const records = (projects || []).map(plannedActualProjectResolution).filter(Boolean);
 
   const aliasTargets = PLANNED_ACTUAL_PROJECT_ALIASES.map(alias => {
-    const targetCode = normalizePlannedActualText(alias.targetCode);
-    const targetName = normalizePlannedActualText(alias.targetName);
-    const canonicalLabel = `${alias.targetCode} — ${alias.targetName}`;
-    const exactTarget = records.find(record => (
-      (targetCode && record.code === targetCode) ||
-      (targetName && record.name === targetName)
-    ));
-    const fallbackCandidates = records.filter(record =>
-      alias.fallbackTokens.every(token => record.full.includes(normalizePlannedActualText(token))),
-    );
+    const targetNameTokens = (alias.targetNameTokens || [])
+      .map(normalizePlannedActualText)
+      .filter(Boolean);
+    const sourceKeys = new Set((alias.sourceNames || []).map(normalizePlannedActualText));
+    const fallbackLabel = String(
+      alias.fallbackLabel || alias.sourceNames?.[0] || 'Unspecified project',
+    ).trim();
+    const fallbackKey = normalizePlannedActualText(alias.sourceNames?.[0] || fallbackLabel);
     const fiscalEnd = Number(S.fiscalYear) + 1;
     const fiscalShort = String(fiscalEnd).slice(-2);
-    const fallbackTarget = exactTarget || fallbackCandidates.sort((a, b) => {
+    const candidates = targetNameTokens.length
+      ? records.filter(record => targetNameTokens.every(token => (
+          record.name.includes(token) || record.full.includes(token)
+        )))
+      : [];
+    const target = candidates.sort((a, b) => {
       const score = record => {
         let value = 0;
-        if (record.full.includes(`fy${fiscalShort}`)) value += 1000;
-        if (record.full.includes(String(fiscalEnd))) value += 500;
-        if (record.full.includes(String(S.fiscalYear))) value += 250;
+        for (const token of targetNameTokens) {
+          if (record.name.includes(token)) value += 100;
+          else if (record.full.includes(token)) value += 50;
+        }
+        if (record.full.includes(`fy${fiscalShort}`)) value += 20;
+        if (record.full.includes(String(fiscalEnd))) value += 10;
+        if (record.full.includes(String(S.fiscalYear))) value += 5;
         value += Math.max(0, Number(record.project?.id) || 0) / 100000;
         return value;
       };
@@ -249,23 +262,17 @@ function buildPlannedActualProjectResolver(projects) {
 
     return {
       alias,
-      sourceKeys: new Set(alias.sourceNames.map(normalizePlannedActualText)),
-      canonicalLabel,
-      target: fallbackTarget || {
+      sourceKeys,
+      target: target || {
         project: null,
-        key: `alias:${targetCode || targetName}`,
-        code: targetCode,
-        name: targetName,
-        full: normalizePlannedActualText(canonicalLabel),
-        label: canonicalLabel,
+        key: `alias:${fallbackKey}`,
+        code: '',
+        name: normalizePlannedActualText(fallbackLabel),
+        full: normalizePlannedActualText(fallbackLabel),
+        label: fallbackLabel,
       },
     };
   });
-
-  function canonicalizeRecord(record) {
-    const aliasTarget = aliasTargets.find(item => item.target.key === record.key);
-    return aliasTarget ? { ...record, label: aliasTarget.canonicalLabel } : record;
-  }
 
   const exact = new Map();
   for (const record of records) {
@@ -281,23 +288,23 @@ function buildPlannedActualProjectResolver(projects) {
     if (!normalized) return null;
 
     const alias = aliasTargets.find(item => item.sourceKeys.has(normalized));
-    if (alias) return { ...alias.target, label: alias.canonicalLabel };
+    if (alias) return alias.target;
 
-    if (exact.has(normalized)) return canonicalizeRecord(exact.get(normalized));
+    if (exact.has(normalized)) return exact.get(normalized);
 
     const codeMatch = records.find(record => (
       record.code &&
       record.code.length >= 4 &&
       (` ${normalized} `).includes(` ${record.code} `)
     ));
-    if (codeMatch) return canonicalizeRecord(codeMatch);
+    if (codeMatch) return codeMatch;
 
     const nameMatch = records.find(record => (
       record.name &&
       record.name.length >= 6 &&
       (normalized.includes(record.name) || record.name.includes(normalized))
     ));
-    if (nameMatch) return canonicalizeRecord(nameMatch);
+    if (nameMatch) return nameMatch;
 
     return {
       project: null,
@@ -598,9 +605,10 @@ function buildPlannedActualEffortData() {
     const resolvedProject = workTypeBucket
       ? plannedActualWorkTypeResolution(workTypeBucket)
       : (
+        plannedActualProjectResolution(assignmentProject) ||
         resolveProject(
           assignment.project_name || `${assignment.project_code || ''} ${assignment.project_name || ''}`,
-        ) || resolveProject(plannedActualProjectLabel(assignmentProject))
+        )
       );
     if (!resolvedProject) continue;
     if (workTypeBucket) activeWorkTypeBucketKeys.add(workTypeBucket.key);
