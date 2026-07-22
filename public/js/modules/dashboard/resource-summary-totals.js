@@ -82,11 +82,19 @@ function getMatrixTotalsViewData(employees, months) {
         getEmployeeWeekAllocation(employee.id, month, week, unavailableSlots),
       );
 
+      const plannedRevenue = getMatrixWeekPlannedRevenue(
+        employees,
+        month,
+        week,
+        unavailableSlots,
+      );
+
       return {
         month,
         week,
         value: averageMatrixValues(employeeAllocations),
         availableResourceCount: availableEmployees.length,
+        plannedRevenue,
       };
     }),
   );
@@ -149,7 +157,10 @@ function renderMatrixTotalsRow(employees, months) {
   const weeklyCells = totals.weeklyAllocation
     .map(item => {
       const availableLabel = `${item.availableResourceCount} available resource${item.availableResourceCount === 1 ? '' : 's'}`;
-      const title = `Average total allocation for ${item.month.label} W${item.week} across ${availableLabel}: ${item.value.toFixed(1)}%. Resources assigned to N/A in this week are excluded from both the numerator and denominator.`;
+      const unpricedNote = item.plannedRevenue.unpricedHours > 0
+        ? ` ${item.plannedRevenue.unpricedHours.toFixed(1)} eligible hours are unpriced because an hourly rate is not configured.`
+        : '';
+      const title = `Average total allocation for ${item.month.label} W${item.week} across ${availableLabel}: ${item.value.toFixed(1)}%. Planned revenue: ${formatExactRevenueValue(item.plannedRevenue.amount)}. Includes Intrasourcing and Local only.${unpricedNote} Resources assigned to N/A in this week are excluded from both the numerator and denominator.`;
 
       return `
         <td
@@ -158,7 +169,10 @@ function renderMatrixTotalsRow(employees, months) {
           data-total-month="${item.month.m}"
           data-total-week="${item.week}"
           title="${esc(title)}"
-        >${formatAllocationViewValue(item.value)}</td>
+        >
+          <span class="matrix-total-week-allocation">${formatAllocationViewValue(item.value)}</span>
+          <span class="matrix-total-week-revenue">${formatRevenueViewValue(item.plannedRevenue.amount)}</span>
+        </td>
       `;
     })
     .join('');

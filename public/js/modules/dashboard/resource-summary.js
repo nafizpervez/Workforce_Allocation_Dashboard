@@ -101,7 +101,7 @@ function getFilteredMatrixEmployees() {
   return employees;
 }
 
-function renderMatrixHeader(months) {
+function renderMatrixHeader(months, employees, unavailableSlots) {
   let header = '<tr class="months">';
 
   header += `
@@ -123,11 +123,21 @@ function renderMatrixHeader(months) {
   `;
 
   months.forEach((month, index) => {
+    const revenue = getMatrixMonthPlannedRevenue(employees, month, unavailableSlots);
+    const unpricedNote = revenue.unpricedHours > 0
+      ? ` · ${revenue.unpricedHours.toLocaleString('en-US', { maximumFractionDigits: 1 })}h unpriced`
+      : '';
+    const title = `${month.label} planned revenue: ${formatExactRevenueValue(revenue.amount)}${unpricedNote}. Includes Intrasourcing and Local only.`;
+
     header += `
       <th
         colspan="4"
-        class="border-b border-gray-200 px-2 py-3 text-center text-xs font-semibold text-gray-700 bg-gray-50 ${index < months.length - 1 ? 'border-r border-gray-200' : ''}"
-      >${esc(month.label)}</th>
+        class="matrix-month-heading border-b border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-700 bg-gray-50 ${index < months.length - 1 ? 'border-r border-gray-200' : ''}"
+        title="${esc(title)}"
+      >
+        <span class="matrix-month-label">${esc(month.label)}</span>
+        <span class="matrix-month-revenue">${formatRevenueViewValue(revenue.amount)}</span>
+      </th>
     `;
   });
 
@@ -212,7 +222,7 @@ function renderResourceSummaryCells(employee) {
   return allocationCells + revenueCells;
 }
 
-function renderAssignmentCells(employee, months) {
+function renderAssignmentCells(employee, months, unavailableSlots) {
   let cells = '';
 
   months.forEach(month => {
@@ -237,7 +247,16 @@ function renderAssignmentCells(employee, months) {
         const project = S.projects.find(item => item.id === assignment.project_id) || {};
         const customer = assignment.account_name || project.account_name || project.client || '—';
         const product = assignment.product_name || project.product_name || '—';
-        const title = `${assignment.project_code || project.code || ''} — ${assignment.project_name || project.name || ''}\nCustomer Name: ${customer}\nProduct Name: ${product}`;
+        const revenue = getMatrixAssignmentPlannedRevenue(employee, assignment, unavailableSlots);
+        const revenueText = revenue.hasRate
+          ? formatRevenueViewValue(revenue.amount)
+          : 'Unpriced';
+        const revenueDetail = revenue.eligible
+          ? (revenue.hasRate
+            ? `${revenue.hours.toFixed(2)}h × ${formatHourlyRateValue(revenue.rate)} = ${formatExactRevenueValue(revenue.amount)}`
+            : `${revenue.hours.toFixed(2)}h · hourly rate not configured`)
+          : 'Excluded from planned revenue';
+        const title = `${assignment.project_code || project.code || ''} — ${assignment.project_name || project.name || ''}\nCustomer Name: ${customer}\nProduct Name: ${product}\nPlanned Revenue: ${revenueDetail}\nOnly Intrasourcing and Local are counted.`;
         const displayName = shortCustomerName(customer) || assignment.project_code;
 
         cells += `
@@ -255,7 +274,10 @@ function renderAssignmentCells(employee, months) {
           >
             <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:4px;min-width:0;">
               <span class="chip-code" style="color:${assignment.project_color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-size:11px;">${esc(displayName)}</span>
-              <span class="chip-pct" style="color:#6b7280;white-space:nowrap;flex-shrink:0;font-size:11px;">${assignment.percentage}%</span>
+              <span class="chip-values">
+                <span class="chip-pct">${assignment.percentage}%</span>
+                <span class="chip-revenue ${revenue.eligible ? '' : 'is-excluded'}">${esc(revenueText)}</span>
+              </span>
             </div>
             <span class="chip-del" data-action="delete-assign" data-id="${assignment.id}">×</span>
           </div>
@@ -273,8 +295,9 @@ function renderMatrix() {
   const table = document.getElementById('matrixTable');
   const months = fiscalMonths(S.fiscalYear);
   const employees = getFilteredMatrixEmployees();
+  const unavailableSlots = getUnavailableAssignmentSlotSet(S.matrixAssignments);
 
-  table.querySelector('thead').innerHTML = renderMatrixHeader(months);
+  table.querySelector('thead').innerHTML = renderMatrixHeader(months, employees, unavailableSlots);
 
   const rows = employees.map((employee, index) => {
     const rowClass = index % 2 === 0 ? 'row-even' : 'row-odd';
@@ -297,7 +320,7 @@ function renderMatrix() {
           </button>
         </td>
         ${renderResourceSummaryCells(employee)}
-        ${renderAssignmentCells(employee, months)}
+        ${renderAssignmentCells(employee, months, unavailableSlots)}
       </tr>
     `;
   });

@@ -249,3 +249,46 @@ tr.matrix-row:hover td.cell {
     --name-w: 190px;
   }
 }
+
+.matrix-month-heading {
+  min-height: var(--matrix-month-header-h);
+}
+
+.matrix-month-heading .matrix-month-label,
+.matrix-month-heading .matrix-month-revenue {
+  display: block;
+  line-height: 1.2;
+}
+
+.matrix-month-heading .matrix-month-revenue {
+  margin-top: 3px;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.matrix-month-heading .matrix-month-label,
+.matrix-month-heading .matrix-month-revenue {
+  display: block;
+  line-height: 1.2;
+}
+
+.matrix-month-heading .matrix-month-revenue {
+  margin-top: 3px;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.matrix-month-heading .matrix-month-label,
+.matrix-month-heading .matrix-month-revenue {
+  display: block;
+  line-height: 1.2;
+}
+
+.matrix-month-heading .matrix-month-revenue {
+  margin-top: 3px;
+  color: #0f766e;
+  font-size: 10px;
+  font-weight: 700;
+}
