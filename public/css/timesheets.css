@@ -302,35 +302,3 @@
     padding-bottom: 0.2rem;
   }
 }
-
-
-/* Global dashboard fiscal-year control */
-.global-fiscal-year-control {
-  height: 40px;
-  border-color: #cbd5e1;
-  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
-}
-
-.global-fiscal-year-control > label {
-  padding-inline: 0.7rem;
-  font-size: 0.72rem;
-}
-
-.global-fiscal-year-control .matrix-fiscal-year-value input {
-  font-size: 0.82rem;
-}
-
-@media (max-width: 1180px) {
-  .global-fiscal-year-control > label > span:first-child {
-    display: none;
-  }
-}
-
-@media (max-width: 960px) {
-  #searchBox {
-    width: 12rem !important;
-  }
-  .global-fiscal-year-control > label {
-    padding-inline: 0.4rem;
-  }
-}

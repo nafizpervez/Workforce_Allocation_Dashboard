@@ -175,8 +175,34 @@ async function deleteEmployee(id) {
 
 
 /* ── Project modal ────────────────────────────────────────────── */
+function fiscalPeriodFromProjectDate(dateText) {
+  const match = String(dateText || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return '';
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  const check = new Date(Date.UTC(year, month - 1, day));
+  if (
+    check.getUTCFullYear() !== year ||
+    check.getUTCMonth() + 1 !== month ||
+    check.getUTCDate() !== day
+  ) return '';
+
+  const fiscalYearEnd = month >= 4 ? year + 1 : year;
+  const quarter = month >= 4 && month <= 6
+    ? 1
+    : month >= 7 && month <= 9
+      ? 2
+      : month >= 10
+        ? 3
+        : 4;
+  return `Q${quarter}-${fiscalYearEnd}`;
+}
+
 function openProjectModal(opts = {}) {
   const editing = !!opts.id, p = editing ? S.projects.find(x => x.id === opts.id) : null, v = (k, fb) => p ? (p[k] ?? fb) : fb;
+  const projectEndDate = v('end_date', '');
+  const projectFiscalPeriod = fiscalPeriodFromProjectDate(projectEndDate) || v('fiscal_period', '');
   const OWNER_OPTS = ['Abdullah Al Baki', 'Basher Muhammad Raquibul Raquibul', 'Zobayer Ahmed', 'Most Iffat Ara Ila', 'Md Naiemul Haque Chowdhury', 'Mohammad A. Hadi'];
   const todayStr = new Date().toISOString().slice(0, 10);
   openModal(`${mHdr(editing ? 'Edit Project' : 'Add Project', editing ? 'Update project details' : 'Register a new project')}<div class="p-6 space-y-4 max-h-[55vh] overflow-y-auto nice-scroll">
@@ -184,14 +210,19 @@ function openProjectModal(opts = {}) {
     <div><label class="field-label">Project Name</label><input id="fp_name" type="text" class="field-input" value="${esc(v('name', ''))}" placeholder="e.g. Desktop SW for IWM 2026"></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Account Name</label><input id="fp_account" type="text" class="field-input" value="${esc(v('account_name', v('client', '')))}"></div><div><label class="field-label">Product Name</label><input id="fp_product_name" type="text" class="field-input" value="${esc(v('product_name', ''))}"></div></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Product Family</label><input id="fp_product_family" type="text" class="field-input" value="${esc(v('product_family', ''))}" placeholder="e.g. Professional Service, Software…"></div><div><label class="field-label">Opportunity Owner</label><input id="fp_owner" type="text" class="field-input" list="ownerList" value="${esc(v('opportunity_owner', ''))}"><datalist id="ownerList">${OWNER_OPTS.map(o => `<option value="${esc(o)}">`).join('')}</datalist></div></div>
-    <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Stage</label><select id="fp_stage" class="field-input">${STAGES.map(x => `<option ${x === v('stage', 'Prospect') ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div><label class="field-label">Fiscal Period</label><input id="fp_fiscal_period" type="text" class="field-input" value="${esc(v('fiscal_period', ''))}" placeholder="e.g. Q1-2026"></div></div>
+    <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Stage</label><select id="fp_stage" class="field-input">${STAGES.map(x => `<option ${x === v('stage', 'Prospect') ? 'selected' : ''}>${x}</option>`).join('')}</select></div><div><label class="field-label">Fiscal Period</label><input id="fp_fiscal_period" type="text" class="field-input bg-gray-50 text-gray-600" value="${esc(projectFiscalPeriod)}" placeholder="Calculated from Closed Won Date" readonly><div class="text-xs text-gray-400 mt-1">Calculated automatically using the April–March fiscal calendar.</div></div></div>
     <div class="grid grid-cols-2 gap-4"><div><label class="field-label">Product Amount (USD)</label><input id="fp_product_amount" type="number" class="field-input" value="${v('product_amount', 0)}" min="0" step="0.01"></div><div><label class="field-label">Probability (%)</label><input id="fp_probability" type="number" class="field-input" value="${v('probability', 0)}" min="0" max="100" step="5"></div></div>
-    <div class="grid grid-cols-3 gap-3"><div><label class="field-label">Created Date</label><input id="fp_created" type="date" class="field-input" value="${esc(v('created_date', todayStr))}"></div><div><label class="field-label">Closed Won Date</label><input id="fp_end" type="date" class="field-input" value="${esc(v('end_date', ''))}"></div><div><label class="field-label">Project Closing Date</label><input id="fp_closing" type="date" class="field-input" value="${esc(v('project_closing_date', ''))}"></div></div>
+    <div class="grid grid-cols-3 gap-3"><div><label class="field-label">Created Date</label><input id="fp_created" type="date" class="field-input" value="${esc(v('created_date', todayStr))}"></div><div><label class="field-label">Closed Won Date</label><input id="fp_end" type="date" class="field-input" value="${esc(projectEndDate)}"></div><div><label class="field-label">Project Closing Date</label><input id="fp_closing" type="date" class="field-input" value="${esc(v('project_closing_date', ''))}"></div></div>
     <div><label class="field-label">Amount (USD)</label><input id="fp_opp_amount" type="number" class="field-input" value="${v('opp_amount', 0)}" min="0" step="0.01"></div>
     <div><label class="field-label">Progress (internal) <span class="text-xs text-gray-400 font-normal ml-1">0 – 100</span></label><input id="fp_prog" type="number" min="0" max="100" step="1" value="${v('progress', 0)}" class="field-input" placeholder="0"></div>
     <div><label class="field-label">Color</label><div class="flex flex-wrap gap-2" id="cpkr">${PCOLORS.map(c => `<button type="button" data-c="${c}" title="${c}" class="w-8 h-8 rounded-lg border border-gray-300 hover:scale-105 transition-transform ${c === v('color', '#8B5CF6') ? 'ring-2 ring-offset-2 ring-gray-900' : ''}" style="background:${c}"></button>`).join('')}</div><input type="hidden" id="fp_color" value="${v('color', '#8B5CF6')}"></div>
   </div>${mFtr(editing ? opts.id : null, 'saveProject', 'deleteProject')}`);
   document.querySelectorAll('#cpkr button').forEach(b => b.addEventListener('click', () => { document.getElementById('fp_color').value = b.dataset.c; document.querySelectorAll('#cpkr button').forEach(x => x.classList.remove('ring-2', 'ring-offset-2', 'ring-gray-900')); b.classList.add('ring-2', 'ring-offset-2', 'ring-gray-900'); }));
+  const closedWonDateInput = document.getElementById('fp_end');
+  const fiscalPeriodInput = document.getElementById('fp_fiscal_period');
+  closedWonDateInput?.addEventListener('input', () => {
+    fiscalPeriodInput.value = fiscalPeriodFromProjectDate(closedWonDateInput.value);
+  });
 }
 
 async function saveProject(id) {

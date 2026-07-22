@@ -159,83 +159,42 @@ function renderNewLogoChart(data, filter, prodFilter) {
 
 /* ── Revenue chart drill-down modal ──────────────────────────── */
 function openRevenueModal(d) {
-  // Format full number with commas, no K abbreviation
-  const fmtFull = v => {
-    if (!v && v !== 0) return '$0.00';
-    return '$' + Number(v).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  };
+  const fmtFull = value => '$' + (Number(value) || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
 
-  const projRow = (p, showFamily) => `
+  const projectRow = project => `
     <div class="flex items-center justify-between gap-3 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors">
       <div class="min-w-0">
-        <div class="text-xs font-semibold text-gray-800 truncate">${esc(p.name)}</div>
-        <div class="text-xs text-gray-400 mono">${esc(p.code)}${showFamily && p.product_family ? ` · ${esc(p.product_family)}` : ''}</div>
+        <div class="text-xs font-semibold text-gray-800 truncate">${esc(project.name)}</div>
+        <div class="text-xs text-gray-400 mono">${esc(project.code)}${project.product_family ? ` · ${esc(project.product_family)}` : ''}</div>
       </div>
-      <span class="text-xs font-bold text-gray-700 mono flex-shrink-0">${fmtFull(p.amount)}</span>
+      <span class="text-xs font-bold text-gray-700 mono flex-shrink-0">${fmtFull(project.amount)}</span>
     </div>`;
 
-  const allProjs = d.all_projects || [];
-  const psProjs = d.ps_projects || [];
-  const totalAmt = d.total_amount || 0;
-  const psAmt = d.ps_amount || 0;
-  const pct = totalAmt > 0 ? (psAmt / totalAmt * 100) : 0;
+  const projects = Array.isArray(d?.all_projects) ? d.all_projects : [];
+  const revenueAmount = Number(d?.total_amount) || 0;
+  const categoryLabel = d?.category_label || 'Selected Category';
 
-  openModal(`${mHdr(d.label + ' — Revenue Breakdown', 'Closed Won · Fiscal Period grouping · Amount uses Product Amount first, then Amount fallback')}
-    <div class="p-6 overflow-y-auto nice-scroll space-y-6" style="max-height:65vh">
-
-      <!-- Total Amount section -->
-      <div>
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#0ea5e9"></span>
-            <span class="text-sm font-semibold text-gray-800">Total Amount</span>
-            <span class="text-xs text-gray-400">${allProjs.length} project${allProjs.length === 1 ? '' : 's'}</span>
+  openModal(`${mHdr(
+    `${d.label} — ${categoryLabel} Revenue`,
+    'Closed Won · grouped by Fiscal Period · Product Amount first, then Amount fallback'
+  )}
+    <div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">
+      <div class="rounded-xl border border-violet-200 bg-violet-50 p-4 mb-4">
+        <div class="flex items-center justify-between gap-4">
+          <div>
+            <div class="text-xs font-semibold uppercase tracking-wide text-violet-600">${esc(categoryLabel)}</div>
+            <div class="text-sm text-violet-800 mt-1">${projects.length} project${projects.length === 1 ? '' : 's'}</div>
           </div>
-          <span class="text-sm font-bold text-sky-600 mono">${fmtFull(totalAmt)}</span>
-        </div>
-        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
-          ${allProjs.map(p => projRow(p, true)).join('') || '<p class="text-xs text-gray-400 px-3">No projects</p>'}
+          <span class="text-xl font-bold text-violet-700 mono">${fmtFull(revenueAmount)}</span>
         </div>
       </div>
 
-      <!-- PS Amount section -->
-      <div>
-        <div class="flex items-center justify-between mb-2">
-          <div class="flex items-center gap-2">
-            <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#8b5cf6"></span>
-            <span class="text-sm font-semibold text-gray-800">PS Amount</span>
-            <span class="text-xs text-gray-400">${psProjs.length} PS project${psProjs.length === 1 ? '' : 's'}</span>
-          </div>
-          <span class="text-sm font-bold text-violet-600 mono">${fmtFull(psAmt)}</span>
-        </div>
-        <div class="space-y-1 max-h-48 overflow-y-auto nice-scroll pr-1">
-          ${psProjs.map(p => projRow(p, false)).join('') || '<p class="text-xs text-gray-400 px-3">No PS projects this FY</p>'}
-        </div>
+      <div class="space-y-1 max-h-96 overflow-y-auto nice-scroll pr-1">
+        ${projects.map(projectRow).join('') || '<p class="text-xs text-gray-400 px-3 py-3">No projects for this category and fiscal year.</p>'}
       </div>
-
-      <!-- PS Share % calculation -->
-      <div class="rounded-xl border border-emerald-200 bg-emerald-50 p-4">
-        <div class="flex items-center gap-2 mb-3">
-          <span class="w-3 h-3 rounded-sm inline-block flex-shrink-0" style="background:#10b981"></span>
-          <span class="text-sm font-semibold text-emerald-800">PS Share % — Calculation</span>
-        </div>
-        <div class="font-mono text-sm text-emerald-900 space-y-1">
-          <div class="flex items-center justify-between">
-            <span class="text-emerald-700">PS Amount (Product Amount first, Amount fallback from PS rows)</span>
-            <span class="font-bold">${fmtFull(psAmt)}</span>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-emerald-700">Total Amount (Product Amount first, Amount fallback)</span>
-            <span class="font-bold">${fmtFull(totalAmt)}</span>
-          </div>
-          <div class="border-t border-emerald-200 my-2"></div>
-          <div class="flex items-center justify-between text-base">
-            <span class="text-emerald-700">${fmtFull(psAmt)} ÷ ${fmtFull(totalAmt)} × 100</span>
-            <span class="font-bold text-emerald-800 text-lg">${pct.toFixed(1)}%</span>
-          </div>
-        </div>
-      </div>
-
     </div>
     <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
       <button onclick="closeModal()" class="btn-gray">Close</button>

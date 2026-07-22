@@ -83,6 +83,21 @@
                   >
                     Project-wise People
                   </button>
+                  <div
+                    id="matrixFiscalYearControl"
+                    class="matrix-fiscal-year-control"
+                    title="Change only the Resource Assignment Matrix fiscal year"
+                  >
+                    <button id="matrixFiscalYearPrevBtn" type="button" aria-label="Previous matrix fiscal year">‹</button>
+                    <label for="matrixFiscalYearInput">
+                      <span>Matrix FY</span>
+                      <span class="matrix-fiscal-year-value">
+                        <input id="matrixFiscalYearInput" type="number" inputmode="numeric" min="1901" max="9999" step="1" aria-label="Matrix fiscal-year ending year" />
+                        <small id="matrixFiscalYearRange"></small>
+                      </span>
+                    </label>
+                    <button id="matrixFiscalYearNextBtn" type="button" aria-label="Next matrix fiscal year">›</button>
+                  </div>
                 </div>
               </div>
             </div>

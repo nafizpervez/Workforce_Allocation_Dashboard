@@ -25,14 +25,6 @@ function fiscalYearDisplayLabel(fiscalYear) {
   return `FY ${getFiscalYearEnd(fiscalYear)}`;
 }
 
-
-function getInitialDashboardFiscalYear() {
-  // Every fresh dashboard load starts on the currently running April–March FY.
-  // User navigation remains session-interactive, but a previously selected FY
-  // must not override the current FY after reload.
-  return getCurrentFiscalYearStart();
-}
-
 function fiscalYearRangeLabel(fiscalYear) {
   const start = normalizeFiscalYearStart(fiscalYear, 2026);
   return `Apr ${start} – Mar ${start + 1}`;
@@ -40,8 +32,10 @@ function fiscalYearRangeLabel(fiscalYear) {
 
 const S = {
   psTypeData: [],
-  // Global dashboard fiscal year (April–March, represented by its start year).
-  fiscalYear: getInitialDashboardFiscalYear(),
+  // Existing dashboards remain fixed to FY27 (Apr 2026–Mar 2027).
+  fiscalYear: 2026,
+  // Only the Resource Assignment Matrix may move across fiscal years.
+  matrixFiscalYear: getCurrentFiscalYearStart(),
   employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
   matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},
   searchQuery: '',
@@ -72,15 +66,14 @@ const S = {
   workSummaryTab: 'team',
   resourceMatrixTab: 'matrix',
   monthlyPlannedWorkMode: 'percent',
-  // Planned vs Actual follows the global fiscal-year selection.
-  monthlyPlannedWorkFiscalYear: getInitialDashboardFiscalYear(),
+  // Blank means the card's default "All" option, which preserves the
+  // established FY27 view. A numeric value is a fiscal-year start year.
+  monthlyPlannedWorkFiscalYear: '',
 };
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
-function getOperationalFiscalYearStart() { return getCurrentFiscalYearStart(); }
-function getOperationalFiscalYearEnd() { return getFiscalYearEnd(getOperationalFiscalYearStart()); }
-function getServicePipelineFiscalYear() { return getOperationalFiscalYearEnd(); }
+const SERVICE_PIPELINE_FISCAL_YEAR = 2027;
 const SERVICE_PIPELINE_STAGES = ['Negotiate', 'Presentation - Solve', 'Proposal', 'Prospect', 'Qualify', 'Validate'];
 const SERVICE_PIPELINE_STAGE_SET = new Set(SERVICE_PIPELINE_STAGES);
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
@@ -315,7 +308,7 @@ function isServicePipelineProject(p) {
   return (
     p &&
     SERVICE_PIPELINE_STAGE_SET.has(String(p.stage || '').trim()) &&
-    getFiscalYearFromFiscalPeriod(p.fiscal_period) === getServicePipelineFiscalYear()
+    getFiscalYearFromFiscalPeriod(p.fiscal_period) === SERVICE_PIPELINE_FISCAL_YEAR
   );
 }
 

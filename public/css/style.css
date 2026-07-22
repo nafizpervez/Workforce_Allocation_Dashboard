@@ -6,7 +6,7 @@
 @import url("./components.css");
 @import url("./drag-drop.css");
 @import url("./sales-charts.css");
-@import url("./timesheets.css?v=global-fy-v1");
+@import url("./timesheets.css?v=resource-header-row-v1");
 @import url("./project-lists.css");
 
 @import url("./monthly-planned-work.css?v=table-tooltip-v1");
