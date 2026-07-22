@@ -3,6 +3,7 @@ const path = require('path');
 
 const ROOT_DIR = path.join(__dirname, '..');
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
+const HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0';
 const PORT = Number(process.env.PORT) || 9002;
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'Esr!@9122';
 const MODAL_ACCESS_PASSWORD = process.env.MODAL_ACCESS_PASSWORD || 'Esr!@9122';
@@ -16,6 +17,7 @@ module.exports = {
   AUTH_MAX_AGE_SECONDS,
   AUTH_SECRET,
   DASHBOARD_PASSWORD,
+  HOST,
   MODAL_ACCESS_PASSWORD,
   PORT,
   PUBLIC_DIR,
