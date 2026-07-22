@@ -1103,40 +1103,28 @@
   border-color: #fcd34d;
 }
 
-@media (max-width: 1500px) {
+/*
+ * Keep the six KPI cards in one row on wide desktop displays. On laptop-sized
+ * viewports, use three equal columns so the cards form two readable rows
+ * instead of being compressed until their labels and values are clipped.
+ */
+@media (max-width: 1760px) {
   #statsRow {
     grid-template-columns: repeat(3, minmax(0, 1fr));
     gap: 16px;
   }
 }
 
-@media (max-width: 900px) {
+@media (max-width: 1120px) {
   #statsRow {
     grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  #statsRow > .dc-stat--active-resources,
-  #statsRow > .dc-stat--running-projects,
-  #statsRow > .dc-stat--utilization,
-  #statsRow > .dc-stat--assigned-projects,
-  #statsRow > .dc-stat--committed-target,
-  #statsRow > .dc-stat--capacity-allocation {
-    grid-column: 1 / -1;
+    gap: 14px;
   }
 }
 
 @media (max-width: 740px) {
   #statsRow {
     grid-template-columns: minmax(0, 1fr);
-  }
-
-  #statsRow > .dc-stat--active-resources,
-  #statsRow > .dc-stat--running-projects,
-  #statsRow > .dc-stat--utilization,
-  #statsRow > .dc-stat--assigned-projects,
-  #statsRow > .dc-stat--committed-target,
-  #statsRow > .dc-stat--capacity-allocation {
-    grid-column: auto;
   }
 
   .active-resource-card {
