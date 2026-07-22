@@ -36,7 +36,8 @@ function initEvents() {
     if (b.dataset.add === 'resource') openEmployeeModal();
     if (b.dataset.add === 'project') openProjectModal();
     if (b.dataset.add === 'assignment') openAssignmentModal();
-    if (b.dataset.add === 'project-excel') document.getElementById('projectExcelUpload')?.click();
+    if (b.dataset.add === 'project-excel-historical') document.getElementById('historicalProjectExcelUpload')?.click();
+    if (b.dataset.add === 'project-excel-forecast') document.getElementById('forecastProjectExcelUpload')?.click();
     if (b.dataset.add === 'assignment-excel') document.getElementById('assignmentExcelUpload')?.click();
   }));
 
@@ -286,9 +287,15 @@ function initEvents() {
     e.target.value = '';
   });
 
-  document.getElementById('projectExcelUpload')?.addEventListener('change', e => {
+  document.getElementById('historicalProjectExcelUpload')?.addEventListener('change', e => {
     const file = e.target.files && e.target.files[0];
-    handleProjectExcelUpload(file);
+    handleProjectExcelUpload(file, 'historical');
+    e.target.value = '';
+  });
+
+  document.getElementById('forecastProjectExcelUpload')?.addEventListener('change', e => {
+    const file = e.target.files && e.target.files[0];
+    handleProjectExcelUpload(file, 'forecast');
     e.target.value = '';
   });
 
@@ -299,8 +306,12 @@ function initEvents() {
   });
 
   document.getElementById('downloadAssignmentExcelBtn')?.addEventListener('click', downloadAssignmentExcel);
-  document.getElementById('preSaleProductBtn')?.addEventListener('click', openPreSaleProductsModal);
-  document.getElementById('reserveRevenueBtn')?.addEventListener('click', openRevenueRatesModal);
+  document.getElementById('preSaleProductBtn')?.addEventListener('click', () => {
+    requestProtectedModalAccess('Pre-Sale Product', openPreSaleProductsModal);
+  });
+  document.getElementById('reserveRevenueBtn')?.addEventListener('click', () => {
+    requestProtectedModalAccess('Reserve Revenue', openRevenueRatesModal);
+  });
 
   initColResize(); initSectionDrag();
 }

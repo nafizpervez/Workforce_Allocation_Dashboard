@@ -1,4 +1,9 @@
-const { normalizeFiscalPeriod } = require('./fiscal');
+const {
+  getCurrentFiscalYearEnd,
+  getFiscalYear,
+  getFiscalYearFromPeriod,
+  normalizeFiscalPeriod,
+} = require('./fiscal');
 const { projectColorForIndex } = require('./project-colors');
 const {
   cleanText,
@@ -7,6 +12,18 @@ const {
   normalizeImportNumber,
   normalizeImportProbability,
 } = require('./values');
+
+const PROJECT_IMPORT_MODES = Object.freeze({
+  HISTORICAL: 'historical',
+  FORECAST: 'forecast',
+});
+
+function normalizeProjectImportMode(value) {
+  const mode = cleanText(value).toLowerCase();
+  return mode === PROJECT_IMPORT_MODES.HISTORICAL
+    ? PROJECT_IMPORT_MODES.HISTORICAL
+    : PROJECT_IMPORT_MODES.FORECAST;
+}
 
 function normalizeImportedProjectRows(rows) {
   const normalized = [];
@@ -47,4 +64,33 @@ function normalizeImportedProjectRows(rows) {
   return normalized;
 }
 
-module.exports = { normalizeImportedProjectRows };
+function getProjectImportFiscalYearEnd(project) {
+  const periodYear = getFiscalYearFromPeriod(project?.fiscal_period);
+  if (periodYear !== null) return periodYear;
+
+  const closeDateFiscalStart = getFiscalYear(project?.end_date);
+  return closeDateFiscalStart === null ? null : closeDateFiscalStart + 1;
+}
+
+function projectMatchesImportMode(project, mode, currentFiscalYearEnd = getCurrentFiscalYearEnd()) {
+  const fiscalYearEnd = getProjectImportFiscalYearEnd(project);
+  if (fiscalYearEnd === null) return false;
+  return normalizeProjectImportMode(mode) === PROJECT_IMPORT_MODES.HISTORICAL
+    ? fiscalYearEnd !== currentFiscalYearEnd
+    : fiscalYearEnd === currentFiscalYearEnd;
+}
+
+function projectImportPartitionLabel(mode, currentFiscalYearEnd = getCurrentFiscalYearEnd()) {
+  return normalizeProjectImportMode(mode) === PROJECT_IMPORT_MODES.HISTORICAL
+    ? `Historical projects outside FY${currentFiscalYearEnd}`
+    : `Forecasted projects in FY${currentFiscalYearEnd}`;
+}
+
+module.exports = {
+  PROJECT_IMPORT_MODES,
+  getProjectImportFiscalYearEnd,
+  normalizeImportedProjectRows,
+  normalizeProjectImportMode,
+  projectImportPartitionLabel,
+  projectMatchesImportMode,
+};

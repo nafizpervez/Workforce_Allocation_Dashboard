@@ -1404,17 +1404,252 @@ function renderBurndownChart() {
   });
 }
 
+
+function getAssignmentBurnRevenueSeries() {
+  const source = typeof getMonthlyPlannedWorkSeries === 'function'
+    ? getMonthlyPlannedWorkSeries(S.fiscalYear, S.assignments)
+    : { rows: [], totalPlannedRevenue: 0 };
+  const rows = source.rows || [];
+  const roundAmount = value => +((Number(value) || 0).toFixed(2));
+  const plannedRevenue = rows.map(row => roundAmount(row.planned?.totalRevenue));
+  const actualRevenue = rows.map(row => roundAmount(row.actual?.totalRevenue));
+  const lastActualIndex = rows.reduce(
+    (latest, row, index) => row.actual?.hasData ? index : latest,
+    -1,
+  );
+
+  let cumulativePlannedValue = 0;
+  let cumulativeActualValue = 0;
+  const cumulativePlanned = plannedRevenue.map(value => {
+    cumulativePlannedValue += value;
+    return roundAmount(cumulativePlannedValue);
+  });
+  const cumulativeActual = actualRevenue.map((value, index) => {
+    if (lastActualIndex < 0 || index > lastActualIndex) return null;
+    cumulativeActualValue += value;
+    return roundAmount(cumulativeActualValue);
+  });
+
+  return {
+    labels: rows.map(row => row.label),
+    plannedRevenue,
+    actualRevenue,
+    cumulativePlanned,
+    cumulativeActual,
+    totalPlannedRevenue: roundAmount(source.totalPlannedRevenue),
+    actualToDate: lastActualIndex >= 0
+      ? Number(cumulativeActual[lastActualIndex]) || 0
+      : 0,
+    lastActualIndex,
+    plannedUnpricedHours: rows.map(row => Number(row.planned?.unpricedRevenueHours) || 0),
+    actualUnpricedHours: rows.map(row => Number(row.actual?.unpricedRevenueHours) || 0),
+  };
+}
+
+function burnRevenueTooltipUnit(value) {
+  return `$${(Number(value) || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function burnRevenueAxisUnit(value) {
+  const n = Number(value) || 0;
+  const absolute = Math.abs(n);
+  if (absolute >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
+  if (absolute >= 1000) return `$${(n / 1000).toFixed(absolute >= 10000 ? 0 : 1)}K`;
+  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+function burnRevenueTooltipOptions(series) {
+  return {
+    bodyFont: { size: 11 },
+    titleFont: { size: 11 },
+    footerFont: { size: 10 },
+    padding: 9,
+    filter: context => context.raw !== null,
+    callbacks: {
+      label: context => ` ${context.dataset.label}: ${burnRevenueTooltipUnit(context.parsed.y)}`,
+      footer: items => {
+        if (!items.length) return [];
+        const index = items[0].dataIndex;
+        const plannedMonth = series.plannedRevenue[index] || 0;
+        const actualMonth = series.actualRevenue[index] || 0;
+        const lines = [`Planned this month: ${burnRevenueTooltipUnit(plannedMonth)}`];
+
+        if (index <= series.lastActualIndex) {
+          lines.push(`Actual this month: ${burnRevenueTooltipUnit(actualMonth)}`);
+          const variance = (series.cumulativeActual[index] || 0) -
+            (series.cumulativePlanned[index] || 0);
+          lines.push(`Actual vs planned to date: ${variance >= 0 ? '+' : '-'}${burnRevenueTooltipUnit(Math.abs(variance))}`);
+        } else {
+          lines.push('Actual this month: not reported');
+        }
+
+        const unpricedHours = (series.plannedUnpricedHours[index] || 0) +
+          (series.actualUnpricedHours[index] || 0);
+        if (unpricedHours > 0) {
+          lines.push(`Unpriced eligible hours: ${unpricedHours.toLocaleString('en-US', { maximumFractionDigits: 1 })}h`);
+        }
+        return lines;
+      },
+    },
+  };
+}
+
+function getAssignmentBurnRevenueSeries() {
+  const months = fiscalMonths(S.fiscalYear);
+  const labels = months.map(month => month.label);
+  const monthIndex = new Map(
+    months.map((month, index) => [`${month.y}-${month.m}`, index]),
+  );
+  const activeEmployees = getActiveEmployees();
+  const employeesById = new Map(activeEmployees.map(employee => [Number(employee.id), employee]));
+  const employeesByName = new Map();
+  for (const employee of activeEmployees) {
+    const key = typeof normalizePersonName === 'function'
+      ? normalizePersonName(employee.name)
+      : String(employee.name || '').trim().toLowerCase();
+    if (key && !employeesByName.has(key)) employeesByName.set(key, employee);
+  }
+
+  const plannedRevenue = months.map(() => 0);
+  const actualRevenue = months.map(() => 0);
+
+  for (const assignment of getEffectiveFiscalAssignments(S.fiscalYear)) {
+    const employee = employeesById.get(Number(assignment.employee_id));
+    if (!employee) continue;
+    const index = monthIndex.get(`${Number(assignment.year)}-${Number(assignment.month)}`);
+    if (index === undefined) continue;
+
+    const percentage = Number(assignment.percentage);
+    if (!Number.isFinite(percentage) || percentage <= 0) continue;
+    const projectName = typeof getSummaryAssignmentProjectName === 'function'
+      ? getSummaryAssignmentProjectName(assignment)
+      : String(assignment.project_name || '').trim();
+    const categoryKey = typeof classifyMonthlyPlannedWorkType === 'function'
+      ? classifyMonthlyPlannedWorkType(projectName)
+      : null;
+    if (!categoryKey) continue;
+
+    const rateInfo = getMonthlyRevenueRate(categoryKey, employee);
+    if (!rateInfo.eligible || !rateInfo.hasRate) continue;
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
+    plannedRevenue[index] += hours * rateInfo.rate;
+  }
+
+  const visibleTimesheetRows = typeof getVisibleTimesheetRows === 'function'
+    ? getVisibleTimesheetRows()
+    : (S.timesheetRows || []);
+
+  for (const row of visibleTimesheetRows) {
+    const parsedMonth = typeof parseMonthlyWorkMonth === 'function'
+      ? parseMonthlyWorkMonth(row.month ?? row.Month ?? row.month_label ?? row.monthLabel)
+      : null;
+    if (!parsedMonth) continue;
+    const index = monthIndex.get(`${parsedMonth.year}-${parsedMonth.month}`);
+    if (index === undefined) continue;
+
+    const categoryKey = typeof classifyMonthlyActualWorkType === 'function'
+      ? classifyMonthlyActualWorkType(row.workType ?? row.work_type ?? row['Work Type'])
+      : null;
+    if (!categoryKey) continue;
+
+    const workerKey = typeof normalizePersonName === 'function'
+      ? normalizePersonName(row.worker)
+      : String(row.worker || '').trim().toLowerCase();
+    const employee = employeesByName.get(workerKey);
+    const rateInfo = getMonthlyRevenueRate(categoryKey, employee);
+    if (!rateInfo.eligible || !rateInfo.hasRate) continue;
+
+    const hours = Number(row.qty ?? row.hours ?? row.quantity);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+    actualRevenue[index] += hours * rateInfo.rate;
+  }
+
+  const roundMoney = value => +((Number(value) || 0).toFixed(2));
+  const roundedPlannedRevenue = plannedRevenue.map(roundMoney);
+  const roundedActualRevenue = actualRevenue.map(roundMoney);
+  const totalPlannedRevenue = roundMoney(
+    roundedPlannedRevenue.reduce((total, value) => total + value, 0),
+  );
+  const lastActualIndex = roundedActualRevenue.reduce(
+    (latest, value, index) => value > 0 ? index : latest,
+    -1,
+  );
+
+  let cumulativePlannedValue = 0;
+  let cumulativeActualValue = 0;
+  const cumulativePlanned = roundedPlannedRevenue.map(value => {
+    cumulativePlannedValue += value;
+    return roundMoney(cumulativePlannedValue);
+  });
+  const cumulativeActual = roundedActualRevenue.map((value, index) => {
+    if (lastActualIndex < 0 || index > lastActualIndex) return null;
+    cumulativeActualValue += value;
+    return roundMoney(cumulativeActualValue);
+  });
+
+  return {
+    labels,
+    plannedRevenue: roundedPlannedRevenue,
+    actualRevenue: roundedActualRevenue,
+    cumulativePlanned,
+    cumulativeActual,
+    totalPlannedRevenue,
+    actualToDate: lastActualIndex >= 0 ? Number(cumulativeActual[lastActualIndex]) || 0 : 0,
+    lastActualIndex,
+  };
+}
+
+function burnupRevenueTooltipUnit(value) {
+  return `$${(Number(value) || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
+function burnupRevenueAxisUnit(value) {
+  const n = Number(value) || 0;
+  const abs = Math.abs(n);
+  if (abs >= 1000000) return `$${(n / 1000000).toFixed(1)}M`;
+  if (abs >= 1000) return `$${(n / 1000).toFixed(abs >= 10000 ? 0 : 1)}K`;
+  return `$${n.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+function burnupRevenueTooltipOptions(series) {
+  return {
+    bodyFont: { size: 11 },
+    titleFont: { size: 11 },
+    footerFont: { size: 10 },
+    padding: 9,
+    filter: context => context.raw !== null,
+    callbacks: {
+      label: context => ` ${context.dataset.label}: ${burnupRevenueTooltipUnit(context.parsed.y)}`,
+      footer: items => {
+        if (!items.length) return [];
+        const index = items[0].dataIndex;
+        const lines = [`Planned this month: ${burnupRevenueTooltipUnit(series.plannedRevenue[index])}`];
+        if (index <= series.lastActualIndex) {
+          lines.push(`Actual this month: ${burnupRevenueTooltipUnit(series.actualRevenue[index])}`);
+          const variance = (series.cumulativeActual[index] || 0) - (series.cumulativePlanned[index] || 0);
+          lines.push(`Actual vs planned to date: ${variance >= 0 ? '+' : '-'}${burnupRevenueTooltipUnit(Math.abs(variance))}`);
+        } else {
+          lines.push('Actual this month: not reported');
+        }
+        return lines;
+      },
+    },
+  };
+}
+
 function renderBurnupChart() {
   if (S.charts.burnup) S.charts.burnup.destroy();
   const element = document.getElementById('burnupChart');
   if (!element) return;
 
-  const series = getAssignmentBurnSeries();
-  const chartMaximum = Math.max(
-    series.totalPlannedHours,
-    series.actualToDate,
-    1,
-  );
+  const series = getAssignmentBurnRevenueSeries();
+  const chartMaximum = Math.max(series.totalPlannedRevenue, series.actualToDate, 1);
 
   S.charts.burnup = new Chart(element.getContext('2d'), {
     type: 'line',
@@ -1422,7 +1657,7 @@ function renderBurnupChart() {
       labels: series.labels,
       datasets: [
         {
-          label: 'Cumulative planned',
+          label: 'Cumulative planned revenue',
           data: series.cumulativePlanned,
           borderColor: '#2563EB',
           borderDash: [5, 4],
@@ -1434,7 +1669,7 @@ function renderBurnupChart() {
           pointHoverRadius: 4,
         },
         {
-          label: 'Cumulative actual',
+          label: 'Cumulative actual revenue',
           data: series.cumulativeActual,
           borderColor: '#059669',
           backgroundColor: 'transparent',
@@ -1446,8 +1681,8 @@ function renderBurnupChart() {
           spanGaps: false,
         },
         {
-          label: 'Total planned scope',
-          data: series.labels.map(() => series.totalPlannedHours),
+          label: 'Total planned revenue',
+          data: series.labels.map(() => series.totalPlannedRevenue),
           borderColor: '#64748B',
           borderDash: [3, 4],
           backgroundColor: 'transparent',
@@ -1464,7 +1699,7 @@ function renderBurnupChart() {
       interaction: { mode: 'index', intersect: false },
       plugins: {
         legend: burnChartLegendOptions(),
-        tooltip: burnChartTooltipOptions(series),
+        tooltip: burnupRevenueTooltipOptions(series),
       },
       scales: {
         x: {
@@ -1474,11 +1709,11 @@ function renderBurnupChart() {
         y: {
           beginAtZero: true,
           suggestedMax: chartMaximum,
-          ticks: { font: { size: 10 }, callback: burnChartAxisUnit },
+          ticks: { font: { size: 10 }, callback: burnupRevenueAxisUnit },
           grid: { color: '#F3F4F6' },
           title: {
             display: true,
-            text: 'Cumulative effort (hours)',
+            text: 'Cumulative revenue (USD)',
             font: { size: 10 },
             color: '#9CA3AF',
           },

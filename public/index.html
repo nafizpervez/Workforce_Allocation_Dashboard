@@ -12,12 +12,12 @@
     <link rel="stylesheet" href="/css/style.css?v=responsive-kpi-two-row-v1" />
   </head>
   <body>
-    <div data-fragment="/views/header.html"></div>
+    <div data-fragment="/views/header.html?v=split-project-import-v1"></div>
     <main class="p-8 max-w-[1920px] mx-auto">
       <div id="dashboard-canvas" class="space-y-6">
         <div data-fragment="/views/sections/stats.html"></div>
         <div data-fragment="/views/sections/resource-matrix.html?v=presale-product-button-v1"></div>
-        <div data-fragment="/views/sections/allocation-charts.html?v=planned-actual-combobox-v2"></div>
+        <div data-fragment="/views/sections/allocation-charts.html?v=all-projects-revenue-burnup-v1"></div>
         <div data-fragment="/views/sections/work-summary.html?v=work-summary-original-v2"></div>
         <div data-fragment="/views/sections/sales-charts.html"></div>
         <div data-fragment="/views/sections/insights.html"></div>
@@ -27,13 +27,14 @@
 
     <div id="toasts" class="fixed bottom-5 right-5 z-50 space-y-2"></div>
     <div id="modalRoot"></div>
-    <input id="projectExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
+    <input id="historicalProjectExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
+    <input id="forecastProjectExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
     <input id="assignmentExcelUpload" type="file" accept=".xlsx,.xls" class="hidden" />
 
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4.4.4/dist/chart.umd.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="/js/modules/core/state.js?v=presale-product-v1"></script>
-    <script src="/js/modules/core/person-identity.js?v=person-alias-v1"></script>
+    <script src="/js/modules/core/person-identity.js?v=person-alias-v3"></script>
     <script src="/js/modules/core/designations.js"></script>
     <script src="/js/modules/core/work-schedule.js?v=workweek-36-66-v1"></script>
     <script src="/js/modules/core/availability.js?v=capacity-na-month-v1"></script>
@@ -43,14 +44,14 @@
     <script src="/js/modules/dashboard/resource-summary-metrics.js?v=matrix-fy-v1"></script>
     <script src="/js/modules/dashboard/resource-summary-totals.js?v=matrix-fy-v1"></script>
     <script src="/js/modules/dashboard/resource-summary.js?v=matrix-fy-v1"></script>
-    <script src="/js/modules/dashboard/overview.js?v=capacity-na-full-value-v1"></script>
+    <script src="/js/modules/dashboard/overview.js?v=revenue-burnup-v1"></script>
     <script src="/js/modules/dashboard/monthly-planned-work.js?v=planned-vs-actual-tooltip-v2"></script>
     <script src="/js/modules/timesheets/model.js?v=actual-burn-charts-v1"></script>
-    <script src="/js/modules/timesheets/planned-actual-model.js?v=project-identity-v1"></script>
-    <script src="/js/modules/timesheets/planned-actual-chart.js?v=project-identity-v1"></script>
+    <script src="/js/modules/timesheets/planned-actual-model.js?v=all-projects-v1"></script>
+    <script src="/js/modules/timesheets/planned-actual-chart.js?v=resource-highlight-v1"></script>
     <script src="/js/modules/timesheets/charts.js?v=work-summary-original-v2"></script>
     <script src="/js/modules/timesheets/ui.js"></script>
-    <script src="/js/modules/imports/projects.js?v=matrix-fy-v1"></script>
+    <script src="/js/modules/imports/projects.js?v=split-fiscal-import-v1"></script>
     <script src="/js/modules/imports/assignments.js?v=matrix-fy-v1"></script>
     <script src="/js/modules/timesheets/upload.js"></script>
     <script src="/js/modules/dashboard/workload.js?v=na-availability-v1"></script>
@@ -64,9 +65,10 @@
     <script src="/js/modules/ui/revenue-breakdown-modal.js?v=four-revenue-modal-v1"></script>
     <script src="/js/modules/ui/revenue-rates-modal.js?v=committed-target-v1"></script>
     <script src="/js/modules/ui/presale-products-modal.js?v=presale-product-v1"></script>
+    <script src="/js/modules/ui/protected-modal-access.js?v=modal-password-v1"></script>
     <script src="/js/modules/ui/committed-targets-modal.js?v=target-storage-v1"></script>
     <script src="/js/modules/ui/resource-project-modals.js?v=workdays-v1"></script>
-    <script src="/js/modules/ui/events.js?v=presale-product-v1"></script>
+    <script src="/js/modules/ui/events.js?v=split-import-password-v1"></script>
     <script src="/js/modules/projects/resources.js?v=na-availability-v1"></script>
     <script src="/js/app.js?v=workweek-36-66-v1"></script>
   </body>
