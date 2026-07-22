@@ -8,7 +8,16 @@ function openResourceModal() {
     const isActive = e.active !== 0;
     const util = S.employeeUtil ? (S.employeeUtil.get(e.id) || 0) : 0;
     const clr = uc(util), badge = ub(util);
-    return `<tr class="${isActive ? '' : 'opacity-50'} hover:bg-gray-50 transition-colors">
+    const searchText = [
+      e.employee_code,
+      e.name,
+      e.email,
+      e.dept,
+      e.designation,
+      isActive ? 'active' : 'inactive',
+    ].filter(Boolean).join(' ').toLowerCase();
+
+    return `<tr data-team-resource-row data-search="${esc(searchText)}" class="${isActive ? '' : 'opacity-50'} hover:bg-gray-50 transition-colors">
       <td class="py-2.5 px-4 text-sm text-gray-500">${esc(e.employee_code || '')}</td>
       <td class="py-2.5 px-4">
         <div class="flex items-center gap-2">
@@ -58,19 +67,80 @@ function openResourceModal() {
 
   openModal(
     mHdr('Team Resources', `${activeEmps.length} active · ${inactiveEmps.length} inactive · productivity calculated on active only`)
-    + `<div class="overflow-y-auto nice-scroll" style="max-height:65vh">
-        <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-500 uppercase tracking-wider">Active Members (${activeEmps.length})</div>
-        ${tableHtml(activeEmps)}
+    + `<div class="modal-scroll-body nice-scroll">
+        <div class="sticky top-0 z-10 px-4 py-3 border-b border-gray-200 bg-white">
+          <label for="teamResourcesSearch" class="sr-only">Search team resources</label>
+          <div class="relative">
+            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+            <input id="teamResourcesSearch" type="search" autocomplete="off"
+              placeholder="Search by name, code, email, department, designation or status..."
+              oninput="filterTeamResources(this.value)"
+              class="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+          </div>
+          <div id="teamResourcesSearchSummary" class="mt-2 text-xs text-gray-500" aria-live="polite"></div>
+        </div>
+        <div id="teamResourcesActiveGroup" data-team-resource-group>
+          <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
+            Active Members (<span data-team-resource-count>${activeEmps.length}</span>)
+          </div>
+          ${tableHtml(activeEmps)}
+        </div>
         ${inactiveEmps.length ? `
-        <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">Inactive Members (${inactiveEmps.length})</div>
-        ${tableHtml(inactiveEmps)}` : ''}
+        <div id="teamResourcesInactiveGroup" data-team-resource-group>
+          <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
+            Inactive Members (<span data-team-resource-count>${inactiveEmps.length}</span>)
+          </div>
+          ${tableHtml(inactiveEmps)}
+        </div>` : ''}
+        <div id="teamResourcesNoResults" class="hidden px-6 py-12 text-center text-sm text-gray-400">
+          No team resources match this search.
+        </div>
       </div>
-      <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
+      <div class="modal-footer px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>`,
     'max-w-6xl'
   );
+
+  filterTeamResources('');
+  setTimeout(() => document.getElementById('teamResourcesSearch')?.focus(), 0);
 }
+
+function filterTeamResources(value = '') {
+  const query = String(value || '').trim().toLowerCase();
+  const groups = [...document.querySelectorAll('[data-team-resource-group]')];
+  let visibleTotal = 0;
+  let totalRows = 0;
+
+  groups.forEach(group => {
+    const rows = [...group.querySelectorAll('[data-team-resource-row]')];
+    let visibleInGroup = 0;
+    totalRows += rows.length;
+
+    rows.forEach(row => {
+      const matches = !query || String(row.dataset.search || '').includes(query);
+      row.classList.toggle('hidden', !matches);
+      if (matches) visibleInGroup += 1;
+    });
+
+    visibleTotal += visibleInGroup;
+    group.classList.toggle('hidden', visibleInGroup === 0);
+    const count = group.querySelector('[data-team-resource-count]');
+    if (count) count.textContent = String(visibleInGroup);
+  });
+
+  const noResults = document.getElementById('teamResourcesNoResults');
+  if (noResults) noResults.classList.toggle('hidden', visibleTotal !== 0);
+
+  const summary = document.getElementById('teamResourcesSearchSummary');
+  if (summary) {
+    summary.textContent = query
+      ? `${visibleTotal} of ${totalRows} resource${totalRows === 1 ? '' : 's'} shown`
+      : `${totalRows} resource${totalRows === 1 ? '' : 's'}`;
+  }
+}
+
+window.filterTeamResources = filterTeamResources;
 
 async function toggleEmployeeActive(empId) {
   try {
