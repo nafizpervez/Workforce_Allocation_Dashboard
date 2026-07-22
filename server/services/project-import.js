@@ -1,6 +1,7 @@
 const {
   getCurrentFiscalYearEnd,
-  getFiscalYear,
+  getFiscalPeriodFromDate,
+  getFiscalYearEndFromDate,
   getFiscalYearFromPeriod,
   normalizeFiscalPeriod,
 } = require('./fiscal');
@@ -37,6 +38,11 @@ function normalizeImportedProjectRows(rows) {
     const productAmount = normalizeImportNumber(raw.product_amount ?? raw['Product Amount']);
     const opportunityAmount = normalizeImportNumber(raw.opp_amount ?? raw.amount ?? raw['Amount']);
 
+    const endDate = normalizeImportDate(raw.end_date || raw.close_date || raw['Close Date']);
+    const suppliedFiscalPeriod = normalizeFiscalPeriod(
+      raw.fiscal_period || raw['Fiscal Period'] || raw.fiscal_year || raw['Fiscal Year'],
+    );
+
     normalized.push({
       code,
       name,
@@ -47,9 +53,9 @@ function normalizeImportedProjectRows(rows) {
       product_family: productFamily,
       product_name: productName,
       stage: cleanText(raw.stage || raw['Stage']) || 'Prospect',
-      end_date: normalizeImportDate(raw.end_date || raw.close_date || raw['Close Date']),
+      end_date: endDate,
       created_date: normalizeImportDate(raw.created_date || raw['Created Date']),
-      fiscal_period: normalizeFiscalPeriod(raw.fiscal_period || raw['Fiscal Period'] || raw.fiscal_year || raw['Fiscal Year']),
+      fiscal_period: getFiscalPeriodFromDate(endDate) || suppliedFiscalPeriod,
       product_amount: +productAmount.toFixed(2),
       opp_amount: +opportunityAmount.toFixed(2),
       budget: +opportunityAmount.toFixed(2),
@@ -65,11 +71,9 @@ function normalizeImportedProjectRows(rows) {
 }
 
 function getProjectImportFiscalYearEnd(project) {
-  const periodYear = getFiscalYearFromPeriod(project?.fiscal_period);
-  if (periodYear !== null) return periodYear;
-
-  const closeDateFiscalStart = getFiscalYear(project?.end_date);
-  return closeDateFiscalStart === null ? null : closeDateFiscalStart + 1;
+  const closeDateFiscalYearEnd = getFiscalYearEndFromDate(project?.end_date);
+  if (closeDateFiscalYearEnd !== null) return closeDateFiscalYearEnd;
+  return getFiscalYearFromPeriod(project?.fiscal_period);
 }
 
 function projectMatchesImportMode(project, mode, currentFiscalYearEnd = getCurrentFiscalYearEnd()) {

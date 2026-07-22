@@ -1,6 +1,7 @@
 const { ensureRevenueRatesTable } = require('../services/revenue-rates');
 const { ensureCommittedTargetsTable } = require('../services/committed-targets');
 const { ensurePreSaleProductsTable } = require('../services/presale-products');
+const { getFiscalPeriodFromDate } = require('../services/fiscal');
 const {
   PERSON_IDENTITY_ALIASES,
   canonicalPersonName,
@@ -171,6 +172,27 @@ function canonicalizeKnownPeople(db) {
   })();
 }
 
+function repairProjectFiscalPeriods(db) {
+  const rows = db.prepare(`
+    SELECT id, end_date, fiscal_period
+    FROM projects
+    WHERE end_date IS NOT NULL AND TRIM(end_date) != ''
+  `).all();
+  const update = db.prepare('UPDATE projects SET fiscal_period=? WHERE id=?');
+  let updated = 0;
+
+  db.transaction(() => {
+    for (const row of rows) {
+      const calculated = getFiscalPeriodFromDate(row.end_date);
+      if (!calculated || calculated === String(row.fiscal_period || '').trim()) continue;
+      update.run(calculated, row.id);
+      updated += 1;
+    }
+  })();
+
+  return updated;
+}
+
 function runMigrations(db) {
   addColumn(db, 'ALTER TABLE employees ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
   addColumn(db, "ALTER TABLE employees ADD COLUMN designation TEXT DEFAULT ''");
@@ -182,6 +204,10 @@ function runMigrations(db) {
   db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_fiscal_period ON projects(fiscal_period)').run();
   db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_import_row_no ON projects(import_row_no)').run();
 
+  try {
+    const repaired = repairProjectFiscalPeriods(db);
+    if (repaired > 0) console.log(`Corrected Fiscal Period for ${repaired} project row${repaired === 1 ? '' : 's'}.`);
+  } catch (error) { console.error('Project Fiscal Period correction migration failed:', error); }
   try { ensureDuplicateProjectCodes(db); }
   catch (error) { console.error('Project duplicate-code compatibility migration failed:', error); }
   try { ensureTimesheetTable(db); }
@@ -196,4 +222,4 @@ function runMigrations(db) {
   catch (error) { console.error('Person identity canonicalization migration failed:', error); }
 }
 
-module.exports = { runMigrations };
+module.exports = { repairProjectFiscalPeriods, runMigrations };

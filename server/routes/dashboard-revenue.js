@@ -1,7 +1,7 @@
 const express = require('express');
 const { getAppDb } = require('../database');
 const { getRevenueAmount, isPSRevenueProject, matchesCategory } = require('../services/project-analytics');
-const { fyLabel, getProjectFiscalYear } = require('../services/fiscal');
+const { fyLabel, getProjectFiscalPeriod, getProjectFiscalYear } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
 const router = express.Router();
 const db = getAppDb();
@@ -36,7 +36,7 @@ router.get('/api/dashboard/ps-revenue-chart', (_, res) => {
         amount,
         product_name: r.product_name || '',
         product_family: r.product_family || '—',
-        fiscal_period: r.fiscal_period || '',
+        fiscal_period: getProjectFiscalPeriod(r) || '',
         amount_source: safeNum(r.product_amount, 0) > 0 ? 'Product Amount' : 'Amount',
       });
 
@@ -51,7 +51,7 @@ router.get('/api/dashboard/ps-revenue-chart', (_, res) => {
           amount,
           product_name: r.product_name || '',
           product_family: r.product_family || '—',
-          fiscal_period: r.fiscal_period || '',
+          fiscal_period: getProjectFiscalPeriod(r) || '',
           amount_source: safeNum(r.product_amount, 0) > 0 ? 'Product Amount' : 'Amount',
         });
       }

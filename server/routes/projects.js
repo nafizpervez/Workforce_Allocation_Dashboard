@@ -1,7 +1,12 @@
 const express = require('express');
 const { getAppDb } = require('../database');
 const { calcDealStatuses } = require('../services/project-analytics');
-const { getCurrentFiscalYearEnd, normalizeFiscalPeriod } = require('../services/fiscal');
+const {
+  getCurrentFiscalYearEnd,
+  getFiscalPeriodFromDate,
+  getProjectFiscalPeriod,
+  normalizeFiscalPeriod,
+} = require('../services/fiscal');
 const { assignUniqueProjectColors, projectColorForIndex } = require('../services/project-colors');
 const {
   getProjectImportFiscalYearEnd,
@@ -24,7 +29,11 @@ const PROJECT_FIELDS = [
 router.get('/api/projects', (_, res) => {
   const rows = db.prepare('SELECT * FROM projects ORDER BY id').all();
   const statusMap = calcDealStatuses(rows);
-  res.json(rows.map(r => ({ ...r, deal_status: statusMap[r.id] || 'NEW LOGO' })));
+  res.json(rows.map(r => ({
+    ...r,
+    fiscal_period: getProjectFiscalPeriod(r) || null,
+    deal_status: statusMap[r.id] || 'NEW LOGO',
+  })));
 });
 
 router.post('/api/projects', (req, res) => {
@@ -44,7 +53,10 @@ router.post('/api/projects', (req, res) => {
       safeNum(b.product_amount, 0), b.account_name || null, b.product_name || null,
       b.product_family || null,
       b.opportunity_owner || null, safeNum(b.opp_amount, 0), safeNum(b.probability, 0),
-      b.created_date || null, normalizeFiscalPeriod(b.fiscal_period) || null, b.project_closing_date || null, null,
+      b.created_date || null,
+      getFiscalPeriodFromDate(b.end_date) || normalizeFiscalPeriod(b.fiscal_period) || null,
+      b.project_closing_date || null,
+      null,
     );
     res.status(201).json(db.prepare('SELECT * FROM projects WHERE id=?').get(info.lastInsertRowid));
   } catch (e) {
@@ -303,19 +315,34 @@ router.post('/api/projects/import', (req, res) => {
 
 router.put('/api/projects/:id', (req, res) => {
   const id = Number(req.params.id);
-  if (!db.prepare('SELECT id FROM projects WHERE id=?').get(id)) return res.status(404).json({ error: 'not found' });
-  const updates = [], params = [];
-  for (const f of PROJECT_FIELDS) {
-    if (req.body && Object.prototype.hasOwnProperty.call(req.body, f)) {
-      updates.push(`${f}=?`);
-      params.push(f === 'fiscal_period' ? (normalizeFiscalPeriod(req.body[f]) || null) : req.body[f]);
-    }
+  const existing = db.prepare('SELECT * FROM projects WHERE id=?').get(id);
+  if (!existing) return res.status(404).json({ error: 'not found' });
+
+  const body = req.body || {};
+  const has = field => Object.prototype.hasOwnProperty.call(body, field);
+  const updates = [];
+  const params = [];
+
+  for (const field of PROJECT_FIELDS) {
+    if (field === 'fiscal_period' || !has(field)) continue;
+    updates.push(`${field}=?`);
+    params.push(body[field]);
   }
+
+  if (has('end_date') || has('fiscal_period')) {
+    const nextEndDate = has('end_date') ? body.end_date : existing.end_date;
+    const suppliedPeriod = has('fiscal_period') ? body.fiscal_period : existing.fiscal_period;
+    updates.push('fiscal_period=?');
+    params.push(getFiscalPeriodFromDate(nextEndDate) || normalizeFiscalPeriod(suppliedPeriod) || null);
+  }
+
   if (updates.length) {
     params.push(id);
     db.prepare(`UPDATE projects SET ${updates.join(',')} WHERE id=?`).run(...params);
   }
-  res.json(db.prepare('SELECT * FROM projects WHERE id=?').get(id));
+
+  const saved = db.prepare('SELECT * FROM projects WHERE id=?').get(id);
+  res.json({ ...saved, fiscal_period: getProjectFiscalPeriod(saved) || null });
 });
 
 router.delete('/api/projects/:id', (req, res) => {
