@@ -154,8 +154,8 @@ function getFiscalAllocationCategorySummary(rawAssignments, employees, totalWeek
   const local = averageCategory('local');
   const preSale = averageCategory('preSale');
   const training = averageCategory('training');
-  const billable = intrasourcing + local + preSale;
-  const project = billable + training;
+  const billable = intrasourcing + local;
+  const project = intrasourcing + local + preSale + training;
 
   return {
     intrasourcing: +intrasourcing.toFixed(1),
@@ -217,7 +217,7 @@ function getFiscalAllocationResourceDetails(rawAssignments, employees, totalWeek
       allocation,
       metrics: {
         intrasourcing: allocation.intrasourcing,
-        billable: +(allocation.intrasourcing + allocation.local + allocation.preSale).toFixed(2),
+        billable: +(allocation.intrasourcing + allocation.local).toFixed(2),
         project: +(allocation.intrasourcing + allocation.local + allocation.preSale + allocation.training).toFixed(2),
       },
     };
