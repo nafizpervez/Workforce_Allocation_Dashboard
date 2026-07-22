@@ -70,7 +70,7 @@ function openViewAllModal(type) {
   let listHtml;
 
   if (type === 'pipeline') {
-    title = `All Service Pipeline FY ${getServicePipelineFiscalYear()}`;
+    title = `All Service Pipeline FY ${SERVICE_PIPELINE_FISCAL_YEAR}`;
     items = applyPipelineFilters(getServicePipelineBaseProjects());
     listHtml = items.map(servicePipelineRowHtml).join('');
   } else {

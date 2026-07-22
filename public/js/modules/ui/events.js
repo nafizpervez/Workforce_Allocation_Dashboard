@@ -2,32 +2,32 @@
 
 /* ================================================================ EVENTS */
 function initEvents() {
-  const globalFiscalYearInput = document.getElementById('globalFiscalYearInput');
-  const commitGlobalFiscalYearInput = async () => {
-    const endYear = Math.trunc(Number(globalFiscalYearInput?.value));
+  const matrixFiscalYearInput = document.getElementById('matrixFiscalYearInput');
+  const commitMatrixFiscalYearInput = async () => {
+    const endYear = Math.trunc(Number(matrixFiscalYearInput?.value));
     if (!Number.isFinite(endYear) || endYear < 1901 || endYear > 9999) {
-      syncGlobalFiscalYearControl();
+      syncMatrixFiscalYearControl();
       toast('Enter a fiscal-year ending year between 1901 and 9999.', 'error');
       return;
     }
-    await changeGlobalFiscalYear(endYear - 1);
+    await changeMatrixFiscalYear(endYear - 1);
   };
 
-  document.getElementById('globalFiscalYearPrevBtn')?.addEventListener('click', () => {
-    changeGlobalFiscalYear(S.fiscalYear - 1);
+  document.getElementById('matrixFiscalYearPrevBtn')?.addEventListener('click', () => {
+    changeMatrixFiscalYear(S.matrixFiscalYear - 1);
   });
-  document.getElementById('globalFiscalYearNextBtn')?.addEventListener('click', () => {
-    changeGlobalFiscalYear(S.fiscalYear + 1);
+  document.getElementById('matrixFiscalYearNextBtn')?.addEventListener('click', () => {
+    changeMatrixFiscalYear(S.matrixFiscalYear + 1);
   });
-  globalFiscalYearInput?.addEventListener('change', commitGlobalFiscalYearInput);
-  globalFiscalYearInput?.addEventListener('keydown', event => {
+  matrixFiscalYearInput?.addEventListener('change', commitMatrixFiscalYearInput);
+  matrixFiscalYearInput?.addEventListener('keydown', event => {
     if (event.key === 'Enter') {
       event.preventDefault();
-      commitGlobalFiscalYearInput();
-      globalFiscalYearInput.blur();
+      commitMatrixFiscalYearInput();
+      matrixFiscalYearInput.blur();
     }
   });
-  syncGlobalFiscalYearControl();
+  syncMatrixFiscalYearControl();
   const addBtn = document.getElementById('addMenuBtn'), addMenu = document.getElementById('addMenu');
   addBtn.addEventListener('click', e => { e.stopPropagation(); addMenu.classList.toggle('hidden'); });
   document.addEventListener('click', () => addMenu.classList.add('hidden'));

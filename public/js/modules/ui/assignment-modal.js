@@ -49,9 +49,9 @@ function getAssignmentModalDateRange(opts, assignment, editing) {
   if (year && month && week) return weekDateRange(year, month, week);
 
   const today = new Date();
-  const defaultDate = getCurrentFiscalYearStart(today) === S.fiscalYear
+  const defaultDate = getCurrentFiscalYearStart(today) === S.matrixFiscalYear
     ? today
-    : new Date(S.fiscalYear, 3, 1);
+    : new Date(S.matrixFiscalYear, 3, 1);
   const slot = getMatrixSlotFromDate(defaultDate);
   return weekDateRange(slot.year, slot.month, slot.week);
 }
@@ -323,7 +323,7 @@ function openAssignmentModal(opts = {}) {
     `);
   } else {
     openModal(`
-      ${mHdr('Add Assignment', `Assign a resource to a project across a date range · ${fiscalYearDisplayLabel(S.fiscalYear)}`)}
+      ${mHdr('Add Assignment', `Assign a resource to a project across a date range · ${fiscalYearDisplayLabel(S.matrixFiscalYear)}`)}
       <div class="p-6 space-y-4">
         ${employeeSelect}
         ${projectFields}
@@ -533,8 +533,8 @@ function setDateRange(preset) {
     start = new Date(displayedStart.getFullYear(), displayedStart.getMonth(), 1);
     end = new Date(displayedStart.getFullYear(), displayedStart.getMonth() + 3, 0);
   } else {
-    start = new Date(S.fiscalYear, 3, 1);
-    end = new Date(S.fiscalYear + 1, 2, 31);
+    start = new Date(S.matrixFiscalYear, 3, 1);
+    end = new Date(S.matrixFiscalYear + 1, 2, 31);
   }
 
   startInput.value = formatDateInputLocal(start);

@@ -191,6 +191,17 @@
                 </div>
                 <div class="monthly-planned-work-side-meta">
                   <div class="monthly-planned-work-controls">
+                    <label class="monthly-planned-work-fy-filter" for="monthlyPlannedWorkFiscalYearFilter">
+                      <span>FY</span>
+                      <select
+                        id="monthlyPlannedWorkFiscalYearFilter"
+                        class="field-input"
+                        aria-label="Planned vs Actual fiscal year"
+                        onchange="setMonthlyPlannedWorkFiscalYear(this.value)"
+                      >
+                        <option value="">All</option>
+                      </select>
+                    </label>
                     <div
                       class="monthly-planned-work-tabs"
                       role="tablist"
