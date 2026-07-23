@@ -1,6 +1,6 @@
 {
   "name": "workforce-allocation-dashboard",
-  "version": "9.2.0",
+  "version": "9.5.0",
   "private": true,
   "description": "Modular workforce allocation dashboard with Express, SQLite, Chart.js and vanilla JavaScript.",
   "main": "server.js",

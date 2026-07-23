@@ -1119,10 +1119,7 @@
 }
 
 .planned-actual-detail-table td.is-number,
-.planned-actual-detail-table th:nth-child(5),
-.planned-actual-detail-table th:nth-child(6),
-.planned-actual-detail-table th:nth-child(7),
-.planned-actual-detail-table th:nth-child(8) {
+.planned-actual-detail-table th.is-number {
   text-align: right;
   white-space: nowrap;
 }

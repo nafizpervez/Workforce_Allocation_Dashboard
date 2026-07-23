@@ -113,13 +113,6 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
       </div>
     </th>
     <th
-      class="sticky-total-allocation col-total-allocation matrix-fixed-heading matrix-total-allocation-heading"
-      rowspan="2"
-      title="Sum of the resource’s Intrasourcing, Local, Pre-Sale, Training and General Admin allocation averages"
-    >
-      <span>Total Allocation</span>
-    </th>
-    <th
       class="sticky-allocation-group matrix-summary-group matrix-allocation-group"
       colspan="${RESOURCE_SUMMARY_COLUMNS.allocation.length}"
     >Allocation</th>
@@ -182,25 +175,7 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
   return header;
 }
 
-function renderResourceSummaryCells(employee) {
-  const summary = getResourceSummaryViewData(employee);
-  const totalAllocationTitle = [
-    `${employee.name} total allocation is the sum of the five visible allocation categories.`,
-    `${RESOURCE_SUMMARY_COLUMNS.allocation.map(column => (
-      `${column.label} ${summary.allocation[column.key].toFixed(1)}%`
-    )).join(' + ')} = ${summary.allocationMeta.total.toFixed(1)}%.`,
-  ].join(' ');
-
-  const totalAllocationCell = `
-    <td
-      class="matrix-fixed-cell sticky-total-allocation col-total-allocation matrix-summary-cell matrix-total-allocation-cell"
-      data-employee-id="${employee.id}"
-      data-summary-group="allocation"
-      data-summary-metric="total"
-      title="${esc(totalAllocationTitle)}"
-    >${formatAllocationViewValue(summary.allocationMeta.total)}</td>
-  `;
-
+function renderResourceSummaryCells(employee, summary = getResourceSummaryViewData(employee)) {
   const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation.map((column, index) => {
     const rule = RESOURCE_ALLOCATION_RULE_BY_KEY[column.key];
     const description = rule?.description ||
@@ -242,7 +217,7 @@ function renderResourceSummaryCells(employee) {
     `;
   }).join('');
 
-  return totalAllocationCell + allocationCells + revenueCells;
+  return allocationCells + revenueCells;
 }
 
 function renderAssignmentCells(employee, months, unavailableSlots) {
@@ -339,6 +314,13 @@ function renderMatrix() {
 
   const rows = employees.map((employee, index) => {
     const rowClass = index % 2 === 0 ? 'row-even' : 'row-odd';
+    const summary = getResourceSummaryViewData(employee);
+    const totalAllocationTitle = [
+      `${employee.name} total allocation is the sum of the five visible allocation categories.`,
+      `${RESOURCE_SUMMARY_COLUMNS.allocation.map(column => (
+        `${column.label} ${summary.allocation[column.key].toFixed(1)}%`
+      )).join(' + ')} = ${summary.allocationMeta.total.toFixed(1)}%.`,
+    ].join(' ');
 
     return `
       <tr class="matrix-row ${rowClass}" data-emp="${employee.id}">
@@ -350,20 +332,24 @@ function renderMatrix() {
             data-action="edit-emp"
             data-emp="${employee.id}"
           >
-            <span class="matrix-avatar avatar-grad">${esc(inits(employee.name))}</span>
+            <span
+              class="matrix-allocation-avatar"
+              title="${esc(totalAllocationTitle)}"
+              aria-label="${esc(employee.name)} total allocation ${formatAllocationViewValue(summary.allocationMeta.total)}"
+            >${formatAllocationViewValue(summary.allocationMeta.total)}</span>
             <span class="matrix-resource-copy">
               <span class="matrix-resource-name">${esc(employee.name)}</span>
               <span class="matrix-resource-designation">${esc(employee.designation || 'No designation')}</span>
             </span>
           </button>
         </td>
-        ${renderResourceSummaryCells(employee)}
+        ${renderResourceSummaryCells(employee, summary)}
         ${renderAssignmentCells(employee, months, unavailableSlots)}
       </tr>
     `;
   });
 
-  const columnCount = 3 +
+  const columnCount = 2 +
     RESOURCE_SUMMARY_COLUMNS.allocation.length +
     RESOURCE_SUMMARY_COLUMNS.revenue.length +
     (months.length * 4);

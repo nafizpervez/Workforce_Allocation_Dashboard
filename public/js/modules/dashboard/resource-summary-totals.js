@@ -119,16 +119,6 @@ function renderMatrixTotalsRow(employees, months) {
   const resourceLabel = `${totals.employeeCount} visible resource${totals.employeeCount === 1 ? '' : 's'}`;
   const fiscalResourceLabel = `${totals.availableFiscalResourceCount} available resource${totals.availableFiscalResourceCount === 1 ? '' : 's'}`;
 
-  const totalAllocationTitle = `Average total allocation across ${fiscalResourceLabel}. This is the average of each visible resource’s Intrasourcing + Local + Pre-Sale + Training + General Admin allocation: ${totals.totalAllocation.toFixed(1)}%.`;
-  const totalAllocationCell = `
-    <td
-      class="matrix-fixed-cell sticky-total-allocation col-total-allocation matrix-total-cell matrix-total-allocation-summary-cell"
-      data-total-group="allocation"
-      data-total-metric="total"
-      title="${esc(totalAllocationTitle)}"
-    >${formatAllocationViewValue(totals.totalAllocation)}</td>
-  `;
-
   const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation
     .map((column, index) => {
       const value = totals.allocation[column.key];
@@ -197,11 +187,13 @@ function renderMatrixTotalsRow(employees, months) {
         class="matrix-fixed-cell sticky-sn col-sn matrix-total-cell matrix-total-symbol-cell"
         title="Totals and averages for ${esc(resourceLabel)}"
       >Σ</td>
-      <td class="matrix-fixed-cell sticky-name col-name matrix-total-cell matrix-total-label-cell">
+      <td
+        class="matrix-fixed-cell sticky-name col-name matrix-total-cell matrix-total-label-cell"
+        title="Average total allocation across ${esc(fiscalResourceLabel)}: ${totals.totalAllocation.toFixed(1)}%."
+      >
         <span class="matrix-total-label">Total / Average</span>
-        <span class="matrix-total-note">${esc(resourceLabel)}</span>
+        <span class="matrix-total-note">${esc(resourceLabel)} · Avg total ${formatAllocationViewValue(totals.totalAllocation)}</span>
       </td>
-      ${totalAllocationCell}
       ${allocationCells}
       ${revenueCells}
       ${weeklyCells}

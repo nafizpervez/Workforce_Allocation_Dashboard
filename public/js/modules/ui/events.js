@@ -145,6 +145,12 @@ function initEvents() {
   /* Matrix table click */
   const matrixTable = document.getElementById('matrixTable');
   matrixTable.addEventListener('click', e => {
+    const clickedAssignmentChip = e.target.closest('[data-action="edit-assign"]');
+    const clickedAssignmentDelete = e.target.closest('[data-action="delete-assign"]');
+    if (!clickedAssignmentChip && !clickedAssignmentDelete) {
+      clearMatrixAssignmentSelection();
+    }
+
     const revenueCell = e.target.closest('[data-action="open-revenue-breakdown"]');
     if (revenueCell) {
       e.stopPropagation();
@@ -158,14 +164,14 @@ function initEvents() {
       return;
     }
 
-    const del = e.target.closest('[data-action="delete-assign"]');
+    const del = clickedAssignmentDelete;
     if (del) {
       e.stopPropagation();
       deleteAssignment(Number(del.dataset.id), { includeMatrixSelection: true });
       return;
     }
 
-    const chip = e.target.closest('[data-action="edit-assign"]');
+    const chip = clickedAssignmentChip;
     if (chip) {
       e.stopPropagation();
       // The first click in a click sequence toggles selection. The second
@@ -205,6 +211,13 @@ function initEvents() {
     e.stopPropagation();
     ensureMatrixAssignmentChipSelected(chip);
     openMatrixAssignmentChip(chip);
+  });
+
+  document.addEventListener('click', e => {
+    if (!getMatrixSelectedAssignmentSet().size) return;
+    if (e.target.closest('#matrixTable [data-action="edit-assign"]')) return;
+    if (e.target.closest('#matrixTable [data-action="delete-assign"]')) return;
+    clearMatrixAssignmentSelection();
   });
 
   matrixTable.addEventListener('keydown', e => {

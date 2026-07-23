@@ -18,19 +18,6 @@
   height: 100%;
 }
 
-.matrix-total-allocation-heading {
-  padding: 0 7px;
-  background: #eef2ff !important;
-  color: #3730a3;
-  text-align: center;
-  line-height: 1.2;
-}
-
-.matrix-total-allocation-heading span {
-  display: inline-block;
-  white-space: normal;
-}
-
 .matrix-summary-group {
   padding: 9px 4px;
   border-right: 1px solid rgba(255, 255, 255, 0.28);
@@ -114,15 +101,29 @@
   cursor: pointer;
 }
 
-.matrix-avatar {
+.matrix-allocation-avatar {
   display: inline-flex;
-  width: 34px;
-  height: 34px;
-  flex: 0 0 34px;
+  width: 42px;
+  height: 42px;
+  flex: 0 0 42px;
   align-items: center;
   justify-content: center;
+  border: 2px solid #4f46e5;
   border-radius: 9999px;
-  font-size: 11px;
+  background: #eef2ff;
+  color: #3730a3;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 1;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.matrix-resource-button:hover .matrix-allocation-avatar,
+.matrix-resource-button:focus-visible .matrix-allocation-avatar {
+  border-color: #2563eb;
+  background: #dbeafe;
+  color: #1d4ed8;
 }
 
 .matrix-resource-copy {
@@ -161,13 +162,6 @@
   font-size: 10px;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-
-.matrix-total-allocation-cell {
-  background-color: #eef2ff;
-  color: #3730a3;
-  font-size: 11px;
-  font-weight: 800;
 }
 
 .matrix-allocation-cell {
@@ -226,13 +220,6 @@
   color: #64748b;
   font-size: 9px;
   font-weight: 500;
-}
-
-.matrix-total-row .matrix-total-allocation-summary-cell {
-  background: #e0e7ff;
-  color: #3730a3;
-  font-size: 11px;
-  font-weight: 800;
 }
 
 .matrix-total-row .matrix-total-allocation-cell {
