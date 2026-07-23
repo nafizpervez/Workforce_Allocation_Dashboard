@@ -1157,9 +1157,10 @@
 /* Per-resource Pre-Sale detail actions. */
 .planned-actual-person-side {
   display: flex;
-  flex-direction: column;
-  align-items: flex-end;
-  gap: 0.28rem;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.42rem;
+  min-width: max-content;
 }
 
 .planned-actual-resource-detail-button {
@@ -1202,6 +1203,7 @@
 @media (max-width: 480px) {
   .planned-actual-person-side {
     grid-column: 2;
-    align-items: flex-start;
+    justify-content: flex-start;
+    min-width: 0;
   }
 }

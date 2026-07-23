@@ -683,10 +683,6 @@ function renderPlannedActualResourceCard(project, resource, mode, totalHours) {
         <span>${esc(deltaText)}</span>
       </div>
       <div class="planned-actual-person-side">
-        <div class="planned-actual-person-effort">
-          <strong>${esc(formatPlannedActualHours(resource.hours))}</strong>
-          <span>${share.toFixed(1)}%</span>
-        </div>
         ${project.preSaleContext ? `
           <button
             type="button"
@@ -696,6 +692,10 @@ function renderPlannedActualResourceCard(project, resource, mode, totalHours) {
             title="Open ${mode === 'planned' ? 'planned assignment' : 'actual time-log'} details for ${esc(resource.name)}"
           >${mode === 'planned' ? 'Planned Details' : 'Actual Details'}</button>
         ` : ''}
+        <div class="planned-actual-person-effort">
+          <strong>${esc(formatPlannedActualHours(resource.hours))}</strong>
+          <span>${share.toFixed(1)}%</span>
+        </div>
       </div>
     </article>
   `;
