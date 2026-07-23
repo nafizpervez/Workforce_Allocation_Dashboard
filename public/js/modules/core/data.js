@@ -136,13 +136,14 @@ async function loadAll() {
       ? fixedAssignmentsRequest
       : api('GET', `/api/assignments?fiscalYear=${matrixFy}`);
 
-    const [emps, projs, asgs, matrixAsgs, revenueRates, committedTargets, preSaleProducts, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
+    const [emps, projs, asgs, matrixAsgs, revenueRates, committedTargets, preSaleProducts, preSaleProductThresholds, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
       api('GET', '/api/employees'), api('GET', '/api/projects'),
       fixedAssignmentsRequest,
       matrixAssignmentsRequest,
       api('GET', '/api/revenue-rates'),
       api('GET', '/api/committed-targets'),
       api('GET', '/api/presale-products'),
+      api('GET', '/api/presale-product-settings'),
       api('GET', `/api/dashboard/stats?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/trends?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/workload?fiscalYear=${fy}`),
@@ -163,6 +164,7 @@ async function loadAll() {
     S.revenueRates = revenueRates;
     S.committedTargets = committedTargets;
     S.preSaleProducts = preSaleProducts;
+    S.preSaleProductThresholds = preSaleProductThresholds;
     buildMatrix();
     buildMatrixEmployeeUtilization();
     S.employeeUtil = new Map(util.all.map(u => [u.id, u.utilization]));
