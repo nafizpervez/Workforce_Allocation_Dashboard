@@ -914,8 +914,26 @@
   background: linear-gradient(135deg, #fff7ed, #fef3c7);
   color: #b45309;
   box-shadow: 0 5px 14px rgba(245, 158, 11, 0.2);
+  font-family: inherit;
   font-size: 0.94rem;
   font-weight: 900;
   line-height: 1.2;
   letter-spacing: 0.01em;
+  cursor: pointer;
+  transition: transform 140ms ease, box-shadow 140ms ease, border-color 140ms ease;
+}
+
+.planned-actual-impact:hover {
+  transform: translateY(-1px);
+  border-color: #d97706;
+  box-shadow: 0 7px 17px rgba(245, 158, 11, 0.28);
+}
+
+.planned-actual-impact:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+.planned-actual-impact.has-active-category {
+  box-shadow: 0 0 0 2px rgba(245, 158, 11, 0.16), 0 7px 17px rgba(245, 158, 11, 0.24);
 }

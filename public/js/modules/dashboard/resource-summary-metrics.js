@@ -142,6 +142,66 @@ function getRevenueRateValue(rateRecord, revenueKey) {
 
 const MATRIX_PLANNED_REVENUE_KEYS = new Set(['intrasourcing', 'local']);
 
+function getMatrixAssignmentCardRevenue(employee, assignment, unavailableSlots = null) {
+  const categoryKey = classifyAllocationProject(
+    getSummaryAssignmentProjectName(assignment),
+  );
+
+  if (categoryKey !== 'preSale') {
+    return getMatrixAssignmentPlannedRevenue(employee, assignment, unavailableSlots);
+  }
+
+  if (unavailableSlots && isEmployeeUnavailableForSlot(
+    employee.id,
+    Number(assignment.year),
+    Number(assignment.month),
+    Number(assignment.week),
+    unavailableSlots,
+  )) {
+    return {
+      eligible: false,
+      categoryKey,
+      hours: 0,
+      rate: null,
+      amount: 0,
+      hasRate: true,
+      basis: 'preSaleProductAmount',
+      productName: '',
+    };
+  }
+
+  const productName = String(
+    assignment.product_name || assignment.assignment_product_name || '',
+  ).trim();
+  const masterProduct = typeof getPreSaleProductByName === 'function'
+    ? getPreSaleProductByName(productName)
+    : null;
+  const directAmountSource = assignment.presale_product_amount;
+  const masterAmountSource = masterProduct?.amount;
+  const directAmount = directAmountSource === null || directAmountSource === undefined || directAmountSource === ''
+    ? null
+    : Number(directAmountSource);
+  const masterAmount = masterAmountSource === null || masterAmountSource === undefined || masterAmountSource === ''
+    ? null
+    : Number(masterAmountSource);
+  const amount = Number.isFinite(masterAmount)
+    ? masterAmount
+    : Number.isFinite(directAmount)
+      ? directAmount
+      : null;
+
+  return {
+    eligible: true,
+    categoryKey,
+    hours: 0,
+    rate: null,
+    amount,
+    hasRate: amount !== null,
+    basis: 'preSaleProductAmount',
+    productName: masterProduct?.name || productName,
+  };
+}
+
 function getMatrixAssignmentPlannedRevenue(employee, assignment, unavailableSlots = null) {
   const categoryKey = classifyAllocationProject(
     getSummaryAssignmentProjectName(assignment),

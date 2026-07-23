@@ -595,9 +595,15 @@ function renderPlannedActualFlow(project) {
         <span class="planned-actual-status">${esc(status)}</span>
         <div class="planned-actual-project-name">${esc(project.label)}</div>
         ${project.preSaleContext ? `
-          <div class="planned-actual-impact" title="${esc(formatPlannedActualBudgetExact(project.preSaleProductAmount))}">
+          <button
+            type="button"
+            class="planned-actual-impact${project.preSaleCategoryKey ? ' has-active-category' : ''}"
+            data-presale-reset
+            title="${esc(`${formatPlannedActualBudgetExact(project.preSaleProductAmount)}. Click to show all Pre-Sale products and clear the confidence-category filter.`)}"
+            aria-label="Show all Pre-Sale products and clear the confidence-category filter"
+          >
             Impact: ${esc(formatPlannedActualBudget(project.preSaleProductAmount))}
-          </div>
+          </button>
           ${renderPlannedActualPreSaleCategoryButtons(project)}
         ` : ''}
         <div class="planned-actual-variance-value">
@@ -1042,6 +1048,17 @@ function initPlannedActualEffortEvents() {
     };
 
     flowRoot.addEventListener('click', event => {
+      const resetButton = event.target.closest('[data-presale-reset]');
+      if (resetButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        plannedActualSelectedPreSaleCategory = '';
+        const productFilter = document.getElementById('plannedActualProductFilter');
+        if (productFilter) productFilter.value = '';
+        renderPlannedActualEffortChart();
+        return;
+      }
+
       const categoryButton = event.target.closest('[data-presale-category]');
       if (categoryButton && !categoryButton.disabled) {
         event.preventDefault();

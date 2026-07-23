@@ -247,16 +247,26 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
         const project = S.projects.find(item => item.id === assignment.project_id) || {};
         const customer = assignment.account_name || project.account_name || project.client || '—';
         const product = assignment.product_name || project.product_name || '—';
-        const revenue = getMatrixAssignmentPlannedRevenue(employee, assignment, unavailableSlots);
+        const revenue = getMatrixAssignmentCardRevenue(employee, assignment, unavailableSlots);
+        const usesPreSaleProductAmount = revenue.basis === 'preSaleProductAmount';
         const revenueText = revenue.hasRate
           ? formatRevenueViewValue(revenue.amount)
-          : 'Unpriced';
+          : usesPreSaleProductAmount
+            ? 'No amount'
+            : 'Unpriced';
         const revenueDetail = revenue.eligible
-          ? (revenue.hasRate
-            ? `${revenue.hours.toFixed(2)}h × ${formatHourlyRateValue(revenue.rate)} = ${formatExactRevenueValue(revenue.amount)}`
-            : `${revenue.hours.toFixed(2)}h · hourly rate not configured`)
+          ? usesPreSaleProductAmount
+            ? (revenue.hasRate
+              ? `Saved Product Amount = ${formatExactRevenueValue(revenue.amount)}`
+              : 'Selected product has no matching saved amount')
+            : (revenue.hasRate
+              ? `${revenue.hours.toFixed(2)}h × ${formatHourlyRateValue(revenue.rate)} = ${formatExactRevenueValue(revenue.amount)}`
+              : `${revenue.hours.toFixed(2)}h · hourly rate not configured`)
           : 'Excluded from planned revenue';
-        const title = `${assignment.project_code || project.code || ''} — ${assignment.project_name || project.name || ''}\nCustomer Name: ${customer}\nProduct Name: ${product}\nPlanned Revenue: ${revenueDetail}\nOnly Intrasourcing and Local are counted.`;
+        const revenueRule = usesPreSaleProductAmount
+          ? 'Pre-Sale cards use the selected Product Amount from the Pre-Sale Product master.'
+          : 'Only Intrasourcing and Local are counted in weekly planned-revenue totals.';
+        const title = `${assignment.project_code || project.code || ''} — ${assignment.project_name || project.name || ''}\nCustomer Name: ${customer}\nProduct Name: ${product}\nRevenue: ${revenueDetail}\n${revenueRule}`;
         const displayName = shortCustomerName(customer) || assignment.project_code;
 
         cells += `

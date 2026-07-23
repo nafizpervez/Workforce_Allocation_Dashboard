@@ -1348,14 +1348,15 @@ button.committed-target-breakdown__item:focus-visible {
   text-transform: uppercase;
 }
 .presale-product-row {
-  padding: 7px 20px;
+  padding: 3px 20px;
   border-bottom: 1px solid #e5e7eb;
   background: #fff;
 }
 .presale-product-row .field-input {
-  min-height: 36px;
-  padding-top: 7px;
-  padding-bottom: 7px;
+  min-height: 32px;
+  height: 32px;
+  padding-top: 4px;
+  padding-bottom: 4px;
 }
 .presale-product-row__index {
   color: #9ca3af;
