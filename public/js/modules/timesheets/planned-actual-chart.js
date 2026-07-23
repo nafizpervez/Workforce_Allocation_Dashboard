@@ -584,10 +584,12 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
               <strong>${esc(row.resourceName || 'Unknown resource')}</strong>
               <span>${esc(row.periodLabel || '')}</span>
             </td>
-            <td>
-              <strong>${esc(row.productName || 'Unmapped Product')}</strong>
-              <span>${esc(productMeta)}</span>
-            </td>
+            ${planned ? `
+              <td>
+                <strong>${esc(row.productName || 'Unmapped Product')}</strong>
+                <span>${esc(productMeta)}</span>
+              </td>
+            ` : ''}
             <td>
               <strong>${sourceDetail}</strong>
               <span>${sourceCaption}</span>
@@ -616,7 +618,7 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
       }).join('')
     : `
       <tr>
-        <td colspan="9" class="planned-actual-detail-empty">
+        <td colspan="${planned ? 9 : 8}" class="planned-actual-detail-empty">
           No ${planned ? 'planned assignment' : 'actual time-log'} details are available for this filter.
         </td>
       </tr>
@@ -638,12 +640,12 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
             <tr>
               <th>#</th>
               <th>Resource</th>
-              <th>Product</th>
+              ${planned ? '<th>Product</th>' : ''}
               <th>${planned ? 'Assignment Project' : 'Time Sheet Project'}</th>
-              <th>${planned ? 'Allocation' : 'Share'}</th>
-              <th>Hours</th>
-              <th>Product Amount</th>
-              <th>Budget</th>
+              <th class="is-number">${planned ? 'Allocation' : 'Share'}</th>
+              <th class="is-number">Hours</th>
+              <th class="is-number">Product Amount</th>
+              <th class="is-number">Budget</th>
               <th>Period</th>
             </tr>
           </thead>
