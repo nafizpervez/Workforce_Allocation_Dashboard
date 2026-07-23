@@ -130,7 +130,7 @@ function renderMatrixTotalsRow(employees, months) {
           data-total-group="allocation"
           data-total-metric="${column.key}"
           title="${esc(title)}"
-        >${formatAllocationViewValue(value)}</td>
+        >${formatMatrixAllocationCellValue(value)}</td>
       `;
     })
     .join('');
@@ -153,7 +153,7 @@ function renderMatrixTotalsRow(employees, months) {
           tabindex="0"
           aria-label="Open ${esc(column.label)} revenue breakdown"
           title="${esc(title)} Click to view the detailed breakdown."
-        >${formatRevenueViewValue(total.value)}</td>
+        >${formatMatrixRevenueValue(total.value)}</td>
       `;
     })
     .join('');
@@ -192,7 +192,7 @@ function renderMatrixTotalsRow(employees, months) {
         title="Average total allocation across ${esc(fiscalResourceLabel)}: ${totals.totalAllocation.toFixed(1)}%."
       >
         <span class="matrix-total-label">Total / Average</span>
-        <span class="matrix-total-note">${esc(resourceLabel)} · Avg total ${formatAllocationViewValue(totals.totalAllocation)}</span>
+        <span class="matrix-total-note">${esc(resourceLabel)} · Avg total ${formatMatrixAllocationValue(totals.totalAllocation)}</span>
       </td>
       ${allocationCells}
       ${revenueCells}

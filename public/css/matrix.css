@@ -27,18 +27,19 @@ table.matrix th {
    four independently calculated revenue columns. Total Allocation is
    displayed inside each resource's circular indicator. */
 :root {
+  --sn-w: 38px;
   --name-w: 190px;
-  --allocation-w: 36px;
-  --revenue-w: 50px;
+  --allocation-w: 32px;
+  --revenue-w: 38px;
   --matrix-month-header-h: 37px;
   --matrix-week-header-h: 92px;
   --matrix-total-row-h: 46px;
 }
 
 .col-sn {
-  width: 52px;
-  min-width: 52px;
-  max-width: 52px;
+  width: var(--sn-w);
+  min-width: var(--sn-w);
+  max-width: var(--sn-w);
 }
 
 .col-name {
@@ -75,36 +76,36 @@ table.matrix th {
 }
 
 .sticky-sn { left: 0; }
-.sticky-name { left: 52px; }
+.sticky-name { left: var(--sn-w); }
 
 .sticky-allocation-1 {
-  left: calc(52px + var(--name-w));
+  left: calc(var(--sn-w) + var(--name-w));
 }
 .sticky-allocation-2 {
-  left: calc(52px + var(--name-w) + var(--allocation-w));
+  left: calc(var(--sn-w) + var(--name-w) + var(--allocation-w));
 }
 .sticky-allocation-3 {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w)
   );
 }
 .sticky-allocation-4 {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
   );
 }
 .sticky-allocation-5 {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
   );
 }
 
 .sticky-revenue-1 {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--allocation-w) + var(--allocation-w)
   );
@@ -112,7 +113,7 @@ table.matrix th {
 
 .sticky-revenue-2 {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--allocation-w) + var(--allocation-w) + var(--revenue-w)
   );
@@ -120,7 +121,7 @@ table.matrix th {
 
 .sticky-revenue-3 {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--allocation-w) + var(--allocation-w) +
     var(--revenue-w) + var(--revenue-w)
@@ -129,7 +130,7 @@ table.matrix th {
 
 .sticky-revenue-4 {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--allocation-w) + var(--allocation-w) +
     var(--revenue-w) + var(--revenue-w) + var(--revenue-w)
@@ -144,12 +145,12 @@ table.matrix th {
 }
 
 .sticky-allocation-group {
-  left: calc(52px + var(--name-w));
+  left: calc(var(--sn-w) + var(--name-w));
 }
 
 .sticky-revenue-group {
   left: calc(
-    52px + var(--name-w) +
+    var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--allocation-w) + var(--allocation-w)
   );

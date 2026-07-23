@@ -28,6 +28,35 @@ function isPSRevenueProject(project) {
   return family === 'PROFESSIONAL SERVICES' || text.includes('PS SYSTEM SUPPORT') || text.includes('PS PROJECT IMPLEMENT');
 }
 
+const RUNNING_CLOSED_WON_START_DATE = '2025-03-01';
+
+function normalizeProjectFamily(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function isProfessionalServiceRunningProject(project) {
+  const family = normalizeProjectFamily(project?.product_family);
+  const closedWonDate = String(project?.end_date || '').trim();
+  return (
+    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
+    (family === 'professional service' || family === 'professional services') &&
+    Number(project?.progress) < 100 &&
+    /^\d{4}-\d{2}-\d{2}$/.test(closedWonDate) &&
+    closedWonDate >= RUNNING_CLOSED_WON_START_DATE
+  );
+}
+
+function isDealAcquisitionChartEligible(project) {
+  return (
+    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
+    getProjectFiscalYear(project) !== null &&
+    !isProfessionalServiceRunningProject(project)
+  );
+}
+
 function matchesCategory(project, category) {
   const text = getProductText(project);
   const family = (project.product_family || '').toUpperCase();
@@ -97,10 +126,13 @@ function calcDealStatusesForSubset(projects) {
 const calcDealStatuses = calcDealStatusesForSubset;
 
 module.exports = {
+  RUNNING_CLOSED_WON_START_DATE,
   calcDealStatuses,
   calcDealStatusesForSubset,
   getProductText,
   getRevenueAmount,
+  isDealAcquisitionChartEligible,
+  isProfessionalServiceRunningProject,
   isPSRevenueProject,
   matchesCategory,
   productCategory,
