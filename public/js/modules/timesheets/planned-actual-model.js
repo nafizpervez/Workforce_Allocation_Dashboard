@@ -510,13 +510,22 @@ function buildPlannedActualScope(
   };
 }
 
-function getPreSaleProductAmountByName(name) {
+function getPreSaleProductMasterByName(name) {
   const normalized = normalizePlannedActualText(name);
-  const product = (S.preSaleProducts || []).find(item => (
+  if (!normalized) return null;
+  return (S.preSaleProducts || []).find(item => (
     normalizePlannedActualText(item.name) === normalized
-  ));
-  const amount = Number(product?.amount);
+  )) || null;
+}
+
+function getPreSaleProductAmountByName(name) {
+  const amount = Number(getPreSaleProductMasterByName(name)?.amount);
   return Number.isFinite(amount) && amount >= 0 ? amount : 0;
+}
+
+function getPreSaleProductPercentByName(name) {
+  const percent = Number(getPreSaleProductMasterByName(name)?.percent);
+  return Number.isFinite(percent) && percent >= 0 && percent <= 100 ? percent : 0;
 }
 
 function addPlannedActualProductName(entry, productName, year, month) {
@@ -539,6 +548,7 @@ function getOrCreatePlannedActualProductScope(entry, productName) {
       label: name,
       productName: name,
       productAmount: getPreSaleProductAmountByName(name),
+      productPercent: getPreSaleProductPercentByName(name),
       plannedByResource: new Map(),
       actualByResource: new Map(),
       plannedResourcesByMonth: new Map(),

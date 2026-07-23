@@ -5,6 +5,200 @@ let plannedActualProjectInputTimer = null;
 let plannedActualProjectMenuCloseTimer = null;
 let plannedActualSelectedResourceKey = '';
 
+let plannedActualSelectedPreSaleCategory = '';
+let plannedActualCategoryProjectKey = '';
+
+const PLANNED_ACTUAL_PRESALE_CATEGORIES = [
+  { key: 'secured', label: 'Secured' },
+  { key: 'best-case', label: 'Best Case' },
+  { key: 'prospect', label: 'Prospect' },
+];
+
+function getPlannedActualPreSaleThresholds() {
+  const securedMinPercent = Number(S.preSaleProductThresholds?.securedMinPercent);
+  const bestCaseMinPercent = Number(S.preSaleProductThresholds?.bestCaseMinPercent);
+
+  if (
+    Number.isFinite(securedMinPercent) &&
+    Number.isFinite(bestCaseMinPercent) &&
+    securedMinPercent > 0 &&
+    securedMinPercent <= 100 &&
+    bestCaseMinPercent >= 0 &&
+    bestCaseMinPercent < securedMinPercent
+  ) {
+    return { securedMinPercent, bestCaseMinPercent };
+  }
+
+  return { securedMinPercent: 90, bestCaseMinPercent: 70 };
+}
+
+function classifyPlannedActualPreSalePercent(percent) {
+  const numericPercent = Math.max(0, Math.min(100, Number(percent) || 0));
+  const thresholds = getPlannedActualPreSaleThresholds();
+  if (numericPercent >= thresholds.securedMinPercent) return 'secured';
+  if (numericPercent >= thresholds.bestCaseMinPercent) return 'best-case';
+  return 'prospect';
+}
+
+function plannedActualPreSaleCategoryDefinition(categoryKey) {
+  return PLANNED_ACTUAL_PRESALE_CATEGORIES.find(category => (
+    category.key === categoryKey
+  )) || null;
+}
+
+function plannedActualPreSaleProductIsActiveInMonth(product, monthKey) {
+  if (!monthKey) return true;
+  const month = (product.monthly || []).find(item => item.key === monthKey);
+  return Boolean(month && (month.plannedHours > 0 || month.actualHours > 0));
+}
+
+function getPlannedActualPreSaleCategorySummaries(project, monthKey = '') {
+  const products = (project?.preSaleProducts || []).filter(product => (
+    plannedActualPreSaleProductIsActiveInMonth(product, monthKey)
+  ));
+
+  return PLANNED_ACTUAL_PRESALE_CATEGORIES.map(category => {
+    const matches = products.filter(product => (
+      classifyPlannedActualPreSalePercent(product.productPercent) === category.key
+    ));
+    const totalPercent = matches.reduce(
+      (sum, product) => sum + (Number(product.productPercent) || 0),
+      0,
+    );
+
+    return {
+      ...category,
+      productCount: matches.length,
+      averagePercent: matches.length ? +(totalPercent / matches.length).toFixed(2) : null,
+    };
+  });
+}
+
+function buildPlannedActualPreSaleCategoryScope(project, categoryKey) {
+  const category = plannedActualPreSaleCategoryDefinition(categoryKey);
+  if (!project || !category) return project;
+
+  const products = (project.preSaleProducts || []).filter(product => (
+    classifyPlannedActualPreSalePercent(product.productPercent) === category.key
+  ));
+  if (!products.length) return project;
+
+  const plannedByResource = new Map();
+  const actualByResource = new Map();
+  products.forEach(product => {
+    mergePlannedActualResourceMap(plannedByResource, product.plannedByResource);
+    mergePlannedActualResourceMap(actualByResource, product.actualByResource);
+  });
+
+  const plannedHours = products.reduce((sum, product) => sum + (Number(product.plannedHours) || 0), 0);
+  const actualHours = products.reduce((sum, product) => sum + (Number(product.actualHours) || 0), 0);
+  const plannedBudget = products.reduce((sum, product) => sum + (Number(product.plannedBudget) || 0), 0);
+  const actualBudget = products.reduce((sum, product) => sum + (Number(product.actualBudget) || 0), 0);
+  const annualScope = buildPlannedActualScope(
+    plannedByResource,
+    actualByResource,
+    plannedHours,
+    actualHours,
+    plannedBudget,
+    actualBudget,
+  );
+
+  const monthly = (project.monthly || []).map(baseMonth => {
+    const monthPlannedByResource = new Map();
+    const monthActualByResource = new Map();
+    let monthPlannedHours = 0;
+    let monthActualHours = 0;
+    let monthPlannedBudget = 0;
+    let monthActualBudget = 0;
+    let monthImpact = 0;
+
+    products.forEach(product => {
+      const productMonth = (product.monthly || []).find(item => item.key === baseMonth.key);
+      if (!productMonth) return;
+      mergePlannedActualResourceMap(monthPlannedByResource, productMonth.plannedByResource);
+      mergePlannedActualResourceMap(monthActualByResource, productMonth.actualByResource);
+      monthPlannedHours += Number(productMonth.plannedHours) || 0;
+      monthActualHours += Number(productMonth.actualHours) || 0;
+      monthPlannedBudget += Number(productMonth.plannedBudget) || 0;
+      monthActualBudget += Number(productMonth.actualBudget) || 0;
+      if (productMonth.plannedHours > 0 || productMonth.actualHours > 0) {
+        monthImpact += Number(product.productAmount) || 0;
+      }
+    });
+
+    return {
+      key: baseMonth.key,
+      label: baseMonth.label,
+      year: baseMonth.year,
+      month: baseMonth.month,
+      ...buildPlannedActualScope(
+        monthPlannedByResource,
+        monthActualByResource,
+        monthPlannedHours,
+        monthActualHours,
+        monthPlannedBudget,
+        monthActualBudget,
+      ),
+      planned: +monthPlannedHours.toFixed(2),
+      actual: +monthActualHours.toFixed(2),
+      variance: +(monthActualHours - monthPlannedHours).toFixed(2),
+      preSaleProductAmount: +monthImpact.toFixed(2),
+    };
+  });
+
+  return {
+    ...project,
+    ...annualScope,
+    monthly,
+    preSaleProducts: products,
+    preSaleProductAmount: +products.reduce(
+      (sum, product) => sum + (Number(product.productAmount) || 0),
+      0,
+    ).toFixed(2),
+    preSaleCategoryKey: category.key,
+    preSaleCategoryLabel: category.label,
+  };
+}
+
+function formatPlannedActualPreSaleAverage(value) {
+  if (value === null || value === undefined) return '—';
+  return `${Number(value).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
+}
+
+function renderPlannedActualPreSaleCategoryButtons(project) {
+  const summaries = project.preSaleCategorySummaries || [];
+  if (!project.preSaleContext || !summaries.length) return '';
+
+  const thresholds = getPlannedActualPreSaleThresholds();
+  const thresholdTitle = {
+    secured: `Percent ≥ ${thresholds.securedMinPercent}%`,
+    'best-case': `${thresholds.bestCaseMinPercent}% ≤ Percent < ${thresholds.securedMinPercent}%`,
+    prospect: `Percent < ${thresholds.bestCaseMinPercent}%`,
+  };
+
+  return `
+    <div class="planned-actual-category-buttons" role="group" aria-label="Pre-Sale confidence category filter">
+      ${summaries.map(summary => {
+        const active = project.preSaleCategoryKey === summary.key;
+        const disabled = summary.productCount === 0;
+        return `
+          <button
+            type="button"
+            class="planned-actual-category-button is-${esc(summary.key)}${active ? ' is-active' : ''}"
+            data-presale-category="${esc(summary.key)}"
+            aria-pressed="${active ? 'true' : 'false'}"
+            title="${esc(`${summary.label}: ${thresholdTitle[summary.key]}. ${summary.productCount} product${summary.productCount === 1 ? '' : 's'}.`)}"
+            ${disabled ? 'disabled' : ''}
+          >
+            <span>${esc(summary.label)}</span>
+            <strong>${esc(formatPlannedActualPreSaleAverage(summary.averagePercent))}</strong>
+          </button>
+        `;
+      }).join('')}
+    </div>
+  `;
+}
+
 function setPlannedActualSelectedResource(resourceKey = '') {
   plannedActualSelectedResourceKey = String(resourceKey || '');
   applyPlannedActualResourceSelection();
@@ -116,6 +310,8 @@ function openPlannedActualProjectMenu({ showAll = false } = {}) {
 }
 
 function selectPlannedActualProjectOption(projectKey, projectLabel) {
+  plannedActualSelectedPreSaleCategory = '';
+  plannedActualCategoryProjectKey = projectKey || '';
   const input = document.getElementById('plannedActualProjectFilter');
   if (!input) return;
 
@@ -327,7 +523,12 @@ function renderPlannedActualTeam(project, mode) {
   const planned = mode === 'planned';
   const resources = planned ? project.plannedResources : project.actualResources;
   const totalHours = planned ? project.plannedHours : project.actualHours;
-  const title = planned ? 'Planned team' : 'Actual delivery team';
+  const categoryPrefix = project.preSaleCategoryLabel
+    ? `${project.preSaleCategoryLabel} `
+    : '';
+  const title = planned
+    ? `${categoryPrefix}planned team`
+    : `${categoryPrefix}actual delivery team`;
   const subtitle = planned
     ? 'Resource Assignment'
     : 'Work Summary Time Sheet';
@@ -397,6 +598,7 @@ function renderPlannedActualFlow(project) {
           <div class="planned-actual-impact" title="${esc(formatPlannedActualBudgetExact(project.preSaleProductAmount))}">
             Impact: ${esc(formatPlannedActualBudget(project.preSaleProductAmount))}
           </div>
+          ${renderPlannedActualPreSaleCategoryButtons(project)}
         ` : ''}
         <div class="planned-actual-variance-value">
           ${esc(formatPlannedActualVariance(project.varianceHours, project.variancePct))}
@@ -624,15 +826,59 @@ function renderPlannedActualEffortChart() {
   populatePlannedActualProjectFilter(data);
   populatePlannedActualMonthFilter(data);
   const selectedProject = getPlannedActualSelection(data);
-  populatePlannedActualProductFilter(selectedProject);
-  const productScopedProject = getPlannedActualProductScope(selectedProject);
-  const project = getPlannedActualScope(productScopedProject);
-  if (project && isPlannedActualPreSaleProject(selectedProject)) {
-    project.preSaleContext = true;
-    project.label = productScopedProject !== selectedProject
-      ? `Pre-Sale — ${productScopedProject.productName}`
-      : 'Pre-Sale';
+
+  if ((selectedProject?.key || '') !== plannedActualCategoryProjectKey) {
+    plannedActualSelectedPreSaleCategory = '';
+    plannedActualCategoryProjectKey = selectedProject?.key || '';
   }
+  if (!isPlannedActualPreSaleProject(selectedProject)) {
+    plannedActualSelectedPreSaleCategory = '';
+  }
+
+  const selectedMonthKey = document.getElementById('plannedActualMonthFilter')?.value || '';
+  const preSaleCategorySummaries = isPlannedActualPreSaleProject(selectedProject)
+    ? getPlannedActualPreSaleCategorySummaries(selectedProject, selectedMonthKey)
+    : [];
+  if (
+    plannedActualSelectedPreSaleCategory &&
+    !preSaleCategorySummaries.some(summary => (
+      summary.key === plannedActualSelectedPreSaleCategory && summary.productCount > 0
+    ))
+  ) {
+    plannedActualSelectedPreSaleCategory = '';
+  }
+
+  populatePlannedActualProductFilter(selectedProject);
+  const productSelect = document.getElementById('plannedActualProductFilter');
+  const selectedProductName = productSelect?.value || '';
+  const productScopedProject = getPlannedActualProductScope(selectedProject);
+  const categoryScopedProject = (
+    isPlannedActualPreSaleProject(selectedProject) &&
+    !selectedProductName &&
+    plannedActualSelectedPreSaleCategory
+  )
+    ? buildPlannedActualPreSaleCategoryScope(
+      selectedProject,
+      plannedActualSelectedPreSaleCategory,
+    )
+    : productScopedProject;
+  const project = getPlannedActualScope(categoryScopedProject);
+
+  if (project && isPlannedActualPreSaleProject(selectedProject)) {
+    const category = plannedActualPreSaleCategoryDefinition(
+      !selectedProductName ? plannedActualSelectedPreSaleCategory : '',
+    );
+    project.preSaleContext = true;
+    project.preSaleCategoryKey = category?.key || '';
+    project.preSaleCategoryLabel = category?.label || '';
+    project.preSaleCategorySummaries = preSaleCategorySummaries;
+    project.label = category
+      ? `Pre-Sale — ${category.label}`
+      : productScopedProject !== selectedProject
+        ? `Pre-Sale — ${productScopedProject.productName}`
+        : 'Pre-Sale';
+  }
+
   const hasData = Boolean(project && (project.plannedHours > 0 || project.actualHours > 0));
   const showMonthlyProgression = Boolean(hasData && !project?.selectedMonthKey);
 
@@ -777,7 +1023,10 @@ function initPlannedActualEffortEvents() {
   const productSelect = document.getElementById('plannedActualProductFilter');
   if (productSelect && productSelect.dataset.bound !== '1') {
     productSelect.dataset.bound = '1';
-    productSelect.addEventListener('change', renderPlannedActualEffortChart);
+    productSelect.addEventListener('change', () => {
+      plannedActualSelectedPreSaleCategory = '';
+      renderPlannedActualEffortChart();
+    });
   }
 
 
@@ -793,6 +1042,20 @@ function initPlannedActualEffortEvents() {
     };
 
     flowRoot.addEventListener('click', event => {
+      const categoryButton = event.target.closest('[data-presale-category]');
+      if (categoryButton && !categoryButton.disabled) {
+        event.preventDefault();
+        event.stopPropagation();
+        const categoryKey = categoryButton.dataset.presaleCategory || '';
+        plannedActualSelectedPreSaleCategory = (
+          plannedActualSelectedPreSaleCategory === categoryKey ? '' : categoryKey
+        );
+        const productFilter = document.getElementById('plannedActualProductFilter');
+        if (productFilter) productFilter.value = '';
+        renderPlannedActualEffortChart();
+        return;
+      }
+
       const card = event.target.closest('.planned-actual-person');
       if (card) {
         event.stopPropagation();

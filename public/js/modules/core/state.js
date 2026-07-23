@@ -37,6 +37,7 @@ const S = {
   // Only the Resource Assignment Matrix may move across fiscal years.
   matrixFiscalYear: getCurrentFiscalYearStart(),
   employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
+  preSaleProductThresholds: { securedMinPercent: 90, bestCaseMinPercent: 70 },
   matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},
   searchQuery: '',
   insightsPeriodHigh: 'fiscal',

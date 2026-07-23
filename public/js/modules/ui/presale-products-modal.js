@@ -2,6 +2,10 @@
 
 let preSaleProductDraftRows = [];
 let preSaleProductDraftSequence = 0;
+let preSaleProductThresholdDraft = {
+  securedMinPercent: 90,
+  bestCaseMinPercent: 70,
+};
 
 function formatPreSaleProductAmount(value) {
   return `$${(Number(value) || 0).toLocaleString('en-US', {
@@ -24,6 +28,14 @@ function createPreSaleProductDraftRow(product = {}) {
     id: product.id ?? null,
     name: String(product.name || ''),
     amount: Number(product.amount) || 0,
+    percent: Number(product.percent) || 0,
+  };
+}
+
+function normalizePreSaleProductThresholdDraft(settings = {}) {
+  return {
+    securedMinPercent: Number(settings.securedMinPercent) || 90,
+    bestCaseMinPercent: Number(settings.bestCaseMinPercent) || 70,
   };
 }
 
@@ -33,7 +45,26 @@ function readPreSaleProductDraftRows() {
     if (!draft) return;
     draft.name = row.querySelector('[data-presale-product-name]')?.value || '';
     draft.amount = row.querySelector('[data-presale-product-amount]')?.value || '';
+    draft.percent = row.querySelector('[data-presale-product-percent]')?.value || '';
   });
+}
+
+function readPreSaleProductThresholdDraft() {
+  preSaleProductThresholdDraft = {
+    securedMinPercent: document.getElementById('presaleSecuredThreshold')?.value || '',
+    bestCaseMinPercent: document.getElementById('presaleBestCaseThreshold')?.value || '',
+  };
+  return preSaleProductThresholdDraft;
+}
+
+function syncPreSaleThresholdPreview() {
+  const bestCaseValue = Number(document.getElementById('presaleBestCaseThreshold')?.value);
+  const preview = document.getElementById('presaleProspectThresholdPreview');
+  if (preview) {
+    preview.textContent = Number.isFinite(bestCaseValue)
+      ? `< ${bestCaseValue.toLocaleString('en-US', { maximumFractionDigits: 2 })}%`
+      : '< Best Case threshold';
+  }
 }
 
 function renderPreSaleProductRows() {
@@ -70,6 +101,21 @@ function renderPreSaleProductRows() {
               placeholder="0.00"
             >
           </div>
+          <div class="relative">
+            <label class="sr-only" for="presale_percent_${index}">Percent</label>
+            <input
+              id="presale_percent_${index}"
+              type="number"
+              min="0"
+              max="100"
+              step="0.01"
+              class="field-input pr-7 text-right"
+              data-presale-product-percent
+              value="${esc(Number(product.percent) || 0)}"
+              placeholder="0"
+            >
+            <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+          </div>
           <button
             type="button"
             class="presale-product-row__remove"
@@ -100,17 +146,59 @@ function removePreSaleProductRow(key) {
 
 function openPreSaleProductsModal() {
   preSaleProductDraftRows = (S.preSaleProducts || []).map(createPreSaleProductDraftRow);
+  preSaleProductThresholdDraft = normalizePreSaleProductThresholdDraft(
+    S.preSaleProductThresholds,
+  );
 
   openModal(`
     ${mHdr(
       'Pre-Sale Product',
-      'Maintain the only Product Names and reference amounts allowed for Pre-Sale assignments.',
+      'Maintain Product Names, reference amounts, confidence percentages and classification thresholds for Pre-Sale assignments.',
     )}
     <div class="modal-scroll-body nice-scroll presale-products-modal__body">
+      <section class="presale-product-thresholds" aria-labelledby="presaleThresholdHeading">
+        <div class="presale-product-thresholds__copy">
+          <strong id="presaleThresholdHeading">Classification thresholds</strong>
+          <span>Percent values are classified automatically throughout the Plan-to-Execution Map.</span>
+        </div>
+        <label class="presale-product-threshold-field is-secured">
+          <span>Secured ≥</span>
+          <input
+            id="presaleSecuredThreshold"
+            type="number"
+            min="0.01"
+            max="100"
+            step="0.01"
+            class="field-input"
+            value="${esc(preSaleProductThresholdDraft.securedMinPercent)}"
+            oninput="syncPreSaleThresholdPreview()"
+          >
+          <em>%</em>
+        </label>
+        <label class="presale-product-threshold-field is-best-case">
+          <span>Best Case ≥</span>
+          <input
+            id="presaleBestCaseThreshold"
+            type="number"
+            min="0"
+            max="99.99"
+            step="0.01"
+            class="field-input"
+            value="${esc(preSaleProductThresholdDraft.bestCaseMinPercent)}"
+            oninput="syncPreSaleThresholdPreview()"
+          >
+          <em>%</em>
+        </label>
+        <div class="presale-product-threshold-field is-prospect" aria-label="Prospect threshold">
+          <span>Prospect</span>
+          <strong id="presaleProspectThresholdPreview">&lt; ${esc(preSaleProductThresholdDraft.bestCaseMinPercent)}%</strong>
+        </div>
+      </section>
       <div class="presale-product-table-header">
         <span>#</span>
         <span>Product Name</span>
         <span class="text-right">Amount</span>
+        <span class="text-right">Percent</span>
         <span></span>
       </div>
       <div id="preSaleProductRows"></div>
@@ -122,24 +210,53 @@ function openPreSaleProductsModal() {
         <button id="savePreSaleProductsBtn" type="button" onclick="savePreSaleProducts()" class="btn-blue">Save Products</button>
       </div>
     </div>
-  `, 'max-w-3xl presale-products-modal-panel');
+  `, 'max-w-4xl presale-products-modal-panel');
 
   renderPreSaleProductRows();
+  syncPreSaleThresholdPreview();
 }
 
 async function savePreSaleProducts() {
   readPreSaleProductDraftRows();
+  const thresholdDraft = readPreSaleProductThresholdDraft();
+  const thresholds = {
+    securedMinPercent: Number(thresholdDraft.securedMinPercent),
+    bestCaseMinPercent: Number(thresholdDraft.bestCaseMinPercent),
+  };
   const products = preSaleProductDraftRows.map(product => ({
     id: product.id,
     name: String(product.name || '').trim(),
     amount: Number(product.amount),
+    percent: Number(product.percent),
   }));
 
+  if (
+    !Number.isFinite(thresholds.securedMinPercent) ||
+    thresholds.securedMinPercent <= 0 ||
+    thresholds.securedMinPercent > 100
+  ) {
+    toast('Secured threshold must be greater than 0 and no more than 100.', 'error');
+    return;
+  }
+  if (
+    !Number.isFinite(thresholds.bestCaseMinPercent) ||
+    thresholds.bestCaseMinPercent < 0 ||
+    thresholds.bestCaseMinPercent >= thresholds.securedMinPercent
+  ) {
+    toast('Best Case threshold must be at least 0 and lower than the Secured threshold.', 'error');
+    return;
+  }
+
   const invalidIndex = products.findIndex(product => (
-    !product.name || !Number.isFinite(product.amount) || product.amount < 0
+    !product.name ||
+    !Number.isFinite(product.amount) ||
+    product.amount < 0 ||
+    !Number.isFinite(product.percent) ||
+    product.percent < 0 ||
+    product.percent > 100
   ));
   if (invalidIndex !== -1) {
-    toast(`Product row ${invalidIndex + 1} requires a name and non-negative amount.`, 'error');
+    toast(`Product row ${invalidIndex + 1} requires a name, non-negative amount and Percent from 0 to 100.`, 'error');
     return;
   }
 
@@ -161,8 +278,16 @@ async function savePreSaleProducts() {
 
   try {
     S.preSaleProducts = await api('PUT', '/api/presale-products', { products });
+    S.preSaleProductThresholds = await api(
+      'PUT',
+      '/api/presale-product-settings',
+      thresholds,
+    );
     closeModal();
-    toast('Pre-Sale Products saved');
+    if (typeof renderPlannedActualEffortChart === 'function') {
+      renderPlannedActualEffortChart();
+    }
+    toast('Pre-Sale Products and thresholds saved');
   } catch (error) {
     if (saveButton) {
       saveButton.disabled = false;
