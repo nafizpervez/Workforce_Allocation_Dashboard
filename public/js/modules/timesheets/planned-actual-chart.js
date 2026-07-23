@@ -4,6 +4,7 @@ let plannedActualFlowResizeTimer = null;
 let plannedActualProjectInputTimer = null;
 let plannedActualProjectMenuCloseTimer = null;
 let plannedActualSelectedResourceKey = '';
+let plannedActualRenderedProject = null;
 
 let plannedActualSelectedPreSaleCategory = '';
 let plannedActualCategoryProjectKey = '';
@@ -85,6 +86,8 @@ function buildPlannedActualPreSaleCategoryScope(project, categoryKey) {
 
   const plannedByResource = new Map();
   const actualByResource = new Map();
+  const plannedDetails = products.flatMap(product => product.plannedDetails || []);
+  const actualDetails = products.flatMap(product => product.actualDetails || []);
   products.forEach(product => {
     mergePlannedActualResourceMap(plannedByResource, product.plannedByResource);
     mergePlannedActualResourceMap(actualByResource, product.actualByResource);
@@ -143,6 +146,8 @@ function buildPlannedActualPreSaleCategoryScope(project, categoryKey) {
       actual: +monthActualHours.toFixed(2),
       variance: +(monthActualHours - monthPlannedHours).toFixed(2),
       preSaleProductAmount: +monthImpact.toFixed(2),
+      plannedDetails: plannedDetails.filter(detail => detail.monthKey === baseMonth.key),
+      actualDetails: actualDetails.filter(detail => detail.monthKey === baseMonth.key),
     };
   });
 
@@ -151,6 +156,8 @@ function buildPlannedActualPreSaleCategoryScope(project, categoryKey) {
     ...annualScope,
     monthly,
     preSaleProducts: products,
+    plannedDetails,
+    actualDetails,
     preSaleProductAmount: +products.reduce(
       (sum, product) => sum + (Number(product.productAmount) || 0),
       0,
@@ -191,7 +198,10 @@ function renderPlannedActualPreSaleCategoryButtons(project) {
             ${disabled ? 'disabled' : ''}
           >
             <span>${esc(summary.label)}</span>
-            <strong>${esc(formatPlannedActualPreSaleAverage(summary.averagePercent))}</strong>
+            <strong>
+              ${esc(formatPlannedActualPreSaleAverage(summary.averagePercent))}
+              <em>· ${summary.productCount} Product${summary.productCount === 1 ? '' : 's'}</em>
+            </strong>
           </button>
         `;
       }).join('')}
@@ -486,6 +496,157 @@ function plannedActualInitials(name) {
     .toUpperCase() || '?';
 }
 
+
+function formatPlannedActualDetailPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '—';
+  return `${numeric.toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
+}
+
+function formatPlannedActualDetailDateRange(detail) {
+  if (!detail?.startDate && !detail?.endDate) return detail?.periodLabel || '—';
+  if (detail.startDate && detail.endDate && detail.startDate !== detail.endDate) {
+    return `${detail.periodLabel || ''} · ${detail.startDate} – ${detail.endDate}`.trim();
+  }
+  return `${detail.periodLabel || ''} · ${detail.startDate || detail.endDate}`.trim();
+}
+
+function getPlannedActualPreSaleDetailRows(project, mode) {
+  const resources = (
+    mode === 'planned' ? project?.plannedResources : project?.actualResources
+  ) || [];
+  const resourceKeys = new Set(resources.map(resource => resource.key));
+  const source = mode === 'planned'
+    ? project?.plannedDetails
+    : project?.actualDetails;
+
+  return [...(source || [])]
+    .filter(detail => resourceKeys.has(detail.resourceKey))
+    .sort((a, b) => (
+      String(a.resourceName || '').localeCompare(String(b.resourceName || '')) ||
+      String(a.monthKey || '').localeCompare(String(b.monthKey || '')) ||
+      Number(a.week || 0) - Number(b.week || 0) ||
+      String(a.productName || '').localeCompare(String(b.productName || '')) ||
+      String(a.timesheetProjectName || '').localeCompare(String(b.timesheetProjectName || ''))
+    ));
+}
+
+function openPlannedActualPreSaleDetails(mode) {
+  const project = plannedActualRenderedProject;
+  if (!project?.preSaleContext || !['planned', 'actual'].includes(mode)) return;
+
+  const rows = getPlannedActualPreSaleDetailRows(project, mode);
+  const planned = mode === 'planned';
+  const totalHours = rows.reduce((sum, row) => sum + (Number(row.hours) || 0), 0);
+  const totalBudget = rows.reduce((sum, row) => sum + (Number(row.budget) || 0), 0);
+  const productAmountByName = new Map();
+  rows.forEach(row => {
+    const productName = String(row.productName || '').trim();
+    if (!productName || productName === 'Unmapped Product') return;
+    if (!productAmountByName.has(productName)) {
+      productAmountByName.set(productName, Number(row.productAmount) || 0);
+    }
+  });
+  const productImpact = [...productAmountByName.values()].reduce((sum, amount) => sum + amount, 0);
+  const resourceCount = new Set(rows.map(row => row.resourceKey)).size;
+  const title = planned ? 'Pre-Sale Planned Details' : 'Pre-Sale Actual Details';
+  const subtitle = planned
+    ? 'Weekly Resource Assignment entries for the currently filtered Pre-Sale plan.'
+    : 'Work Summary Time Sheet entries allocated to the currently filtered Pre-Sale products.';
+
+  const rowsHtml = rows.length
+    ? rows.map((row, index) => {
+        const productMeta = row.productName === 'Unmapped Product'
+          ? 'No matching planned product'
+          : `${formatPlannedActualDetailPercent(row.productPercent)} confidence`;
+        const sourceDetail = planned
+          ? esc(row.projectName || 'Pre-Sale')
+          : esc(row.timesheetProjectName || '(No project name)');
+        const sourceCaption = planned ? 'Assignment project' : esc(row.workType || 'Pre - Sales');
+        const hourCaption = !planned && Number(row.sourceHours) > Number(row.hours) + 0.001
+          ? `<small>of ${esc(formatPlannedActualHours(row.sourceHours))} time log</small>`
+          : '';
+
+        return `
+          <tr>
+            <td class="planned-actual-detail-index">${index + 1}</td>
+            <td>
+              <strong>${esc(row.resourceName || 'Unknown resource')}</strong>
+              <span>${esc(row.periodLabel || '')}</span>
+            </td>
+            <td>
+              <strong>${esc(row.productName || 'Unmapped Product')}</strong>
+              <span>${esc(productMeta)}</span>
+            </td>
+            <td>
+              <strong>${sourceDetail}</strong>
+              <span>${sourceCaption}</span>
+            </td>
+            <td class="is-number">
+              <strong>${esc(formatPlannedActualDetailPercent(row.allocationPercent))}</strong>
+              <span>${planned ? 'Allocation' : 'Product share'}</span>
+            </td>
+            <td class="is-number">
+              <strong>${esc(formatPlannedActualHours(row.hours))}</strong>
+              ${hourCaption}
+            </td>
+            <td class="is-number">
+              <strong>${esc(formatPlannedActualBudgetExact(row.productAmount))}</strong>
+              <span>Reference amount</span>
+            </td>
+            <td class="is-number">
+              <strong>${esc(formatPlannedActualBudgetExact(row.budget))}</strong>
+              <span>Calculated budget</span>
+            </td>
+            <td>
+              <strong>${esc(formatPlannedActualDetailDateRange(row))}</strong>
+            </td>
+          </tr>
+        `;
+      }).join('')
+    : `
+      <tr>
+        <td colspan="9" class="planned-actual-detail-empty">
+          No ${planned ? 'planned assignment' : 'actual time-log'} details are available for this filter.
+        </td>
+      </tr>
+    `;
+
+  openModal(`
+    ${mHdr(title, subtitle)}
+    <div class="planned-actual-detail-modal-body">
+      <div class="planned-actual-detail-summary">
+        <div><span>Resources</span><strong>${resourceCount}</strong></div>
+        <div><span>Entries</span><strong>${rows.length}</strong></div>
+        <div><span>Total Hours</span><strong>${esc(formatPlannedActualHours(totalHours))}</strong></div>
+        <div><span>Calculated Budget</span><strong>${esc(formatPlannedActualBudget(totalBudget))}</strong></div>
+        <div><span>Product Impact</span><strong>${esc(formatPlannedActualBudget(productImpact))}</strong></div>
+      </div>
+      <div class="planned-actual-detail-table-wrap nice-scroll">
+        <table class="planned-actual-detail-table">
+          <thead>
+            <tr>
+              <th>#</th>
+              <th>Resource</th>
+              <th>Product</th>
+              <th>${planned ? 'Assignment Project' : 'Time Sheet Project'}</th>
+              <th>${planned ? 'Allocation' : 'Share'}</th>
+              <th>Hours</th>
+              <th>Product Amount</th>
+              <th>Budget</th>
+              <th>Period</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+      </div>
+    </div>
+    <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+      <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+    </div>
+  `, 'max-w-7xl planned-actual-detail-modal-panel');
+}
+
 function renderPlannedActualResourceCard(project, resource, mode, totalHours) {
   const status = plannedActualResourceStatus(project, resource.key, mode);
   const color = plannedActualResourceColor(resource.key);
@@ -542,10 +703,20 @@ function renderPlannedActualTeam(project, mode) {
           <span>${esc(subtitle)}</span>
           <h4>${esc(title)}</h4>
         </div>
-        <div class="planned-actual-team-total">
-          <strong>${esc(formatPlannedActualHours(totalHours))}</strong>
-          <span>${resources.length} resource${resources.length === 1 ? '' : 's'}</span>
-          ${showPreSaleAmount ? `<em title="${esc(formatPlannedActualBudgetExact(amount))}">Amount ${esc(formatPlannedActualBudget(amount))}</em>` : ''}
+        <div class="planned-actual-team-actions">
+          <div class="planned-actual-team-total">
+            <strong>${esc(formatPlannedActualHours(totalHours))}</strong>
+            <span>${resources.length} resource${resources.length === 1 ? '' : 's'}</span>
+            ${showPreSaleAmount ? `<em title="${esc(formatPlannedActualBudgetExact(amount))}">Amount ${esc(formatPlannedActualBudget(amount))}</em>` : ''}
+          </div>
+          ${showPreSaleAmount ? `
+            <button
+              type="button"
+              class="planned-actual-detail-button is-${mode}"
+              data-presale-detail="${mode}"
+              title="Open ${planned ? 'planned assignment' : 'actual time-log'} details for the current Pre-Sale filter"
+            >${planned ? 'Planned' : 'Actual'} Details</button>
+          ` : ''}
         </div>
       </header>
       <div class="planned-actual-people" data-flow-side="${mode}">
@@ -578,6 +749,7 @@ function plannedActualExecutionMessage(project) {
 function renderPlannedActualFlow(project) {
   const root = document.getElementById('plannedActualFlow');
   if (!root || !project) return;
+  plannedActualRenderedProject = project;
 
   const status = plannedActualStatus(project);
   const statusKey = status.toLowerCase().replace(/\s+/g, '-');
@@ -903,6 +1075,7 @@ function renderPlannedActualEffortChart() {
   renderPlannedActualSummary(data, project);
 
   if (!hasData) {
+    plannedActualRenderedProject = null;
     if (S.charts.plannedActualEffort) {
       S.charts.plannedActualEffort.destroy();
       S.charts.plannedActualEffort = null;
@@ -1048,6 +1221,14 @@ function initPlannedActualEffortEvents() {
     };
 
     flowRoot.addEventListener('click', event => {
+      const detailButton = event.target.closest('[data-presale-detail]');
+      if (detailButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        openPlannedActualPreSaleDetails(detailButton.dataset.presaleDetail || '');
+        return;
+      }
+
       const resetButton = event.target.closest('[data-presale-reset]');
       if (resetButton) {
         event.preventDefault();
