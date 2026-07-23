@@ -69,7 +69,7 @@ function listPreSaleProducts(db) {
       created_at,
       updated_at
     FROM presale_products
-    ORDER BY name COLLATE NOCASE, id
+    ORDER BY probability_percent DESC, name COLLATE NOCASE, id
   `).all().map(mapPreSaleProductRow);
 }
 

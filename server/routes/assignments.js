@@ -38,9 +38,13 @@ const ASSIGNMENT_SELECT = `
       NULLIF(a.product_name, ''),
       NULLIF(p.product_name, ''),
       ''
-    ) AS product_name
+    ) AS product_name,
+    pp.amount AS presale_product_amount,
+    pp.probability_percent AS presale_product_percent
   FROM assignments a
   JOIN projects p ON p.id = a.project_id
+  LEFT JOIN presale_products pp
+    ON pp.name = COALESCE(NULLIF(a.product_name, ''), NULLIF(p.product_name, '')) COLLATE NOCASE
 `;
 
 function getAssignmentById(id) {

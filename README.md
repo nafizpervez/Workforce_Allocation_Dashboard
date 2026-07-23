@@ -93,14 +93,26 @@ The **Pre-Sale Product** modal provides a persistent master list containing:
 
 - Product Name
 - Amount
+- Percent
+- Editable Secured and Best Case classification thresholds
 
-Products can be added, edited, renamed, and removed. The modal has a fixed outer height and an internally scrollable list for large product sets.
+Products can be added, edited, renamed, and removed. The modal has a fixed outer height and an internally scrollable, compact list for large product sets. Product rows are automatically sorted by **Percent descending**; the highest-confidence product appears first after a Percent change, after saving, and whenever the modal is reopened. Equal Percent values are ordered by Product Name.
+
+Default confidence classification:
+
+- **Secured:** Percent is greater than or equal to `90`
+- **Best Case:** Percent is greater than or equal to `70` and below the Secured threshold
+- **Prospect:** Percent is below the Best Case threshold
+
+The Secured and Best Case boundaries are editable. The server validates that the Best Case threshold remains lower than the Secured threshold.
 
 For Pre-Sale assignments:
 
 - Product Name must be selected from the saved master list.
 - Arbitrary product names are rejected by both the browser and server.
 - The selected product's saved amount is shown for reference.
+- The Resource Assignment Matrix assignment card displays the selected product's current saved Amount instead of `$0`.
+- Assignment API responses include the matched Pre-Sale Product Amount and Percent so the card remains tied to the current master value.
 - A product that is still referenced by an assignment cannot be removed.
 - Renaming a product updates matching assignment selections.
 
@@ -126,10 +138,14 @@ When **Pre-Sale** is selected:
 
 - A Product dropdown appears to the right of Month.
 - The dropdown contains `All Products` and applicable saved Pre-Sale products.
-- Planned Team Amount is calculated from employee planned hours and designation rates.
-- Actual Delivery Team Amount comes from the Pre-Sale Product master.
-- All Products sums the distinct included product amounts.
-- Selecting one product scopes effort and amount information to that product.
+- Planned Budget and Actual Budget are calculated from matched employee effort and designation rates.
+- The central **Impact** amount comes from the distinct included Product Amount values in the Pre-Sale Product master.
+- Three side-by-side confidence controls show the average Percent for **Secured**, **Best Case**, and **Prospect** products.
+- Clicking a confidence control filters the planned team, actual delivery team, effort, budgets, Impact, variance, monthly progression, and flow lines to products in that classification.
+- The planned and actual team headings change to identify the active confidence classification.
+- Clicking the active confidence control again clears that filter.
+- The central **Impact** control is clickable and restores the default `All Products` Pre-Sale state by clearing the Product and confidence-category filters.
+- Selecting an individual Product clears the confidence-category filter and scopes the visualization to that Product.
 
 ### Planned vs Actual
 
@@ -289,7 +305,7 @@ Current persisted domains include:
 - Work Summary Time Sheet entries
 - Reserve Revenue rates
 - Committed revenue targets
-- Pre-Sale Product master data
+- Pre-Sale Product master data, confidence Percent values, and classification thresholds
 
 Never replace `workforce.db` merely to apply a source-code update.
 
@@ -321,6 +337,14 @@ Examples:
 |        75% |       27.495 |
 |        50% |        18.33 |
 |        25% |        9.165 |
+
+### Resource Assignment Matrix revenue labels
+
+- Intrasourcing and Local assignment cards calculate planned revenue as assignment hours multiplied by the applicable designation hourly rate.
+- A Pre-Sale assignment card displays the current saved **Product Amount** for its selected Product Name. This prevents a valid selected product from appearing as `$0`.
+- The selected Pre-Sale Product Amount is a reference/opportunity amount and is not multiplied by assignment hours.
+- Weekly aggregate planned-revenue totals continue to include Intrasourcing and Local only, preventing the same Pre-Sale Product Amount from being counted again for every assigned resource and week.
+- Training remains excluded from weekly planned-revenue totals.
 
 ### N/A availability rule
 
@@ -407,22 +431,26 @@ Capacity Allocated = Planned Intrasourcing Revenue + Planned Local Revenue
 
 Pre-Sale and Training are excluded from Capacity Allocated. Existing N/A exclusions continue to apply.
 
-### Planned Team amount for Pre-Sale
+### Pre-Sale Plan-to-Execution financial values
 
 For each planned employee in the selected scope:
 
 ```text
-Employee planned hours × employee Local / Pre-Sale / Training hourly rate
+Planned Budget contribution = employee planned hours × employee Local / Pre-Sale / Training hourly rate
 ```
 
-The employee amounts are summed.
+For each matched actual employee in the selected scope:
 
-### Actual Delivery Team amount for Pre-Sale
+```text
+Actual Budget contribution = employee actual hours × employee Local / Pre-Sale / Training hourly rate
+```
 
-Actual Pre-Sale amount is sourced from the saved Pre-Sale Product master:
+The center-card **Impact** value is separate from effort-based budgets:
 
-- `All Products` sums the distinct included product amounts.
-- An individual product selection shows that product's saved amount.
+- `All Products` sums the distinct included Product Amount values once.
+- An individual Product selection shows that Product's saved Amount.
+- A Secured, Best Case, or Prospect selection sums the distinct Product Amount values classified into that category.
+- Clicking Impact clears Product/category filtering and returns to the default Pre-Sale scope.
 
 ### Canonical employee identity
 
@@ -570,8 +598,10 @@ All application APIs are protected by dashboard authentication, except the authe
 | PUT    | `/api/revenue-rates`                | Save designation hourly rates          |
 | GET    | `/api/committed-targets`            | Read committed targets                 |
 | PUT    | `/api/committed-targets/:targetKey` | Save a committed target                |
-| GET    | `/api/presale-products`             | Read Pre-Sale products                 |
+| GET    | `/api/presale-products`             | Read Pre-Sale products sorted by Percent descending |
 | PUT    | `/api/presale-products`             | Save the complete Pre-Sale product set |
+| GET    | `/api/presale-product-settings`      | Read confidence classification thresholds |
+| PUT    | `/api/presale-product-settings`      | Save confidence classification thresholds |
 
 ### Dashboard analytics
 
@@ -879,15 +909,17 @@ For a production change, verify at least the following:
 - Employee CRUD and Workdays persistence
 - Project CRUD and import
 - Assignment create, edit, bulk create, import, reschedule, and delete
-- Pre-Sale Product create, edit, rename, remove, and persistence
+- Pre-Sale Product create, edit, rename, remove, Amount/Percent persistence, and descending Percent sorting
+- Secured and Best Case threshold validation and persistence
 - Pre-Sale assignment Product Name validation
+- Pre-Sale assignment-card Product Amount display, including immediate refresh after a Product Amount change
 - Reserve Revenue persistence
 - Committed Target persistence and fallback behavior
 - Running Projects date and revenue rules
 - Utilization N/A denominator exclusions
 - N/A monthly Workdays deduction
 - Max Capacity, Available Capacity, Capacity Allocated, and remaining capacity calculations
-- Plan-to-Execution Pre-Sale product filtering and amount calculations
+- Plan-to-Execution Pre-Sale Product and confidence-category filtering, average Percent calculations, Impact amounts, and Impact reset behavior
 - Work Summary Time Sheet upload and Planned vs Actual rendering
 - Modal fixed-header, fixed-footer, and internal-scroll behavior
 - Database row counts and integrity after migrations
@@ -944,6 +976,12 @@ Upgrade Node.js to version `22.13.0` or newer. Node.js 24.x is the target runtim
 ### Pre-Sale product cannot be deleted
 
 The product is still referenced by one or more assignments. Change or remove those assignment references first, then delete the product from the master.
+
+### A Pre-Sale assignment card shows `No amount`
+
+- Confirm the assignment's Product Name still matches a saved Pre-Sale Product.
+- Open **Pre-Sale Product** and confirm the Product has a valid non-negative Amount.
+- Save the Product master, then reload the matrix if the assignment was imported from an older dataset without Product metadata.
 
 ### Capacity values appear lower after N/A assignments
 

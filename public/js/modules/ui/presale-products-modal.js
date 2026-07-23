@@ -39,6 +39,27 @@ function normalizePreSaleProductThresholdDraft(settings = {}) {
   };
 }
 
+
+function comparePreSaleProductDraftRows(a, b) {
+  const percentDifference = (Number(b?.percent) || 0) - (Number(a?.percent) || 0);
+  if (percentDifference) return percentDifference;
+
+  const nameDifference = String(a?.name || '').localeCompare(
+    String(b?.name || ''),
+    undefined,
+    { sensitivity: 'base' },
+  );
+  if (nameDifference) return nameDifference;
+
+  return String(a?.key || '').localeCompare(String(b?.key || ''));
+}
+
+function sortPreSaleProductRowsByPercent() {
+  readPreSaleProductDraftRows();
+  preSaleProductDraftRows.sort(comparePreSaleProductDraftRows);
+  renderPreSaleProductRows();
+}
+
 function readPreSaleProductDraftRows() {
   document.querySelectorAll('[data-presale-product-row]').forEach(row => {
     const draft = preSaleProductDraftRows.find(item => item.key === row.dataset.presaleProductRow);
@@ -113,6 +134,7 @@ function renderPreSaleProductRows() {
               data-presale-product-percent
               value="${esc(Number(product.percent) || 0)}"
               placeholder="0"
+              onchange="sortPreSaleProductRowsByPercent()"
             >
             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
           </div>
@@ -145,7 +167,9 @@ function removePreSaleProductRow(key) {
 }
 
 function openPreSaleProductsModal() {
-  preSaleProductDraftRows = (S.preSaleProducts || []).map(createPreSaleProductDraftRow);
+  preSaleProductDraftRows = (S.preSaleProducts || [])
+    .map(createPreSaleProductDraftRow)
+    .sort(comparePreSaleProductDraftRows);
   preSaleProductThresholdDraft = normalizePreSaleProductThresholdDraft(
     S.preSaleProductThresholds,
   );
@@ -223,6 +247,7 @@ async function savePreSaleProducts() {
     securedMinPercent: Number(thresholdDraft.securedMinPercent),
     bestCaseMinPercent: Number(thresholdDraft.bestCaseMinPercent),
   };
+  preSaleProductDraftRows.sort(comparePreSaleProductDraftRows);
   const products = preSaleProductDraftRows.map(product => ({
     id: product.id,
     name: String(product.name || '').trim(),
@@ -284,6 +309,9 @@ async function savePreSaleProducts() {
       thresholds,
     );
     closeModal();
+    if (typeof renderMatrix === 'function') {
+      renderMatrix();
+    }
     if (typeof renderPlannedActualEffortChart === 'function') {
       renderPlannedActualEffortChart();
     }

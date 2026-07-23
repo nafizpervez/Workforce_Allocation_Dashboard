@@ -87,9 +87,15 @@ function assignmentProjectCombo(selectedId) {
 }
 
 function getAssignmentPreSaleProductOptions(selectedName) {
-  const products = [...(S.preSaleProducts || [])].sort((a, b) => (
-    String(a.name || '').localeCompare(String(b.name || ''), undefined, { sensitivity: 'base' })
-  ));
+  const products = [...(S.preSaleProducts || [])].sort((a, b) => {
+    const percentDifference = (Number(b.percent) || 0) - (Number(a.percent) || 0);
+    if (percentDifference) return percentDifference;
+    return String(a.name || '').localeCompare(
+      String(b.name || ''),
+      undefined,
+      { sensitivity: 'base' },
+    );
+  });
   const selectedProduct = getPreSaleProductByName(selectedName);
   const options = [];
 
