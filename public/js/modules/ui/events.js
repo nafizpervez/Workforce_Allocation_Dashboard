@@ -145,6 +145,8 @@ function initEvents() {
   /* Matrix table click */
   const matrixTable = document.getElementById('matrixTable');
   matrixTable.addEventListener('click', e => {
+    const selectedAssignments = getMatrixSelectedAssignmentSet();
+    const hadSelectedAssignments = selectedAssignments.size > 0;
     const clickedAssignmentChip = e.target.closest('[data-action="edit-assign"]');
     const clickedAssignmentDelete = e.target.closest('[data-action="delete-assign"]');
     if (!clickedAssignmentChip && !clickedAssignmentDelete) {
@@ -190,6 +192,11 @@ function initEvents() {
 
     const cell = e.target.closest('td.cell');
     if (cell) {
+      // Selection takes priority over creating a new assignment. The first
+      // empty-cell click after one or more assignments were selected only
+      // clears that selection; a later click can open Add Assignment.
+      if (hadSelectedAssignments) return;
+
       openAssignmentModal({
         employee_id: Number(cell.dataset.emp),
         year: Number(cell.dataset.year),
