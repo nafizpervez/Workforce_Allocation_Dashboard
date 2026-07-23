@@ -334,6 +334,27 @@ function formatAllocationViewValue(value) {
     : `${Number(value).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
 }
 
+function formatMatrixAllocationValue(value) {
+  return value === null || value === undefined
+    ? '—'
+    : `${Number(value).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`;
+}
+
+function formatMatrixAllocationCellValue(value) {
+  return value === null || value === undefined
+    ? '—'
+    : Number(value).toLocaleString('en-US', { maximumFractionDigits: 1 });
+}
+
+function getMatrixAllocationToneClass(value) {
+  const percentage = Number(value);
+  if (!Number.isFinite(percentage)) return 'matrix-allocation-tone--neutral';
+  if (percentage >= 100) return 'matrix-allocation-tone--green';
+  if (percentage >= 80) return 'matrix-allocation-tone--blue';
+  if (percentage >= 65) return 'matrix-allocation-tone--yellow';
+  return 'matrix-allocation-tone--red';
+}
+
 function formatRevenueViewValue(value) {
   if (value === null || value === undefined) return '—';
 
@@ -355,6 +376,29 @@ function formatRevenueViewValue(value) {
   return `$${amount.toLocaleString('en-US', {
     maximumFractionDigits: 0,
   })}`;
+}
+
+function formatMatrixRevenueValue(value) {
+  if (value === null || value === undefined) return '—';
+
+  const amount = Number(value);
+  const absoluteAmount = Math.abs(amount);
+
+  if (absoluteAmount >= 1_000_000) {
+    return `${(amount / 1_000_000).toLocaleString('en-US', {
+      maximumFractionDigits: 1,
+    })}M`;
+  }
+
+  if (absoluteAmount >= 1_000) {
+    return `${(amount / 1_000).toLocaleString('en-US', {
+      maximumFractionDigits: 1,
+    })}K`;
+  }
+
+  return amount.toLocaleString('en-US', {
+    maximumFractionDigits: 0,
+  });
 }
 
 function formatExactRevenueValue(value) {

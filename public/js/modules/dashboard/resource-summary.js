@@ -115,11 +115,11 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
     <th
       class="sticky-allocation-group matrix-summary-group matrix-allocation-group"
       colspan="${RESOURCE_SUMMARY_COLUMNS.allocation.length}"
-    >Allocation</th>
+    >Allocation (%)</th>
     <th
       class="sticky-revenue-group matrix-summary-group matrix-revenue-group"
       colspan="${RESOURCE_SUMMARY_COLUMNS.revenue.length}"
-    >Revenue</th>
+    >Revenue ($)</th>
   `;
 
   months.forEach((month, index) => {
@@ -190,7 +190,7 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
         data-summary-group="allocation"
         data-summary-metric="${column.key}"
         title="${esc(title)}"
-      >${formatAllocationViewValue(summary.allocation[column.key])}</td>
+      >${formatMatrixAllocationCellValue(summary.allocation[column.key])}</td>
     `;
   }).join('');
 
@@ -213,7 +213,7 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
         tabindex="0"
         aria-label="Open ${esc(employee.name)} ${esc(column.label)} revenue breakdown"
         title="${esc(title)}"
-      >${formatRevenueViewValue(revenue)}</td>
+      >${formatMatrixRevenueValue(revenue)}</td>
     `;
   }).join('');
 
@@ -333,10 +333,10 @@ function renderMatrix() {
             data-emp="${employee.id}"
           >
             <span
-              class="matrix-allocation-avatar"
+              class="matrix-allocation-avatar ${getMatrixAllocationToneClass(summary.allocationMeta.total)}"
               title="${esc(totalAllocationTitle)}"
               aria-label="${esc(employee.name)} total allocation ${formatAllocationViewValue(summary.allocationMeta.total)}"
-            >${formatAllocationViewValue(summary.allocationMeta.total)}</span>
+            >${formatMatrixAllocationValue(summary.allocationMeta.total)}</span>
             <span class="matrix-resource-copy">
               <span class="matrix-resource-name">${esc(employee.name)}</span>
               <span class="matrix-resource-designation">${esc(employee.designation || 'No designation')}</span>
