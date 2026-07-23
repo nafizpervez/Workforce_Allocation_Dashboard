@@ -1,32 +1,45 @@
 const express = require('express');
 const { getAppDb } = require('../database');
-const { calcDealStatusesForSubset, matchesCategory, productCategory } = require('../services/project-analytics');
+const {
+  calcDealStatusesForSubset,
+  isDealAcquisitionChartEligible,
+  matchesCategory,
+  productCategory,
+} = require('../services/project-analytics');
 const { fiscalSortValue, fyLabel, getProjectFiscalYear } = require('../services/fiscal');
 const router = express.Router();
 const db = getAppDb();
 
 router.get('/api/dashboard/new-logo-chart', (_, res) => {
   const allProjects = db.prepare(
-    'SELECT id, code, name, account_name, client, end_date, fiscal_period, stage, product_name, product_family FROM projects'
+    'SELECT id, code, name, account_name, client, end_date, fiscal_period, stage, progress, product_name, product_family FROM projects'
   ).all();
 
   const CATEGORIES = ['ALL', 'ALLCLEAN', 'SOFTWARE', 'PS', 'PERSONAL', 'STUDENT'];
 
   /*
    * For each category:
-   *   1. Filter projects to only those matching the category
-   *   2. Compute NEW LOGO / REPEAT / REACTIVE independently within that subset
-   *   3. Build FY counts and project lists with the canonical-status dedup:
+   *   1. Build the Closed Won account history used for NEW LOGO / REPEAT / REACTIVE
+   *   2. Keep active Running Projects out of the chart until Progress reaches 100%
+   *   3. Derive its fiscal year from Closed Won Date through getProjectFiscalYear()
+   *   4. Build FY counts and project lists with the canonical-status dedup:
    *      - One bar count per unique account per FY
    *      - Canonical status = status of the FIRST SA code for that account in that FY
    *      - Project list: one entry per (account + product_category) per FY per status
    */
   const buildChartForCategory = (cat) => {
-    const subset = allProjects.filter(p => p.stage === 'Closed Won' && getProjectFiscalYear(p) !== null && matchesCategory(p, cat));
-    const statusMap = calcDealStatusesForSubset(subset);
+    // Closed Won deals establish account history as soon as they are won.
+    // Active Running Projects are promoted into the acquisition chart when Progress reaches 100%.
+    const categoryHistory = allProjects.filter(project => (
+      String(project.stage || '').trim().toLowerCase() === 'closed won' &&
+      getProjectFiscalYear(project) !== null &&
+      matchesCategory(project, cat)
+    ));
+    const statusMap = calcDealStatusesForSubset(categoryHistory);
+    const completedSubset = categoryHistory.filter(isDealAcquisitionChartEligible);
 
-    // Sort chronologically
-    const cwSorted = subset
+    // Sort completed deals chronologically by the fiscal period derived from Closed Won Date.
+    const cwSorted = completedSubset
       .filter(p => getProjectFiscalYear(p) !== null)
       .sort((a, b) => {
         const fiscalDiff = fiscalSortValue(a) - fiscalSortValue(b);

@@ -1,6 +1,10 @@
 const express = require('express');
 const { getAppDb } = require('../database');
-const { calcDealStatuses } = require('../services/project-analytics');
+const {
+  RUNNING_CLOSED_WON_START_DATE,
+  calcDealStatuses,
+  isProfessionalServiceRunningProject,
+} = require('../services/project-analytics');
 const { fiscalMonths } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
 const {
@@ -14,7 +18,6 @@ const db = getAppDb();
 
 const FY_WEEK_COUNT = 48;
 const MONTH_WEEK_COUNT = 4;
-const RUNNING_CLOSED_WON_START_DATE = '2025-03-01';
 
 function getActiveEmployeeRows() {
   return db.prepare(`
@@ -52,24 +55,6 @@ function addUtcMonths(date, monthCount) {
   const result = new Date(date.getTime());
   result.setUTCMonth(result.getUTCMonth() + Number(monthCount || 0));
   return result;
-}
-
-function isClosedWonDateInRunningWindow(dateText) {
-  const value = String(dateText || '').trim();
-  return /^\d{4}-\d{2}-\d{2}$/.test(value) &&
-    value >= RUNNING_CLOSED_WON_START_DATE;
-}
-
-function normalizeProjectFamily(value) {
-  return String(value || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
-}
-
-function isProfessionalServiceProject(project) {
-  const family = normalizeProjectFamily(project?.product_family);
-  return family === 'professional service' || family === 'professional services';
 }
 
 function normalizeAllocationProjectName(value) {
@@ -222,15 +207,6 @@ function getFiscalAllocationResourceDetails(rawAssignments, employees, totalWeek
       },
     };
   }).filter(row => row.available_weeks > 0);
-}
-
-function isProfessionalServiceRunningProject(project) {
-  return (
-    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
-    isProfessionalServiceProject(project) &&
-    Number(project?.progress) < 100 &&
-    isClosedWonDateInRunningWindow(project?.end_date)
-  );
 }
 
 function isOpenProject(project) {

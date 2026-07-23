@@ -1,6 +1,6 @@
 const express = require('express');
 const { getAppDb } = require('../database');
-const { calcDealStatuses } = require('../services/project-analytics');
+const { calcDealStatuses, isDealAcquisitionChartEligible } = require('../services/project-analytics');
 const {
   getCurrentFiscalYearEnd,
   getFiscalPeriodFromDate,
@@ -33,6 +33,7 @@ router.get('/api/projects', (_, res) => {
     ...r,
     fiscal_period: getProjectFiscalPeriod(r) || null,
     deal_status: statusMap[r.id] || 'NEW LOGO',
+    acquisition_chart_eligible: isDealAcquisitionChartEligible(r),
   })));
 });
 
@@ -58,7 +59,14 @@ router.post('/api/projects', (req, res) => {
       b.project_closing_date || null,
       null,
     );
-    res.status(201).json(db.prepare('SELECT * FROM projects WHERE id=?').get(info.lastInsertRowid));
+    const saved = db.prepare('SELECT * FROM projects WHERE id=?').get(info.lastInsertRowid);
+    const statusMap = calcDealStatuses(db.prepare('SELECT * FROM projects ORDER BY id').all());
+    res.status(201).json({
+      ...saved,
+      fiscal_period: getProjectFiscalPeriod(saved) || null,
+      deal_status: statusMap[saved.id] || 'NEW LOGO',
+      acquisition_chart_eligible: isDealAcquisitionChartEligible(saved),
+    });
   } catch (e) {
     if (String(e.message).includes('UNIQUE')) return res.status(409).json({ error: 'project code must be unique' });
     throw e;
@@ -329,7 +337,10 @@ router.put('/api/projects/:id', (req, res) => {
     params.push(body[field]);
   }
 
-  if (has('end_date') || has('fiscal_period')) {
+  const nextProgress = has('progress') ? safeNum(body.progress, existing.progress) : safeNum(existing.progress, 0);
+  const completingProject = has('progress') && nextProgress >= 100;
+
+  if (has('end_date') || has('fiscal_period') || completingProject) {
     const nextEndDate = has('end_date') ? body.end_date : existing.end_date;
     const suppliedPeriod = has('fiscal_period') ? body.fiscal_period : existing.fiscal_period;
     updates.push('fiscal_period=?');
@@ -342,7 +353,13 @@ router.put('/api/projects/:id', (req, res) => {
   }
 
   const saved = db.prepare('SELECT * FROM projects WHERE id=?').get(id);
-  res.json({ ...saved, fiscal_period: getProjectFiscalPeriod(saved) || null });
+  const statusMap = calcDealStatuses(db.prepare('SELECT * FROM projects ORDER BY id').all());
+  res.json({
+    ...saved,
+    fiscal_period: getProjectFiscalPeriod(saved) || null,
+    deal_status: statusMap[saved.id] || 'NEW LOGO',
+    acquisition_chart_eligible: isDealAcquisitionChartEligible(saved),
+  });
 });
 
 router.delete('/api/projects/:id', (req, res) => {
