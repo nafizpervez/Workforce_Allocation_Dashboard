@@ -1153,3 +1153,57 @@
     grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
+
+/* Per-resource Pre-Sale detail actions. */
+.planned-actual-person-side {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 0.42rem;
+  min-width: max-content;
+}
+
+.planned-actual-resource-detail-button {
+  min-height: 1.45rem;
+  padding: 0.18rem 0.42rem;
+  border: 1px solid #cbd5e1;
+  border-radius: 0.42rem;
+  background: #ffffff;
+  color: #334155;
+  font-size: 0.54rem;
+  font-weight: 800;
+  line-height: 1.1;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: transform 140ms ease, border-color 140ms ease, background 140ms ease, box-shadow 140ms ease;
+}
+
+.planned-actual-resource-detail-button.is-planned {
+  border-color: #c7d2fe;
+  background: #eef2ff;
+  color: #4338ca;
+}
+
+.planned-actual-resource-detail-button.is-actual {
+  border-color: #a7f3d0;
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.planned-actual-resource-detail-button:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 4px 10px rgba(15, 23, 42, 0.1);
+}
+
+.planned-actual-resource-detail-button:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}
+
+@media (max-width: 480px) {
+  .planned-actual-person-side {
+    grid-column: 2;
+    justify-content: flex-start;
+    min-width: 0;
+  }
+}

@@ -161,6 +161,12 @@ async function loadAll() {
     S.projects = projs;
     S.assignments = asgs;
     S.matrixAssignments = matrixAsgs;
+    if (S.matrixSelectedAssignmentIds instanceof Set) {
+      const availableAssignmentIds = new Set(matrixAsgs.map(assignment => Number(assignment.id)));
+      [...S.matrixSelectedAssignmentIds].forEach(id => {
+        if (!availableAssignmentIds.has(Number(id))) S.matrixSelectedAssignmentIds.delete(id);
+      });
+    }
     S.revenueRates = revenueRates;
     S.committedTargets = committedTargets;
     S.preSaleProducts = preSaleProducts;

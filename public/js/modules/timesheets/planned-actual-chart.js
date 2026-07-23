@@ -511,7 +511,7 @@ function formatPlannedActualDetailDateRange(detail) {
   return `${detail.periodLabel || ''} · ${detail.startDate || detail.endDate}`.trim();
 }
 
-function getPlannedActualPreSaleDetailRows(project, mode) {
+function getPlannedActualPreSaleDetailRows(project, mode, resourceKey = '') {
   const resources = (
     mode === 'planned' ? project?.plannedResources : project?.actualResources
   ) || [];
@@ -521,7 +521,10 @@ function getPlannedActualPreSaleDetailRows(project, mode) {
     : project?.actualDetails;
 
   return [...(source || [])]
-    .filter(detail => resourceKeys.has(detail.resourceKey))
+    .filter(detail => (
+      resourceKeys.has(detail.resourceKey) &&
+      (!resourceKey || detail.resourceKey === resourceKey)
+    ))
     .sort((a, b) => (
       String(a.resourceName || '').localeCompare(String(b.resourceName || '')) ||
       String(a.monthKey || '').localeCompare(String(b.monthKey || '')) ||
@@ -531,12 +534,14 @@ function getPlannedActualPreSaleDetailRows(project, mode) {
     ));
 }
 
-function openPlannedActualPreSaleDetails(mode) {
+function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
   const project = plannedActualRenderedProject;
   if (!project?.preSaleContext || !['planned', 'actual'].includes(mode)) return;
 
-  const rows = getPlannedActualPreSaleDetailRows(project, mode);
   const planned = mode === 'planned';
+  const resources = planned ? project.plannedResources : project.actualResources;
+  const resource = resources.find(item => item.key === resourceKey) || null;
+  const rows = getPlannedActualPreSaleDetailRows(project, mode, resourceKey);
   const totalHours = rows.reduce((sum, row) => sum + (Number(row.hours) || 0), 0);
   const totalBudget = rows.reduce((sum, row) => sum + (Number(row.budget) || 0), 0);
   const productAmountByName = new Map();
@@ -549,10 +554,15 @@ function openPlannedActualPreSaleDetails(mode) {
   });
   const productImpact = [...productAmountByName.values()].reduce((sum, amount) => sum + amount, 0);
   const resourceCount = new Set(rows.map(row => row.resourceKey)).size;
-  const title = planned ? 'Pre-Sale Planned Details' : 'Pre-Sale Actual Details';
-  const subtitle = planned
-    ? 'Weekly Resource Assignment entries for the currently filtered Pre-Sale plan.'
-    : 'Work Summary Time Sheet entries allocated to the currently filtered Pre-Sale products.';
+  const baseTitle = planned ? 'Pre-Sale Planned Details' : 'Pre-Sale Actual Details';
+  const title = resource ? `${resource.name} — ${baseTitle}` : baseTitle;
+  const subtitle = resource
+    ? (planned
+      ? 'Weekly Resource Assignment entries for this resource under the current Pre-Sale filter.'
+      : 'Work Summary Time Sheet entries for this resource under the current Pre-Sale filter.')
+    : (planned
+      ? 'Weekly Resource Assignment entries for the currently filtered Pre-Sale plan.'
+      : 'Work Summary Time Sheet entries allocated to the currently filtered Pre-Sale products.');
 
   const rowsHtml = rows.length
     ? rows.map((row, index) => {
@@ -672,9 +682,20 @@ function renderPlannedActualResourceCard(project, resource, mode, totalHours) {
         <strong>${esc(resource.name)}</strong>
         <span>${esc(deltaText)}</span>
       </div>
-      <div class="planned-actual-person-effort">
-        <strong>${esc(formatPlannedActualHours(resource.hours))}</strong>
-        <span>${share.toFixed(1)}%</span>
+      <div class="planned-actual-person-side">
+        ${project.preSaleContext ? `
+          <button
+            type="button"
+            class="planned-actual-resource-detail-button is-${mode}"
+            data-presale-resource-detail="${mode}"
+            data-resource-key="${esc(resource.key)}"
+            title="Open ${mode === 'planned' ? 'planned assignment' : 'actual time-log'} details for ${esc(resource.name)}"
+          >${mode === 'planned' ? 'Planned Details' : 'Actual Details'}</button>
+        ` : ''}
+        <div class="planned-actual-person-effort">
+          <strong>${esc(formatPlannedActualHours(resource.hours))}</strong>
+          <span>${share.toFixed(1)}%</span>
+        </div>
       </div>
     </article>
   `;
@@ -703,20 +724,10 @@ function renderPlannedActualTeam(project, mode) {
           <span>${esc(subtitle)}</span>
           <h4>${esc(title)}</h4>
         </div>
-        <div class="planned-actual-team-actions">
-          <div class="planned-actual-team-total">
-            <strong>${esc(formatPlannedActualHours(totalHours))}</strong>
-            <span>${resources.length} resource${resources.length === 1 ? '' : 's'}</span>
-            ${showPreSaleAmount ? `<em title="${esc(formatPlannedActualBudgetExact(amount))}">Amount ${esc(formatPlannedActualBudget(amount))}</em>` : ''}
-          </div>
-          ${showPreSaleAmount ? `
-            <button
-              type="button"
-              class="planned-actual-detail-button is-${mode}"
-              data-presale-detail="${mode}"
-              title="Open ${planned ? 'planned assignment' : 'actual time-log'} details for the current Pre-Sale filter"
-            >${planned ? 'Planned' : 'Actual'} Details</button>
-          ` : ''}
+        <div class="planned-actual-team-total">
+          <strong>${esc(formatPlannedActualHours(totalHours))}</strong>
+          <span>${resources.length} resource${resources.length === 1 ? '' : 's'}</span>
+          ${showPreSaleAmount ? `<em title="${esc(formatPlannedActualBudgetExact(amount))}">Amount ${esc(formatPlannedActualBudget(amount))}</em>` : ''}
         </div>
       </header>
       <div class="planned-actual-people" data-flow-side="${mode}">
@@ -1221,11 +1232,14 @@ function initPlannedActualEffortEvents() {
     };
 
     flowRoot.addEventListener('click', event => {
-      const detailButton = event.target.closest('[data-presale-detail]');
+      const detailButton = event.target.closest('[data-presale-resource-detail]');
       if (detailButton) {
         event.preventDefault();
         event.stopPropagation();
-        openPlannedActualPreSaleDetails(detailButton.dataset.presaleDetail || '');
+        openPlannedActualPreSaleDetails(
+          detailButton.dataset.presaleResourceDetail || '',
+          detailButton.dataset.resourceKey || '',
+        );
         return;
       }
 
@@ -1267,6 +1281,7 @@ function initPlannedActualEffortEvents() {
     });
 
     flowRoot.addEventListener('keydown', event => {
+      if (event.target.closest('[data-presale-resource-detail]')) return;
       const card = event.target.closest('.planned-actual-person');
       if (!card || !['Enter', ' '].includes(event.key)) return;
       event.preventDefault();

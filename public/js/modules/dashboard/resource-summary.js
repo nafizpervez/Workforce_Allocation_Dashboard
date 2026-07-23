@@ -291,10 +291,12 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
           : 'Only Intrasourcing and Local are counted in weekly planned-revenue totals.';
         const title = `${assignment.project_code || project.code || ''} — ${assignment.project_name || project.name || ''}\nCustomer Name: ${customer}\nProduct Name: ${product}\nRevenue: ${revenueDetail}\n${revenueRule}`;
         const displayName = shortCustomerName(customer) || assignment.project_code;
+        const isSelected = S.matrixSelectedAssignmentIds instanceof Set &&
+          S.matrixSelectedAssignmentIds.has(Number(assignment.id));
 
         cells += `
           <div
-            class="chip"
+            class="chip${isSelected ? ' is-selected' : ''}"
             data-action="edit-assign"
             data-id="${assignment.id}"
             data-year="${month.y}"
@@ -302,6 +304,9 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
             data-week="${week}"
             data-start="${slotRange.start}"
             data-end="${slotRange.end}"
+            tabindex="0"
+            role="button"
+            aria-selected="${isSelected ? 'true' : 'false'}"
             style="background:${assignment.project_color}20;border-left:3px solid ${assignment.project_color};min-width:0;width:100%;box-sizing:border-box;"
             title="${esc(title)}"
           >

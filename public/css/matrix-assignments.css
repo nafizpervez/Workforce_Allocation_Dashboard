@@ -181,3 +181,25 @@ td.cell:hover .cell-add {
   color: #9ca3af;
   font-weight: 600;
 }
+
+/* Multi-select state for weekly assignment cards. */
+.chip.is-selected {
+  z-index: 3;
+  transform: translateY(-1px);
+  box-shadow:
+    0 0 0 2px #2563eb,
+    0 5px 14px rgba(37, 99, 235, 0.2);
+}
+
+.chip.is-selected:hover {
+  transform: translateY(-1px);
+}
+
+.chip.is-selected .chip-del {
+  display: inline-flex;
+}
+
+.chip:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 2px;
+}

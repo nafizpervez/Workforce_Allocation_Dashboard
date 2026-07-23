@@ -39,6 +39,7 @@ const S = {
   employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
   preSaleProductThresholds: { securedMinPercent: 90, bestCaseMinPercent: 70 },
   matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},
+  matrixSelectedAssignmentIds: new Set(),
   searchQuery: '',
   insightsPeriodHigh: 'fiscal',
   insightsPeriodLow: 'fiscal',

@@ -13,7 +13,7 @@ async function loadLayoutFragments() {
 async function init() {
   try {
     await loadLayoutFragments();
-    initEvents();
+    initEvents(); 
     await loadAll();
   } catch (error) {
     console.error(error);
