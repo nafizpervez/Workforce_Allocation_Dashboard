@@ -619,15 +619,64 @@ async function saveAssignment(id) {
   }
 }
 
-async function deleteAssignment(id) {
-  if (!confirm('Delete this assignment?')) return;
+async function deleteAssignment(id, options = {}) {
+  const assignmentId = Number(id);
+  if (!assignmentId) return;
 
-  try {
-    await api('DELETE', `/api/assignments/${id}`);
-    closeModal();
-    toast('Assignment deleted');
-    await loadAll();
-  } catch (error) {
-    toast(error.message, 'error');
+  const includeMatrixSelection = Boolean(options.includeMatrixSelection);
+  const selectedIds = typeof getMatrixSelectedAssignmentSet === 'function'
+    ? getMatrixSelectedAssignmentSet()
+    : new Set();
+
+  let idsToDelete = [assignmentId];
+
+  if (includeMatrixSelection) {
+    selectedIds.add(assignmentId);
+    const clickedChip = document.querySelector(
+      `#matrixTable .chip[data-id="${assignmentId}"]`,
+    );
+    if (typeof updateMatrixAssignmentChipSelection === 'function') {
+      updateMatrixAssignmentChipSelection(clickedChip, true);
+    }
+    idsToDelete = [...selectedIds]
+      .map(Number)
+      .filter(assignmentToDelete => (
+        Number.isFinite(assignmentToDelete) &&
+        document.querySelector(`#matrixTable .chip[data-id="${assignmentToDelete}"]`)
+      ));
   }
+
+  const multiple = idsToDelete.length > 1;
+  const message = multiple
+    ? `Delete all ${idsToDelete.length} selected assignments? This cannot be undone.`
+    : 'Delete this assignment?';
+  if (!confirm(message)) return;
+
+  const results = await Promise.allSettled(
+    idsToDelete.map(assignmentToDelete => (
+      api('DELETE', `/api/assignments/${assignmentToDelete}`)
+    )),
+  );
+  const deletedIds = idsToDelete.filter((assignmentToDelete, index) => (
+    results[index]?.status === 'fulfilled'
+  ));
+  const failures = results.filter(result => result.status === 'rejected');
+
+  deletedIds.forEach(assignmentToDelete => selectedIds.delete(assignmentToDelete));
+  closeModal();
+  await loadAll();
+
+  if (failures.length) {
+    const firstError = failures[0]?.reason?.message || 'Unknown deletion error';
+    toast(
+      `${deletedIds.length} assignment${deletedIds.length === 1 ? '' : 's'} deleted; ` +
+      `${failures.length} failed. ${firstError}`,
+      'error',
+    );
+    return;
+  }
+
+  toast(multiple
+    ? `${idsToDelete.length} selected assignments deleted`
+    : 'Assignment deleted');
 }

@@ -1,5 +1,59 @@
 /* Workforce Allocation Dashboard — ui/events.js */
 
+function getMatrixSelectedAssignmentSet() {
+  if (!(S.matrixSelectedAssignmentIds instanceof Set)) {
+    S.matrixSelectedAssignmentIds = new Set();
+  }
+  return S.matrixSelectedAssignmentIds;
+}
+
+function updateMatrixAssignmentChipSelection(chip, selected) {
+  if (!chip) return;
+  chip.classList.toggle('is-selected', selected);
+  chip.setAttribute('aria-selected', selected ? 'true' : 'false');
+}
+
+function clearMatrixAssignmentSelection() {
+  getMatrixSelectedAssignmentSet().clear();
+  document.querySelectorAll('#matrixTable .chip.is-selected').forEach(chip => {
+    updateMatrixAssignmentChipSelection(chip, false);
+  });
+}
+
+function openMatrixAssignmentChip(chip) {
+  if (!chip) return;
+  openAssignmentModal({
+    id: Number(chip.dataset.id),
+    year: Number(chip.dataset.year),
+    month: Number(chip.dataset.month),
+    week: Number(chip.dataset.week),
+    start_date: chip.dataset.start,
+    end_date: chip.dataset.end,
+  });
+}
+
+function toggleMatrixAssignmentChipSelection(chip) {
+  const id = Number(chip?.dataset.id);
+  if (!id) return;
+
+  const selectedIds = getMatrixSelectedAssignmentSet();
+  const shouldSelect = !selectedIds.has(id);
+
+  if (shouldSelect) selectedIds.add(id);
+  else selectedIds.delete(id);
+
+  updateMatrixAssignmentChipSelection(chip, shouldSelect);
+}
+
+function ensureMatrixAssignmentChipSelected(chip) {
+  const id = Number(chip?.dataset.id);
+  if (!id) return;
+
+  const selectedIds = getMatrixSelectedAssignmentSet();
+  selectedIds.add(id);
+  updateMatrixAssignmentChipSelection(chip, true);
+}
+
 /* ================================================================ EVENTS */
 function initEvents() {
   const matrixFiscalYearInput = document.getElementById('matrixFiscalYearInput');
@@ -107,21 +161,17 @@ function initEvents() {
     const del = e.target.closest('[data-action="delete-assign"]');
     if (del) {
       e.stopPropagation();
-      deleteAssignment(Number(del.dataset.id));
+      deleteAssignment(Number(del.dataset.id), { includeMatrixSelection: true });
       return;
     }
 
     const chip = e.target.closest('[data-action="edit-assign"]');
     if (chip) {
       e.stopPropagation();
-      openAssignmentModal({
-        id: Number(chip.dataset.id),
-        year: Number(chip.dataset.year),
-        month: Number(chip.dataset.month),
-        week: Number(chip.dataset.week),
-        start_date: chip.dataset.start,
-        end_date: chip.dataset.end,
-      });
+      // The first click in a click sequence toggles selection. The second
+      // click of an immediate double-click is ignored here and handled by
+      // the dedicated dblclick listener below.
+      if (e.detail === 1) toggleMatrixAssignmentChipSelection(chip);
       return;
     }
 
@@ -145,8 +195,28 @@ function initEvents() {
     }
   });
 
+  matrixTable.addEventListener('dblclick', e => {
+    if (e.target.closest('[data-action="delete-assign"]')) return;
+
+    const chip = e.target.closest('[data-action="edit-assign"]');
+    if (!chip) return;
+
+    e.preventDefault();
+    e.stopPropagation();
+    ensureMatrixAssignmentChipSelected(chip);
+    openMatrixAssignmentChip(chip);
+  });
+
   matrixTable.addEventListener('keydown', e => {
     if (!['Enter', ' '].includes(e.key)) return;
+
+    const chip = e.target.closest('[data-action="edit-assign"]');
+    if (chip) {
+      e.preventDefault();
+      toggleMatrixAssignmentChipSelection(chip);
+      return;
+    }
+
     const revenueCell = e.target.closest('[data-action="open-revenue-breakdown"]');
     if (!revenueCell) return;
     e.preventDefault();

@@ -2,7 +2,7 @@
 @import url("./layout.css");
 @import url("./matrix.css");
 @import url("./matrix-summary.css");
-@import url("./matrix-assignments.css");
+@import url("./matrix-assignments.css?v=assignment-multiselect-v1");
 @import url("./components.css");
 @import url("./drag-drop.css");
 @import url("./sales-charts.css");
@@ -10,4 +10,4 @@
 @import url("./project-lists.css");
 
 @import url("./monthly-planned-work.css?v=table-tooltip-v1");
-@import url("./planned-actual.css");
+@import url("./planned-actual.css?v=resource-details-v1");

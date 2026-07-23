@@ -68,8 +68,14 @@ The supporting rows in these cards are interactive and open detailed resource, p
   - FY2027 = April 2026 through March 2027
   - FY2028 = April 2027 through March 2028
 - Allocation and Revenue groups use separate visual treatments.
+- A sticky **Total Allocation** column appears immediately after Resource and sums each resource's Intrasourcing, Local, Pre-Sale, Training, and General Admin allocation averages.
+- The Total/Average row shows the average Total Allocation across the currently visible available resources.
 - Revenue breakdown is available from the Total/Average row.
 - Assignment editing preserves project, dates, presets, percentage allocation, customer, and product metadata.
+- A single click selects or deselects weekly assignment cards without opening the editor.
+- Multiple weekly assignments can be selected across the visible matrix and deleted together from any selected card's delete control after confirmation.
+- Only an immediate double-click opens the existing Edit Assignment modal; repeated single clicks only toggle selection.
+- Selected assignments use a visible blue selection ring and remain selected while scrolling or re-rendering the current matrix scope.
 - Matrix controls appear in this order:
   1. Pre-Sale Product
   2. Reserve Revenue
@@ -97,6 +103,8 @@ The **Pre-Sale Product** modal provides a persistent master list containing:
 - Editable Secured and Best Case classification thresholds
 
 Products can be added, edited, renamed, and removed. The modal has a fixed outer height and an internally scrollable, compact list for large product sets. Product rows are automatically sorted by **Percent descending**; the highest-confidence product appears first after a Percent change, after saving, and whenever the modal is reopened. Equal Percent values are ordered by Product Name.
+
+A live **Total Amount** row appears at the bottom of the Amount column and recalculates immediately when product amounts are added, edited, or removed.
 
 Default confidence classification:
 
@@ -140,12 +148,18 @@ When **Pre-Sale** is selected:
 - The dropdown contains `All Products` and applicable saved Pre-Sale products.
 - Planned Budget and Actual Budget are calculated from matched employee effort and designation rates.
 - The central **Impact** amount comes from the distinct included Product Amount values in the Pre-Sale Product master.
-- Three side-by-side confidence controls show the average Percent for **Secured**, **Best Case**, and **Prospect** products.
-- Clicking a confidence control filters the planned team, actual delivery team, effort, budgets, Impact, variance, monthly progression, and flow lines to products in that classification.
+- Three side-by-side confidence controls show both the average Percent and Product count for **Secured**, **Best Case**, and **Prospect** products.
+- Clicking a confidence control filters the planned team, actual delivery team, effort, budgets, Impact, variance, monthly progression, flow lines, and drill-down records to products in that classification.
 - The planned and actual team headings change to identify the active confidence classification.
 - Clicking the active confidence control again clears that filter.
 - The central **Impact** control is clickable and restores the default `All Products` Pre-Sale state by clearing the Product and confidence-category filters.
 - Selecting an individual Product clears the confidence-category filter and scopes the visualization to that Product.
+- Every planned resource card provides its own Pre-Sale-only **Planned Details** action.
+- Every actual-delivery resource card provides its own Pre-Sale-only **Actual Details** action.
+- Planned resource details list only that resource's Resource Assignment records with Product, allocation percentage, confidence Percent, planned hours, Product Amount, calculated budget, week, and assignment date range.
+- Actual resource details list only that resource's Work Summary Time Sheet records with Time Sheet Project, mapped Product, Product share, confidence Percent, allocated hours, original time-log hours where applicable, Product Amount, calculated budget, and month.
+- Resource-level detail actions inherit the active Month, Product, and Secured / Best Case / Prospect filters.
+- Detail rows follow the current Month, Product, and Secured / Best Case / Prospect filters and reconcile to the visible team-card hours and budgets.
 
 ### Planned vs Actual
 
@@ -328,6 +342,19 @@ Do not substitute a 40-hour work week.
 ```text
 hours = 36.66 × allocationPercent / 100
 ```
+
+### Resource Matrix Total Allocation
+
+```text
+Total Allocation =
+  Intrasourcing Allocation
+  + Local Allocation
+  + Pre-Sale Allocation
+  + Training Allocation
+  + General Admin Allocation
+```
+
+Each category is the resource's fiscal-year average after N/A availability exclusions. The Total/Average row reports the average of these resource-level totals for the currently visible resources.
 
 Examples:
 
@@ -908,7 +935,8 @@ For a production change, verify at least the following:
 - Protected API endpoints reject unauthenticated requests
 - Employee CRUD and Workdays persistence
 - Project CRUD and import
-- Assignment create, edit, bulk create, import, reschedule, and delete
+- Assignment create, edit, bulk create, import, reschedule, single delete, multi-select, and confirmed multi-delete
+- Assignment single-click selection/deselection and immediate double-click-only edit behavior
 - Pre-Sale Product create, edit, rename, remove, Amount/Percent persistence, and descending Percent sorting
 - Secured and Best Case threshold validation and persistence
 - Pre-Sale assignment Product Name validation
@@ -920,6 +948,7 @@ For a production change, verify at least the following:
 - N/A monthly Workdays deduction
 - Max Capacity, Available Capacity, Capacity Allocated, and remaining capacity calculations
 - Plan-to-Execution Pre-Sale Product and confidence-category filtering, average Percent calculations, Impact amounts, and Impact reset behavior
+- Per-resource Planned Details and Actual Details filtering and total reconciliation
 - Work Summary Time Sheet upload and Planned vs Actual rendering
 - Modal fixed-header, fixed-footer, and internal-scroll behavior
 - Database row counts and integrity after migrations
