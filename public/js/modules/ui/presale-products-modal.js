@@ -14,6 +14,21 @@ function formatPreSaleProductAmount(value) {
   })}`;
 }
 
+
+function getPreSaleProductDraftTotalAmount() {
+  readPreSaleProductDraftRows();
+  return preSaleProductDraftRows.reduce((sum, product) => {
+    const amount = Number(product.amount);
+    return sum + (Number.isFinite(amount) && amount >= 0 ? amount : 0);
+  }, 0);
+}
+
+function updatePreSaleProductTotalAmount() {
+  const output = document.getElementById('preSaleProductTotalAmount');
+  if (!output) return;
+  output.textContent = formatPreSaleProductAmount(getPreSaleProductDraftTotalAmount());
+}
+
 function getPreSaleProductByName(name) {
   const target = String(name || '').trim().toLowerCase();
   if (!target) return null;
@@ -120,6 +135,7 @@ function renderPreSaleProductRows() {
               data-presale-product-amount
               value="${esc(Number(product.amount) || 0)}"
               placeholder="0.00"
+              oninput="updatePreSaleProductTotalAmount()"
             >
           </div>
           <div class="relative">
@@ -150,6 +166,8 @@ function renderPreSaleProductRows() {
         </div>
       `).join('')
     : '<div class="px-6 py-14 text-center text-sm text-gray-400">No products yet. Add a product to begin.</div>';
+
+  updatePreSaleProductTotalAmount();
 }
 
 function addPreSaleProductRow() {
@@ -226,6 +244,13 @@ function openPreSaleProductsModal() {
         <span></span>
       </div>
       <div id="preSaleProductRows"></div>
+      <div class="presale-product-total-row" aria-live="polite">
+        <span></span>
+        <strong>Total Amount</strong>
+        <output id="preSaleProductTotalAmount">${esc(formatPreSaleProductAmount(0))}</output>
+        <span></span>
+        <span></span>
+      </div>
     </div>
     <div class="modal-footer flex items-center justify-between gap-3 rounded-b-2xl border-t border-gray-200 bg-gray-50 p-5">
       <button type="button" onclick="addPreSaleProductRow()" class="btn-gray">+ Add Product</button>

@@ -18,6 +18,19 @@
   height: 100%;
 }
 
+.matrix-total-allocation-heading {
+  padding: 0 7px;
+  background: #eef2ff !important;
+  color: #3730a3;
+  text-align: center;
+  line-height: 1.2;
+}
+
+.matrix-total-allocation-heading span {
+  display: inline-block;
+  white-space: normal;
+}
+
 .matrix-summary-group {
   padding: 9px 4px;
   border-right: 1px solid rgba(255, 255, 255, 0.28);
@@ -150,6 +163,13 @@
   font-variant-numeric: tabular-nums;
 }
 
+.matrix-total-allocation-cell {
+  background-color: #eef2ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 800;
+}
+
 .matrix-allocation-cell {
   background-color: #fbfcfe;
 }
@@ -206,6 +226,13 @@
   color: #64748b;
   font-size: 9px;
   font-weight: 500;
+}
+
+.matrix-total-row .matrix-total-allocation-summary-cell {
+  background: #e0e7ff;
+  color: #3730a3;
+  font-size: 11px;
+  font-weight: 800;
 }
 
 .matrix-total-row .matrix-total-allocation-cell {

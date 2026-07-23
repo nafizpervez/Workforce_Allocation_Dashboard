@@ -422,6 +422,8 @@ function getOrCreatePlannedActualProject(
       preSaleProductNames: new Set(),
       preSaleProductNamesByMonth: new Map(),
       preSaleProductScopes: new Map(),
+      plannedDetails: [],
+      actualDetails: [],
       plannedHours: 0,
       actualHours: 0,
       plannedBudget: 0,
@@ -557,6 +559,8 @@ function getOrCreatePlannedActualProductScope(entry, productName) {
       actualByMonth: new Map(),
       plannedBudgetByMonth: new Map(),
       actualBudgetByMonth: new Map(),
+      plannedDetails: [],
+      actualDetails: [],
       plannedHours: 0,
       actualHours: 0,
       plannedBudget: 0,
@@ -566,7 +570,92 @@ function getOrCreatePlannedActualProductScope(entry, productName) {
   return entry.preSaleProductScopes.get(name);
 }
 
-function addPlannedActualProductPlanned(scope, assignment, employee, hours, budget) {
+
+function plannedActualDetailPeriodLabel(year, month, week = null) {
+  const monthLabel = `${MN[Number(month) - 1] || 'Month'} ${Number(year) || ''}`.trim();
+  return week ? `${monthLabel} · W${Number(week)}` : monthLabel;
+}
+
+function buildPlannedActualPlannedDetail(
+  assignment,
+  employee,
+  productScope,
+  hours,
+  budget,
+  projectName,
+) {
+  const range = typeof weekDateRange === 'function'
+    ? weekDateRange(assignment.year, assignment.month, assignment.week)
+    : { start: '', end: '' };
+  const productName = productScope?.productName || String(assignment.product_name || '').trim();
+
+  return {
+    kind: 'planned',
+    resourceKey: `employee:${employee.id}`,
+    resourceName: employee.name,
+    projectName: String(projectName || 'Pre-Sale').trim() || 'Pre-Sale',
+    productName: productName || 'Unmapped Product',
+    productPercent: productScope ? Number(productScope.productPercent) : null,
+    productAmount: productScope ? Number(productScope.productAmount) || 0 : 0,
+    allocationPercent: Math.max(0, Number(assignment.percentage) || 0),
+    hours: +Number(hours || 0).toFixed(4),
+    budget: +Number(budget || 0).toFixed(2),
+    year: Number(assignment.year),
+    month: Number(assignment.month),
+    week: Number(assignment.week),
+    monthKey: plannedActualMonthKey(assignment.year, assignment.month),
+    periodLabel: plannedActualDetailPeriodLabel(
+      assignment.year,
+      assignment.month,
+      assignment.week,
+    ),
+    startDate: range.start || '',
+    endDate: range.end || '',
+    workType: 'Pre - Sales',
+    timesheetProjectName: '',
+    sourceHours: +Number(hours || 0).toFixed(4),
+  };
+}
+
+function buildPlannedActualActualDetail(
+  row,
+  parsedMonth,
+  resourceKey,
+  resourceName,
+  productScope,
+  hours,
+  budget,
+  allocationShare,
+  sourceHours,
+) {
+  return {
+    kind: 'actual',
+    resourceKey,
+    resourceName,
+    projectName: 'Pre-Sale',
+    productName: productScope?.productName || 'Unmapped Product',
+    productPercent: productScope ? Number(productScope.productPercent) : null,
+    productAmount: productScope ? Number(productScope.productAmount) || 0 : 0,
+    allocationPercent: Math.max(0, Number(allocationShare) || 0) * 100,
+    hours: +Number(hours || 0).toFixed(4),
+    budget: +Number(budget || 0).toFixed(2),
+    year: Number(parsedMonth.year),
+    month: Number(parsedMonth.month),
+    week: null,
+    monthKey: plannedActualMonthKey(parsedMonth.year, parsedMonth.month),
+    periodLabel: String(row.month || plannedActualDetailPeriodLabel(
+      parsedMonth.year,
+      parsedMonth.month,
+    )).trim(),
+    startDate: '',
+    endDate: '',
+    workType: String(row.workType || 'Pre - Sales').trim(),
+    timesheetProjectName: String(row.projectName || '(No project name)').trim(),
+    sourceHours: +Number(sourceHours || hours || 0).toFixed(4),
+  };
+}
+
+function addPlannedActualProductPlanned(scope, assignment, employee, hours, budget, detail = null) {
   const resourceKey = `employee:${employee.id}`;
   addPlannedActualHours(scope.plannedByResource, resourceKey, employee.name, hours);
   addPlannedActualMonthResourceHours(scope.plannedResourcesByMonth, assignment.year, assignment.month, resourceKey, employee.name, hours);
@@ -574,15 +663,25 @@ function addPlannedActualProductPlanned(scope, assignment, employee, hours, budg
   addPlannedActualMonthAmount(scope.plannedBudgetByMonth, assignment.year, assignment.month, budget);
   scope.plannedHours += hours;
   scope.plannedBudget += budget;
+  if (detail) scope.plannedDetails.push(detail);
 }
 
-function addPlannedActualProductActual(scope, parsedMonth, resourceKey, resourceName, hours, budget) {
+function addPlannedActualProductActual(
+  scope,
+  parsedMonth,
+  resourceKey,
+  resourceName,
+  hours,
+  budget,
+  detail = null,
+) {
   addPlannedActualHours(scope.actualByResource, resourceKey, resourceName, hours);
   addPlannedActualMonthResourceHours(scope.actualResourcesByMonth, parsedMonth.year, parsedMonth.month, resourceKey, resourceName, hours);
   addPlannedActualMonthHours(scope.actualByMonth, parsedMonth.year, parsedMonth.month, hours);
   addPlannedActualMonthAmount(scope.actualBudgetByMonth, parsedMonth.year, parsedMonth.month, budget);
   scope.actualHours += hours;
   scope.actualBudget += budget;
+  if (detail) scope.actualDetails.push(detail);
 }
 
 
@@ -784,10 +883,29 @@ function buildPlannedActualEffortData() {
 
     if (resolvedProject.key === 'work-type:pre-sale') {
       const productName = String(assignment.product_name || '').trim();
-      if (productName) {
+      const productScope = productName
+        ? getOrCreatePlannedActualProductScope(projectEntry, productName)
+        : null;
+      const plannedDetail = buildPlannedActualPlannedDetail(
+        assignment,
+        employee,
+        productScope,
+        hours,
+        plannedBudget,
+        assignmentProjectName,
+      );
+      projectEntry.plannedDetails.push(plannedDetail);
+
+      if (productName && productScope) {
         addPlannedActualProductName(projectEntry, productName, assignment.year, assignment.month);
-        const productScope = getOrCreatePlannedActualProductScope(projectEntry, productName);
-        addPlannedActualProductPlanned(productScope, assignment, employee, hours, plannedBudget);
+        addPlannedActualProductPlanned(
+          productScope,
+          assignment,
+          employee,
+          hours,
+          plannedBudget,
+          plannedDetail,
+        );
         const employeeMonthKey = `${employee.id}|${plannedActualMonthKey(assignment.year, assignment.month)}`;
         if (!preSalePlanByEmployeeMonth.has(employeeMonthKey)) preSalePlanByEmployeeMonth.set(employeeMonthKey, new Map());
         const productHours = preSalePlanByEmployeeMonth.get(employeeMonthKey);
@@ -856,18 +974,62 @@ function buildPlannedActualEffortData() {
     projectEntry.actualHours += hours;
     projectEntry.actualBudget += actualBudget;
 
-    if (resolvedProject.key === 'work-type:pre-sale' && matchedEmployee) {
-      const employeeMonthKey = `${matchedEmployee.id}|${plannedActualMonthKey(parsedMonth.year, parsedMonth.month)}`;
-      const productHours = preSalePlanByEmployeeMonth.get(employeeMonthKey);
-      const totalProductPlan = [...(productHours?.values() || [])].reduce((sum, value) => sum + value, 0);
+    if (resolvedProject.key === 'work-type:pre-sale') {
+      const employeeMonthKey = matchedEmployee
+        ? `${matchedEmployee.id}|${plannedActualMonthKey(parsedMonth.year, parsedMonth.month)}`
+        : '';
+      const productHours = employeeMonthKey
+        ? preSalePlanByEmployeeMonth.get(employeeMonthKey)
+        : null;
+      const totalProductPlan = [...(productHours?.values() || [])].reduce(
+        (sum, value) => sum + value,
+        0,
+      );
+      let mapped = false;
+
       if (productHours && totalProductPlan > 0) {
         for (const [productName, productPlannedHours] of productHours.entries()) {
           const share = productPlannedHours / totalProductPlan;
           const allocatedHours = hours * share;
           const allocatedBudget = actualBudget * share;
           const productScope = getOrCreatePlannedActualProductScope(projectEntry, productName);
-          addPlannedActualProductActual(productScope, parsedMonth, resourceKey, resourceName, allocatedHours, allocatedBudget);
+          const actualDetail = buildPlannedActualActualDetail(
+            row,
+            parsedMonth,
+            resourceKey,
+            resourceName,
+            productScope,
+            allocatedHours,
+            allocatedBudget,
+            share,
+            hours,
+          );
+          addPlannedActualProductActual(
+            productScope,
+            parsedMonth,
+            resourceKey,
+            resourceName,
+            allocatedHours,
+            allocatedBudget,
+            actualDetail,
+          );
+          projectEntry.actualDetails.push(actualDetail);
+          mapped = true;
         }
+      }
+
+      if (!mapped) {
+        projectEntry.actualDetails.push(buildPlannedActualActualDetail(
+          row,
+          parsedMonth,
+          resourceKey,
+          resourceName,
+          null,
+          hours,
+          actualBudget,
+          1,
+          hours,
+        ));
       }
     }
   }
@@ -901,6 +1063,8 @@ function buildPlannedActualEffortData() {
         planned,
         actual,
         variance: +(actual - planned).toFixed(2),
+        plannedDetails: entry.plannedDetails.filter(detail => detail.monthKey === key),
+        actualDetails: entry.actualDetails.filter(detail => detail.monthKey === key),
       };
     });
 
@@ -940,6 +1104,8 @@ function buildPlannedActualEffortData() {
           actual,
           variance: +(actual - planned).toFixed(2),
           preSaleProductAmount: active ? scope.productAmount : 0,
+          plannedDetails: scope.plannedDetails.filter(detail => detail.monthKey === key),
+          actualDetails: scope.actualDetails.filter(detail => detail.monthKey === key),
         };
       });
       return {

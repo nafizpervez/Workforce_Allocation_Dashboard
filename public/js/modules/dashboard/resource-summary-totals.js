@@ -60,6 +60,9 @@ function getMatrixTotalsViewData(employees, months) {
       ),
     ]),
   );
+  const totalAllocation = averageMatrixValues(
+    availableSummaries.map(summary => summary.allocationMeta.total),
+  );
 
   const revenue = Object.fromEntries(
     RESOURCE_SUMMARY_COLUMNS.revenue.map(column => [
@@ -103,6 +106,7 @@ function getMatrixTotalsViewData(employees, months) {
     employeeCount: employees.length,
     availableFiscalResourceCount: availableSummaries.length,
     allocation,
+    totalAllocation,
     revenue,
     weeklyAllocation,
   };
@@ -114,6 +118,16 @@ function renderMatrixTotalsRow(employees, months) {
   const totals = getMatrixTotalsViewData(employees, months);
   const resourceLabel = `${totals.employeeCount} visible resource${totals.employeeCount === 1 ? '' : 's'}`;
   const fiscalResourceLabel = `${totals.availableFiscalResourceCount} available resource${totals.availableFiscalResourceCount === 1 ? '' : 's'}`;
+
+  const totalAllocationTitle = `Average total allocation across ${fiscalResourceLabel}. This is the average of each visible resource’s Intrasourcing + Local + Pre-Sale + Training + General Admin allocation: ${totals.totalAllocation.toFixed(1)}%.`;
+  const totalAllocationCell = `
+    <td
+      class="matrix-fixed-cell sticky-total-allocation col-total-allocation matrix-total-cell matrix-total-allocation-summary-cell"
+      data-total-group="allocation"
+      data-total-metric="total"
+      title="${esc(totalAllocationTitle)}"
+    >${formatAllocationViewValue(totals.totalAllocation)}</td>
+  `;
 
   const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation
     .map((column, index) => {
@@ -187,6 +201,7 @@ function renderMatrixTotalsRow(employees, months) {
         <span class="matrix-total-label">Total / Average</span>
         <span class="matrix-total-note">${esc(resourceLabel)}</span>
       </td>
+      ${totalAllocationCell}
       ${allocationCells}
       ${revenueCells}
       ${weeklyCells}

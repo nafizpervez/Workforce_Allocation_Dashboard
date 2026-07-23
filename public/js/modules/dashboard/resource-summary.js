@@ -113,6 +113,13 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
       </div>
     </th>
     <th
+      class="sticky-total-allocation col-total-allocation matrix-fixed-heading matrix-total-allocation-heading"
+      rowspan="2"
+      title="Sum of the resource’s Intrasourcing, Local, Pre-Sale, Training and General Admin allocation averages"
+    >
+      <span>Total Allocation</span>
+    </th>
+    <th
       class="sticky-allocation-group matrix-summary-group matrix-allocation-group"
       colspan="${RESOURCE_SUMMARY_COLUMNS.allocation.length}"
     >Allocation</th>
@@ -177,6 +184,22 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
 
 function renderResourceSummaryCells(employee) {
   const summary = getResourceSummaryViewData(employee);
+  const totalAllocationTitle = [
+    `${employee.name} total allocation is the sum of the five visible allocation categories.`,
+    `${RESOURCE_SUMMARY_COLUMNS.allocation.map(column => (
+      `${column.label} ${summary.allocation[column.key].toFixed(1)}%`
+    )).join(' + ')} = ${summary.allocationMeta.total.toFixed(1)}%.`,
+  ].join(' ');
+
+  const totalAllocationCell = `
+    <td
+      class="matrix-fixed-cell sticky-total-allocation col-total-allocation matrix-summary-cell matrix-total-allocation-cell"
+      data-employee-id="${employee.id}"
+      data-summary-group="allocation"
+      data-summary-metric="total"
+      title="${esc(totalAllocationTitle)}"
+    >${formatAllocationViewValue(summary.allocationMeta.total)}</td>
+  `;
 
   const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation.map((column, index) => {
     const rule = RESOURCE_ALLOCATION_RULE_BY_KEY[column.key];
@@ -219,7 +242,7 @@ function renderResourceSummaryCells(employee) {
     `;
   }).join('');
 
-  return allocationCells + revenueCells;
+  return totalAllocationCell + allocationCells + revenueCells;
 }
 
 function renderAssignmentCells(employee, months, unavailableSlots) {
@@ -335,7 +358,7 @@ function renderMatrix() {
     `;
   });
 
-  const columnCount = 2 +
+  const columnCount = 3 +
     RESOURCE_SUMMARY_COLUMNS.allocation.length +
     RESOURCE_SUMMARY_COLUMNS.revenue.length +
     (months.length * 4);
