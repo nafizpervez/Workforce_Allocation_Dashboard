@@ -14,6 +14,139 @@ function formatPreSaleProductAmount(value) {
   })}`;
 }
 
+function formatPreSaleProductPlannedHours(value) {
+  return `${(Number(value) || 0).toLocaleString('en-US', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 1,
+  })}h`;
+}
+
+function formatPreSaleProductHourlyRate(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric) || numeric < 0) return 'Rate not set';
+  return `${formatPreSaleProductAmount(numeric)}/h`;
+}
+
+function normalizePreSaleProductPlanningKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/\s+/g, ' ');
+}
+
+function isPreSaleProductPlanningAssignment(assignment, projectById) {
+  const project = projectById.get(Number(assignment?.project_id));
+  const projectName = String(assignment?.project_name || project?.name || '');
+  return /pre[\s‐‑‒–—−_-]*sales?\b/i.test(projectName);
+}
+
+function getPreSaleProductPlannedResources(productName) {
+  const targetProduct = normalizePreSaleProductPlanningKey(productName);
+  if (!targetProduct) return [];
+
+  const employeeById = new Map(
+    (S.employees || []).map(employee => [Number(employee.id), employee]),
+  );
+  const projectById = new Map(
+    (S.projects || []).map(project => [Number(project.id), project]),
+  );
+  const assignments = typeof getEffectiveFiscalAssignments === 'function'
+    ? getEffectiveFiscalAssignments(S.fiscalYear, S.assignments)
+    : (S.assignments || []);
+  const resourceMap = new Map();
+
+  for (const assignment of assignments) {
+    const assignmentProduct = normalizePreSaleProductPlanningKey(
+      assignment.product_name || assignment.assignment_product_name,
+    );
+    if (assignmentProduct !== targetProduct) continue;
+    if (!isPreSaleProductPlanningAssignment(assignment, projectById)) continue;
+
+    const employee = employeeById.get(Number(assignment.employee_id));
+    if (!employee || employee.active === 0) continue;
+    if (typeof isNonAssignablePerson === 'function' && isNonAssignablePerson(employee.name)) {
+      continue;
+    }
+
+    const percentage = Math.max(0, Number(assignment.percentage) || 0);
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
+    if (hours <= 0) continue;
+
+    const rateRecord = typeof getRevenueRateForDesignation === 'function'
+      ? getRevenueRateForDesignation(employee.designation)
+      : null;
+    const hourlyRate = Number(rateRecord?.local_rate);
+    const hasRate = Number.isFinite(hourlyRate) && hourlyRate >= 0;
+    const resourceKey = String(employee.id);
+
+    if (!resourceMap.has(resourceKey)) {
+      resourceMap.set(resourceKey, {
+        employeeId: Number(employee.id),
+        name: employee.name || 'Unknown resource',
+        designation: employee.designation || 'Designation not set',
+        hours: 0,
+        hourlyRate: hasRate ? hourlyRate : null,
+        revenue: 0,
+      });
+    }
+
+    const resource = resourceMap.get(resourceKey);
+    resource.hours += hours;
+    resource.revenue += hasRate ? hours * hourlyRate : 0;
+    if (resource.hourlyRate === null && hasRate) resource.hourlyRate = hourlyRate;
+  }
+
+  return [...resourceMap.values()]
+    .map(resource => ({
+      ...resource,
+      hours: +resource.hours.toFixed(2),
+      revenue: +resource.revenue.toFixed(2),
+    }))
+    .sort((a, b) => b.hours - a.hours || a.name.localeCompare(b.name));
+}
+
+function getPreSaleProductPlannedRevenue(productName) {
+  return getPreSaleProductPlannedResources(productName).reduce(
+    (sum, resource) => sum + (Number(resource.revenue) || 0),
+    0,
+  );
+}
+
+function renderPreSaleProductPlanningBreakdown(productName) {
+  const resources = getPreSaleProductPlannedResources(productName);
+  if (!resources.length) {
+    return '<div class="presale-product-plan-empty">No planned resources for this product in the selected fiscal year.</div>';
+  }
+
+  const totalHours = resources.reduce((sum, resource) => sum + resource.hours, 0);
+  const totalRevenue = resources.reduce((sum, resource) => sum + resource.revenue, 0);
+
+  return `
+    <div class="presale-product-plan-list">
+      ${resources.map(resource => `
+        <div class="presale-product-plan-person">
+          <div class="presale-product-plan-person__identity">
+            <strong title="${esc(resource.name)}">${esc(resource.name)}</strong>
+            <span>${esc(resource.designation)}</span>
+          </div>
+          <div class="presale-product-plan-person__hours">
+            <strong>${esc(formatPreSaleProductPlannedHours(resource.hours))}</strong>
+            <span>${esc(formatPreSaleProductHourlyRate(resource.hourlyRate))}</span>
+          </div>
+          <div class="presale-product-plan-person__revenue">
+            <strong>${esc(formatPreSaleProductAmount(resource.revenue))}</strong>
+            <span>Planned revenue</span>
+          </div>
+        </div>
+      `).join('')}
+      <div class="presale-product-plan-total">
+        <span>${resources.length} resource${resources.length === 1 ? '' : 's'} · ${esc(formatPreSaleProductPlannedHours(totalHours))}</span>
+        <strong>${esc(formatPreSaleProductAmount(totalRevenue))}</strong>
+      </div>
+    </div>
+  `;
+}
+
 
 function getPreSaleProductDraftTotalAmount() {
   readPreSaleProductDraftRows();
@@ -25,8 +158,18 @@ function getPreSaleProductDraftTotalAmount() {
 
 function updatePreSaleProductTotalAmount() {
   const output = document.getElementById('preSaleProductTotalAmount');
-  if (!output) return;
-  output.textContent = formatPreSaleProductAmount(getPreSaleProductDraftTotalAmount());
+  if (output) {
+    output.textContent = formatPreSaleProductAmount(getPreSaleProductDraftTotalAmount());
+  }
+
+  const revenueOutput = document.getElementById('preSaleProductTotalPlannedRevenue');
+  if (revenueOutput) {
+    const totalRevenue = preSaleProductDraftRows.reduce(
+      (sum, product) => sum + getPreSaleProductPlannedRevenue(product.name),
+      0,
+    );
+    revenueOutput.textContent = formatPreSaleProductAmount(totalRevenue);
+  }
 }
 
 function getPreSaleProductByName(name) {
@@ -72,6 +215,11 @@ function comparePreSaleProductDraftRows(a, b) {
 function sortPreSaleProductRowsByPercent() {
   readPreSaleProductDraftRows();
   preSaleProductDraftRows.sort(comparePreSaleProductDraftRows);
+  renderPreSaleProductRows();
+}
+
+function refreshPreSaleProductPlanningBreakdowns() {
+  readPreSaleProductDraftRows();
   renderPreSaleProductRows();
 }
 
@@ -121,6 +269,7 @@ function renderPreSaleProductRows() {
               value="${esc(product.name)}"
               placeholder="Product Name"
               autocomplete="off"
+              onchange="refreshPreSaleProductPlanningBreakdowns()"
             >
           </div>
           <div class="relative">
@@ -153,6 +302,9 @@ function renderPreSaleProductRows() {
               onchange="sortPreSaleProductRowsByPercent()"
             >
             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+          </div>
+          <div class="presale-product-row__planning">
+            ${renderPreSaleProductPlanningBreakdown(product.name)}
           </div>
           <button
             type="button"
@@ -195,7 +347,7 @@ function openPreSaleProductsModal() {
   openModal(`
     ${mHdr(
       'Pre-Sale Product',
-      'Maintain Product Names, reference amounts, confidence percentages and classification thresholds for Pre-Sale assignments.',
+      'Maintain Product Names, reference amounts and confidence percentages, and review planned resource hours and revenue calculated from Reserve Revenue rates.',
     )}
     <div class="modal-scroll-body nice-scroll presale-products-modal__body">
       <section class="presale-product-thresholds" aria-labelledby="presaleThresholdHeading">
@@ -241,6 +393,7 @@ function openPreSaleProductsModal() {
         <span>Product Name</span>
         <span class="text-right">Amount</span>
         <span class="text-right">Percent</span>
+        <span>Planned Resources · Hours · Revenue</span>
         <span></span>
       </div>
       <div id="preSaleProductRows"></div>
@@ -249,17 +402,18 @@ function openPreSaleProductsModal() {
         <strong>Total Amount</strong>
         <output id="preSaleProductTotalAmount">${esc(formatPreSaleProductAmount(0))}</output>
         <span></span>
+        <output id="preSaleProductTotalPlannedRevenue">${esc(formatPreSaleProductAmount(0))}</output>
         <span></span>
       </div>
     </div>
-    <div class="modal-footer flex items-center justify-between gap-3 rounded-b-2xl border-t border-gray-200 bg-gray-50 p-5">
+    <div class="modal-footer flex items-center justify-between gap-2 rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
       <button type="button" onclick="addPreSaleProductRow()" class="btn-gray">+ Add Product</button>
       <div class="flex gap-3">
         <button type="button" onclick="closeModal()" class="btn-gray">Cancel</button>
         <button id="savePreSaleProductsBtn" type="button" onclick="savePreSaleProducts()" class="btn-blue">Save Products</button>
       </div>
     </div>
-  `, 'max-w-4xl presale-products-modal-panel');
+  `, 'max-w-6xl presale-products-modal-panel');
 
   renderPreSaleProductRows();
   syncPreSaleThresholdPreview();

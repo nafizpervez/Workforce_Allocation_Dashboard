@@ -71,6 +71,7 @@ function classifyAllocationProject(projectName) {
   if (/intrasource/i.test(normalizedName)) return 'intrasourcing';
   if (/pre[\s-]*sale/i.test(normalizedName)) return 'preSale';
   if (/training[\s-]*delivery/i.test(normalizedName)) return 'training';
+  if (/skill[\s-]*development/i.test(normalizedName)) return 'skillDevelopment';
   if (/general[\s-]*admin/i.test(normalizedName)) return 'generalAdmin';
   return 'local';
 }
@@ -85,6 +86,7 @@ function getFiscalAllocationCategorySummary(rawAssignments, employees, totalWeek
     'local',
     'preSale',
     'training',
+    'skillDevelopment',
     'generalAdmin',
   ];
 
@@ -153,7 +155,14 @@ function getFiscalAllocationResourceDetails(rawAssignments, employees, totalWeek
   const unavailableSlots = getUnavailableSlotSet(rawAssignments);
   const effectiveAssignments = filterEffectiveAssignments(rawAssignments);
   const unavailableCountByEmployee = new Map();
-  const categoryKeys = ['intrasourcing', 'local', 'preSale', 'training', 'generalAdmin'];
+  const categoryKeys = [
+    'intrasourcing',
+    'local',
+    'preSale',
+    'training',
+    'skillDevelopment',
+    'generalAdmin',
+  ];
   const percentagesByEmployee = new Map();
 
   for (const slot of unavailableSlots) {

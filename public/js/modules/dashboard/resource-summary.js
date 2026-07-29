@@ -179,7 +179,7 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
   const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation.map((column, index) => {
     const rule = RESOURCE_ALLOCATION_RULE_BY_KEY[column.key];
     const description = rule?.description ||
-      'All projects not classified as Intrasourcing, Pre-Sale, Training, or General Admin.';
+      'All projects not classified as Intrasourcing, Pre-Sale, Training, Skill Development, or General Admin.';
     const percentageTotal = summary.allocationMeta.percentageTotals[column.key];
     const title = `${description} ${percentageTotal.toFixed(1)} total weekly percentage points ÷ ${summary.allocationMeta.fiscalWeekCount} available FY weeks = ${summary.allocation[column.key].toFixed(1)}%.`;
 
@@ -316,7 +316,7 @@ function renderMatrix() {
     const rowClass = index % 2 === 0 ? 'row-even' : 'row-odd';
     const summary = getResourceSummaryViewData(employee);
     const totalAllocationTitle = [
-      `${employee.name} total allocation is the sum of the five visible allocation categories.`,
+      `${employee.name} total allocation is the sum of the ${RESOURCE_SUMMARY_COLUMNS.allocation.length} visible allocation categories.`,
       `${RESOURCE_SUMMARY_COLUMNS.allocation.map(column => (
         `${column.label} ${summary.allocation[column.key].toFixed(1)}%`
       )).join(' + ')} = ${summary.allocationMeta.total.toFixed(1)}%.`,
