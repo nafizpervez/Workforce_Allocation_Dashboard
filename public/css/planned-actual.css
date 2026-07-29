@@ -448,6 +448,62 @@
 }
 
 
+.planned-actual-not-local-projects {
+  margin-top: 0.55rem;
+  padding: 0.48rem;
+  border: 1px solid #e2e8f0;
+  border-radius: 0.65rem;
+  background: #f8fafc;
+  text-align: left;
+}
+
+.planned-actual-not-local-label {
+  display: block;
+  margin-bottom: 0.3rem;
+  color: #64748b;
+  font-size: 0.58rem;
+  font-weight: 800;
+  letter-spacing: 0.045em;
+  text-transform: uppercase;
+}
+
+.planned-actual-not-local-options {
+  display: flex;
+  max-height: 7rem;
+  flex-wrap: wrap;
+  gap: 0.28rem;
+  overflow-y: auto;
+}
+
+.planned-actual-not-local-option {
+  max-width: 100%;
+  padding: 0.24rem 0.42rem;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #475569;
+  font-size: 0.58rem;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.planned-actual-not-local-option:hover,
+.planned-actual-not-local-option:focus-visible {
+  border-color: #818cf8;
+  color: #3730a3;
+  outline: none;
+}
+
+.planned-actual-not-local-option.is-active {
+  border-color: #4f46e5;
+  background: #eef2ff;
+  color: #3730a3;
+}
+
+
 .planned-actual-impact {
   margin-top: 0.22rem;
   color: #0f172a;

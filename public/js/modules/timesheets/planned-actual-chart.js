@@ -8,6 +8,7 @@ let plannedActualRenderedProject = null;
 
 let plannedActualSelectedPreSaleCategory = '';
 let plannedActualCategoryProjectKey = '';
+let plannedActualSelectedNotLocalProjectKey = '';
 
 const PLANNED_ACTUAL_PRESALE_CATEGORIES = [
   { key: 'secured', label: 'Secured' },
@@ -240,6 +241,10 @@ function normalizePlannedActualProjectInput(value) {
     .replace(/\s+/g, ' ');
 }
 
+function plannedActualProjectOptionLabel(project) {
+  return String(project?.dropdownLabel || project?.label || '').trim();
+}
+
 function resolvePlannedActualProject(data, value, preferredKey = '') {
   const normalizedKey = normalizePlannedActualProjectInput(preferredKey);
   if (normalizedKey) {
@@ -254,7 +259,8 @@ function resolvePlannedActualProject(data, value, preferredKey = '') {
 
   return data.projects.find(project => (
     normalizePlannedActualProjectInput(project.key) === normalized ||
-    normalizePlannedActualProjectInput(project.label) === normalized
+    normalizePlannedActualProjectInput(project.label) === normalized ||
+    normalizePlannedActualProjectInput(plannedActualProjectOptionLabel(project)) === normalized
   )) || null;
 }
 
@@ -288,6 +294,7 @@ function renderPlannedActualProjectMenu(data, query = '', showAll = false) {
     if (showAll || !normalizedQuery) return true;
     return (
       normalizePlannedActualProjectInput(project.label).includes(normalizedQuery) ||
+      normalizePlannedActualProjectInput(plannedActualProjectOptionLabel(project)).includes(normalizedQuery) ||
       normalizePlannedActualProjectInput(project.key).includes(normalizedQuery)
     );
   }).slice(0, 100);
@@ -299,8 +306,8 @@ function renderPlannedActualProjectMenu(data, query = '', showAll = false) {
           class="planned-actual-project-option"
           role="option"
           data-project-key="${esc(project.key)}"
-          data-project-label="${esc(project.label)}"
-        >${esc(project.label)}</button>
+          data-project-label="${esc(plannedActualProjectOptionLabel(project))}"
+        >${esc(plannedActualProjectOptionLabel(project))}</button>
       `).join('')
     : '<div class="planned-actual-project-option-empty">No matching projects</div>';
 }
@@ -339,10 +346,10 @@ function populatePlannedActualProjectFilter(data) {
   const resolved = resolvePlannedActualProject(data, current, input.dataset.projectKey);
 
   if (resolved) {
-    input.value = resolved.label;
+    input.value = plannedActualProjectOptionLabel(resolved);
     input.dataset.projectKey = resolved.key;
   } else if (!current.trim() && data.projects[0]) {
-    input.value = data.projects[0].label;
+    input.value = plannedActualProjectOptionLabel(data.projects[0]);
     input.dataset.projectKey = data.projects[0].key;
   } else {
     delete input.dataset.projectKey;
@@ -493,7 +500,9 @@ function renderPlannedActualSummary(data, project) {
       ? `actual hours use Time Sheet Work Type “${project.workType}”`
       : project.actualMatchMode === 'aggregate-projects'
         ? `the view aggregates ${project.includedProjectCount || 0} projects and matching Time Sheet project names while excluding Pre-Sale, Intrasourcing / Intrasource, Training Delivery and General Admin`
-        : 'actual hours use matching Time Sheet project names';
+        : project.actualMatchMode === 'aggregate-not-local'
+          ? `the view aggregates ${project.includedProjectCount || 0} projects marked Not Local and matches Time Sheet project names for each project`
+          : 'actual hours use matching Time Sheet project names';
     note.textContent = `FY${data.fiscalYear + 1}${monthText}: planned hours and budget come from weekly Resource Assignments; ${actualSource}. Budgets use each matched resource’s saved designation rate.`;
   }
 }
@@ -540,6 +549,78 @@ function formatPlannedActualDetailDateRange(detail) {
   return `${detail.periodLabel || ''} · ${detail.startDate || detail.endDate}`.trim();
 }
 
+function isPlannedActualNotLocalAggregate(project) {
+  return Boolean(
+    project?.isNotLocalAggregate ||
+    String(project?.key || '') === 'aggregate:not-local'
+  );
+}
+
+function getPlannedActualNotLocalScope(data, dropdownProject) {
+  if (!isPlannedActualNotLocalAggregate(dropdownProject)) return dropdownProject;
+
+  const projectOptions = dropdownProject.includedProjects || [];
+  if (
+    plannedActualSelectedNotLocalProjectKey &&
+    !projectOptions.some(project => project.key === plannedActualSelectedNotLocalProjectKey)
+  ) {
+    plannedActualSelectedNotLocalProjectKey = '';
+  }
+
+  if (!plannedActualSelectedNotLocalProjectKey) {
+    return {
+      ...dropdownProject,
+      notLocalProjectOptions: projectOptions,
+      selectedNotLocalProjectKey: '',
+    };
+  }
+
+  const selected = (data.notLocalProjects || []).find(project => (
+    project.key === plannedActualSelectedNotLocalProjectKey
+  ));
+  if (!selected) return dropdownProject;
+
+  return {
+    ...selected,
+    label: `Not Local — ${selected.label}`,
+    notLocalParentKey: dropdownProject.key,
+    notLocalProjectOptions: projectOptions,
+    selectedNotLocalProjectKey: selected.key,
+  };
+}
+
+function renderPlannedActualNotLocalProjects(project) {
+  const options = project?.notLocalProjectOptions || project?.includedProjects || [];
+  if (!options.length || (!isPlannedActualNotLocalAggregate(project) && !project?.notLocalParentKey)) {
+    return '';
+  }
+
+  const selectedKey = String(project.selectedNotLocalProjectKey || '');
+  return `
+    <div class="planned-actual-not-local-projects" aria-label="Not Local project filter">
+      <span class="planned-actual-not-local-label">Projects</span>
+      <div class="planned-actual-not-local-options nice-scroll">
+        <button
+          type="button"
+          class="planned-actual-not-local-option${selectedKey ? '' : ' is-active'}"
+          data-not-local-project-key=""
+          aria-pressed="${selectedKey ? 'false' : 'true'}"
+          title="Show the combined resource map for every Not Local project"
+        >All</button>
+        ${options.map(option => `
+          <button
+            type="button"
+            class="planned-actual-not-local-option${selectedKey === option.key ? ' is-active' : ''}"
+            data-not-local-project-key="${esc(option.key)}"
+            aria-pressed="${selectedKey === option.key ? 'true' : 'false'}"
+            title="${esc(`${option.label}: planned ${formatPlannedActualHours(option.plannedHours)}, actual ${formatPlannedActualHours(option.actualHours)}`)}"
+          >${esc(option.label)}</button>
+        `).join('')}
+      </div>
+    </div>
+  `;
+}
+
 function getPlannedActualResourceDetailContext(project) {
   const contextKey = String(
     project?.detailContextKey ||
@@ -560,6 +641,22 @@ function getPlannedActualResourceDetailContext(project) {
     return {
       key: 'skill-development',
       label: 'Skill Development',
+      includesProductData: false,
+    };
+  }
+
+  if (isPlannedActualNotLocalAggregate(project) || project?.notLocalParentKey) {
+    return {
+      key: 'not-local',
+      label: String(project?.label || 'Not Local').trim(),
+      includesProductData: false,
+    };
+  }
+
+  if (project?.isNotLocalProject || Number(project?.project?.not_local_project) === 1) {
+    return {
+      key: 'not-local-project',
+      label: String(project?.project?.name || project?.label || 'Not Local Project').trim(),
       includesProductData: false,
     };
   }
@@ -872,6 +969,7 @@ function renderPlannedActualFlow(project) {
       <section class="planned-actual-execution is-${statusKey}" id="plannedActualExecutionNode">
         <span class="planned-actual-status">${esc(status)}</span>
         <div class="planned-actual-project-name">${esc(project.label)}</div>
+        ${renderPlannedActualNotLocalProjects(project)}
         ${project.preSaleContext ? `
           <button
             type="button"
@@ -1109,11 +1207,15 @@ function renderPlannedActualEffortChart() {
 
   populatePlannedActualProjectFilter(data);
   populatePlannedActualMonthFilter(data);
-  const selectedProject = getPlannedActualSelection(data);
+  const dropdownProject = getPlannedActualSelection(data);
+  if (!isPlannedActualNotLocalAggregate(dropdownProject)) {
+    plannedActualSelectedNotLocalProjectKey = '';
+  }
+  const selectedProject = getPlannedActualNotLocalScope(data, dropdownProject);
 
-  if ((selectedProject?.key || '') !== plannedActualCategoryProjectKey) {
+  if ((dropdownProject?.key || '') !== plannedActualCategoryProjectKey) {
     plannedActualSelectedPreSaleCategory = '';
-    plannedActualCategoryProjectKey = selectedProject?.key || '';
+    plannedActualCategoryProjectKey = dropdownProject?.key || '';
   }
   if (!isPlannedActualPreSaleProject(selectedProject)) {
     plannedActualSelectedPreSaleCategory = '';
@@ -1327,6 +1429,15 @@ function initPlannedActualEffortEvents() {
     };
 
     flowRoot.addEventListener('click', event => {
+      const notLocalProjectButton = event.target.closest('[data-not-local-project-key]');
+      if (notLocalProjectButton) {
+        event.preventDefault();
+        event.stopPropagation();
+        plannedActualSelectedNotLocalProjectKey = notLocalProjectButton.dataset.notLocalProjectKey || '';
+        renderPlannedActualEffortChart();
+        return;
+      }
+
       const detailButton = event.target.closest('[data-planned-actual-resource-detail]');
       if (detailButton) {
         event.preventDefault();

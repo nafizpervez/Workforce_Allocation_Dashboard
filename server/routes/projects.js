@@ -23,7 +23,7 @@ const db = getAppDb();
 const PROJECT_FIELDS = [
   'code', 'name', 'client', 'budget', 'spent_pct', 'end_date', 'stage', 'progress', 'color', 'priority',
   'product_amount', 'account_name', 'product_name', 'product_family', 'opportunity_owner', 'opp_amount', 'probability',
-  'created_date', 'fiscal_period', 'project_closing_date',
+  'created_date', 'fiscal_period', 'project_closing_date', 'not_local_project',
 ];
 
 router.get('/api/projects', (_, res) => {
@@ -44,8 +44,8 @@ router.post('/api/projects', (req, res) => {
     const info = db.prepare(`
       INSERT INTO projects (code,name,client,budget,spent_pct,end_date,stage,progress,color,priority,
         product_amount,account_name,product_name,product_family,opportunity_owner,opp_amount,probability,
-        created_date,fiscal_period,project_closing_date,import_row_no)
-      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+        created_date,fiscal_period,project_closing_date,import_row_no,not_local_project)
+      VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
     `).run(
       b.code, b.name, b.client || b.account_name || null,
       safeNum(b.budget ?? b.opp_amount, 0), safeNum(b.spent_pct, 0),
@@ -58,6 +58,7 @@ router.post('/api/projects', (req, res) => {
       getFiscalPeriodFromDate(b.end_date) || normalizeFiscalPeriod(b.fiscal_period) || null,
       b.project_closing_date || null,
       null,
+      b.not_local_project ? 1 : 0,
     );
     const saved = db.prepare('SELECT * FROM projects WHERE id=?').get(info.lastInsertRowid);
     const statusMap = calcDealStatuses(db.prepare('SELECT * FROM projects ORDER BY id').all());
@@ -334,7 +335,7 @@ router.put('/api/projects/:id', (req, res) => {
   for (const field of PROJECT_FIELDS) {
     if (field === 'fiscal_period' || !has(field)) continue;
     updates.push(`${field}=?`);
-    params.push(body[field]);
+    params.push(field === 'not_local_project' ? (body[field] ? 1 : 0) : body[field]);
   }
 
   const nextProgress = has('progress') ? safeNum(body.progress, existing.progress) : safeNum(existing.progress, 0);

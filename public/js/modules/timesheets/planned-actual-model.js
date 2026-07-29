@@ -214,6 +214,7 @@ function plannedActualProjectResolution(project) {
   const code = normalizePlannedActualText(project.code);
   const name = normalizePlannedActualText(project.name);
   const label = plannedActualProjectLabel(project);
+  const isNotLocalProject = Number(project.not_local_project) === 1;
 
   return {
     project,
@@ -222,6 +223,9 @@ function plannedActualProjectResolution(project) {
     name,
     full: normalizePlannedActualText(label),
     label,
+    dropdownLabel: label,
+    isNotLocalProject,
+    actualMatchMode: 'project-name',
   };
 }
 
@@ -409,6 +413,8 @@ function getOrCreatePlannedActualProject(
       key,
       project,
       label: label || 'Unnamed project',
+      dropdownLabel: metadata.dropdownLabel || label || 'Unnamed project',
+      isNotLocalProject: Boolean(metadata.isNotLocalProject),
       actualMatchMode: metadata.actualMatchMode || 'project-name',
       workType: metadata.workType || '',
       plannedByResource: new Map(),
@@ -432,6 +438,8 @@ function getOrCreatePlannedActualProject(
   } else {
     const entry = projectMap.get(key);
     if (label && entry.label !== label) entry.label = label;
+    if (metadata.dropdownLabel) entry.dropdownLabel = metadata.dropdownLabel;
+    if (metadata.isNotLocalProject) entry.isNotLocalProject = true;
     if (metadata.actualMatchMode) entry.actualMatchMode = metadata.actualMatchMode;
     if (metadata.workType) entry.workType = metadata.workType;
     if (!entry.project && project) entry.project = project;
@@ -877,6 +885,148 @@ function buildPlannedActualAllProjects(projects, months) {
   };
 }
 
+const PLANNED_ACTUAL_NOT_LOCAL_KEY = 'aggregate:not-local';
+
+function isPlannedActualNotLocalProject(project) {
+  return Boolean(
+    project?.isNotLocalProject ||
+    Number(project?.project?.not_local_project) === 1
+  );
+}
+
+function buildPlannedActualNotLocalProjects(projects, months) {
+  const includedProjects = (projects || []).filter(isPlannedActualNotLocalProject);
+  if (!includedProjects.length) return null;
+
+  const plannedByResource = new Map();
+  const actualByResource = new Map();
+  const plannedDetails = [];
+  const actualDetails = [];
+
+  for (const project of includedProjects) {
+    mergePlannedActualResourceMap(plannedByResource, project.plannedByResource);
+    mergePlannedActualResourceMap(actualByResource, project.actualByResource);
+    plannedDetails.push(...(project.plannedDetails || []));
+    actualDetails.push(...(project.actualDetails || []));
+  }
+
+  const plannedHours = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.plannedHours) || 0),
+    0,
+  );
+  const actualHours = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.actualHours) || 0),
+    0,
+  );
+  const plannedBudget = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.plannedBudget) || 0),
+    0,
+  );
+  const actualBudget = includedProjects.reduce(
+    (sum, project) => sum + (Number(project.actualBudget) || 0),
+    0,
+  );
+
+  const summarizeProject = (project, month = null) => ({
+    key: project.key,
+    label: project.label,
+    plannedHours: +(Number(month?.plannedHours ?? project.plannedHours) || 0).toFixed(2),
+    actualHours: +(Number(month?.actualHours ?? project.actualHours) || 0).toFixed(2),
+    plannedBudget: +(Number(month?.plannedBudget ?? project.plannedBudget) || 0).toFixed(2),
+    actualBudget: +(Number(month?.actualBudget ?? project.actualBudget) || 0).toFixed(2),
+  });
+
+  const includedProjectSummaries = includedProjects
+    .map(project => summarizeProject(project))
+    .sort((a, b) => (
+      Math.max(b.plannedHours, b.actualHours) - Math.max(a.plannedHours, a.actualHours) ||
+      a.label.localeCompare(b.label)
+    ));
+
+  const annualScope = buildPlannedActualScope(
+    plannedByResource,
+    actualByResource,
+    plannedHours,
+    actualHours,
+    plannedBudget,
+    actualBudget,
+  );
+
+  const monthly = (months || []).map(month => {
+    const monthPlannedByResource = new Map();
+    const monthActualByResource = new Map();
+    const monthPlannedDetails = [];
+    const monthActualDetails = [];
+    const activeProjects = [];
+    let monthPlannedHours = 0;
+    let monthActualHours = 0;
+    let monthPlannedBudget = 0;
+    let monthActualBudget = 0;
+
+    for (const project of includedProjects) {
+      const projectMonth = (project.monthly || []).find(item => item.key === month.key);
+      if (!projectMonth) continue;
+
+      const projectPlanned = Number(projectMonth.plannedHours) || 0;
+      const projectActual = Number(projectMonth.actualHours) || 0;
+      if (projectPlanned <= 0 && projectActual <= 0) continue;
+
+      mergePlannedActualResourceMap(monthPlannedByResource, projectMonth.plannedByResource);
+      mergePlannedActualResourceMap(monthActualByResource, projectMonth.actualByResource);
+      monthPlannedHours += projectPlanned;
+      monthActualHours += projectActual;
+      monthPlannedBudget += Number(projectMonth.plannedBudget) || 0;
+      monthActualBudget += Number(projectMonth.actualBudget) || 0;
+      monthPlannedDetails.push(...(projectMonth.plannedDetails || []));
+      monthActualDetails.push(...(projectMonth.actualDetails || []));
+      activeProjects.push(summarizeProject(project, projectMonth));
+    }
+
+    activeProjects.sort((a, b) => (
+      Math.max(b.plannedHours, b.actualHours) - Math.max(a.plannedHours, a.actualHours) ||
+      a.label.localeCompare(b.label)
+    ));
+
+    return {
+      ...month,
+      ...buildPlannedActualScope(
+        monthPlannedByResource,
+        monthActualByResource,
+        monthPlannedHours,
+        monthActualHours,
+        monthPlannedBudget,
+        monthActualBudget,
+      ),
+      planned: +monthPlannedHours.toFixed(2),
+      actual: +monthActualHours.toFixed(2),
+      variance: +(monthActualHours - monthPlannedHours).toFixed(2),
+      includedProjects: activeProjects,
+      includedProjectCount: activeProjects.length,
+      plannedDetails: monthPlannedDetails,
+      actualDetails: monthActualDetails,
+    };
+  });
+
+  return {
+    key: PLANNED_ACTUAL_NOT_LOCAL_KEY,
+    project: null,
+    label: 'Not Local',
+    dropdownLabel: 'Not Local',
+    isNotLocalAggregate: true,
+    actualMatchMode: 'aggregate-not-local',
+    workType: '',
+    includedProjectCount: includedProjects.length,
+    includedProjectKeys: includedProjects.map(project => project.key),
+    includedProjects: includedProjectSummaries,
+    plannedDetails,
+    actualDetails,
+    ...annualScope,
+    monthly,
+    preSaleProducts: [],
+    preSaleProductAmount: 0,
+  };
+}
+
 function buildPlannedActualEffortData() {
   // Plan-to-Execution remains on the dashboard's established FY27 scope.
   const fiscalYear = S.fiscalYear;
@@ -903,7 +1053,10 @@ function buildPlannedActualEffortData() {
     const assignmentProjectName = String(
       assignment.project_name || assignmentProject?.name || '',
     ).trim();
-    const workTypeBucket = plannedActualWorkTypeBucketForProject(assignmentProjectName);
+    const isNotLocalProject = Number(assignmentProject?.not_local_project) === 1;
+    const workTypeBucket = isNotLocalProject
+      ? null
+      : plannedActualWorkTypeBucketForProject(assignmentProjectName);
     const resolvedProject = workTypeBucket
       ? plannedActualWorkTypeResolution(workTypeBucket)
       : (
@@ -927,6 +1080,8 @@ function buildPlannedActualEffortData() {
       {
         actualMatchMode: resolvedProject.actualMatchMode,
         workType: resolvedProject.workType,
+        dropdownLabel: resolvedProject.dropdownLabel,
+        isNotLocalProject: resolvedProject.isNotLocalProject,
       },
     );
     const resourceKey = `employee:${employee.id}`;
@@ -986,14 +1141,14 @@ function buildPlannedActualEffortData() {
         const productHours = preSalePlanByEmployeeMonth.get(employeeMonthKey);
         productHours.set(productName, (productHours.get(productName) || 0) + hours);
       }
-    } else if (resolvedProject.key === 'work-type:skill-development') {
+    } else if (resolvedProject.key === 'work-type:skill-development' || resolvedProject.isNotLocalProject) {
       projectEntry.plannedDetails.push(buildPlannedActualWorkTypePlannedDetail(
         assignment,
         employee,
         hours,
         plannedBudget,
         assignmentProjectName,
-        resolvedProject.workType,
+        resolvedProject.workType || 'Project Delivery',
       ));
     }
   }
@@ -1007,13 +1162,17 @@ function buildPlannedActualEffortData() {
     const hours = Math.max(0, Number(row.qty) || 0);
     if (hours <= 0) continue;
 
-    const workTypeBucket = plannedActualWorkTypeBucketForTimesheetRow(
-      row,
-      activeWorkTypeBucketKeys,
-    );
+    const directProjectResolution = resolveProject(row.projectName || '(No project name)');
+    const isNotLocalProject = Number(directProjectResolution?.project?.not_local_project) === 1;
+    const workTypeBucket = isNotLocalProject
+      ? null
+      : plannedActualWorkTypeBucketForTimesheetRow(
+        row,
+        activeWorkTypeBucketKeys,
+      );
     const resolvedProject = workTypeBucket
       ? plannedActualWorkTypeResolution(workTypeBucket)
-      : resolveProject(row.projectName || '(No project name)');
+      : directProjectResolution;
     if (!resolvedProject) continue;
 
     const projectEntry = getOrCreatePlannedActualProject(
@@ -1024,6 +1183,8 @@ function buildPlannedActualEffortData() {
       {
         actualMatchMode: resolvedProject.actualMatchMode,
         workType: resolvedProject.workType,
+        dropdownLabel: resolvedProject.dropdownLabel,
+        isNotLocalProject: resolvedProject.isNotLocalProject,
       },
     );
     const normalizedWorker = normalizePersonName(row.worker);
@@ -1115,7 +1276,7 @@ function buildPlannedActualEffortData() {
           hours,
         ));
       }
-    } else if (resolvedProject.key === 'work-type:skill-development') {
+    } else if (resolvedProject.key === 'work-type:skill-development' || resolvedProject.isNotLocalProject) {
       projectEntry.actualDetails.push(buildPlannedActualWorkTypeActualDetail(
         row,
         parsedMonth,
@@ -1240,11 +1401,19 @@ function buildPlannedActualEffortData() {
     month: m,
   }));
   const allProjects = buildPlannedActualAllProjects(projects, months);
+  const notLocalProjects = projects.filter(isPlannedActualNotLocalProject);
+  const notLocalAggregate = buildPlannedActualNotLocalProjects(notLocalProjects, months);
+  const standardProjects = projects.filter(project => !isPlannedActualNotLocalProject(project));
 
   return {
     fiscalYear,
     months,
-    projects: [allProjects, ...projects],
+    projects: [
+      allProjects,
+      ...(notLocalAggregate ? [notLocalAggregate] : []),
+      ...standardProjects,
+    ],
+    notLocalProjects,
     plannedHours: +projects.reduce((sum, project) => sum + project.plannedHours, 0).toFixed(2),
     actualHours: +projects.reduce((sum, project) => sum + project.actualHours, 0).toFixed(2),
     plannedBudget: +projects.reduce((sum, project) => sum + project.plannedBudget, 0).toFixed(2),
