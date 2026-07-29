@@ -23,7 +23,7 @@ table.matrix th {
   white-space: nowrap;
 }
 
-/* Fixed summary block: SN + Resource + five allocation columns +
+/* Fixed summary block: SN + Resource + six allocation columns +
    four independently calculated revenue columns. Total Allocation is
    displayed inside each resource's circular indicator. */
 :root {
@@ -102,8 +102,7 @@ table.matrix th {
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
   );
 }
-
-.sticky-revenue-1 {
+.sticky-allocation-6 {
   left: calc(
     var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
@@ -111,11 +110,19 @@ table.matrix th {
   );
 }
 
+.sticky-revenue-1 {
+  left: calc(
+    var(--sn-w) + var(--name-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
+  );
+}
+
 .sticky-revenue-2 {
   left: calc(
     var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--revenue-w)
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) + var(--revenue-w)
   );
 }
 
@@ -123,7 +130,7 @@ table.matrix th {
   left: calc(
     var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--revenue-w) + var(--revenue-w)
   );
 }
@@ -132,7 +139,7 @@ table.matrix th {
   left: calc(
     var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) +
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
     var(--revenue-w) + var(--revenue-w) + var(--revenue-w)
   );
   box-shadow: 5px 0 7px rgba(15, 23, 42, 0.08);
@@ -152,7 +159,7 @@ table.matrix th {
   left: calc(
     var(--sn-w) + var(--name-w) +
     var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w)
+    var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
   );
   box-shadow: 5px 0 7px rgba(15, 23, 42, 0.08);
 }

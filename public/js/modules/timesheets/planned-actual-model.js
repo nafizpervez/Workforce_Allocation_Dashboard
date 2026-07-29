@@ -655,6 +655,81 @@ function buildPlannedActualActualDetail(
   };
 }
 
+function buildPlannedActualWorkTypePlannedDetail(
+  assignment,
+  employee,
+  hours,
+  budget,
+  projectName,
+  workType,
+) {
+  const range = typeof weekDateRange === 'function'
+    ? weekDateRange(assignment.year, assignment.month, assignment.week)
+    : { start: '', end: '' };
+
+  return {
+    kind: 'planned',
+    resourceKey: `employee:${employee.id}`,
+    resourceName: employee.name,
+    projectName: String(projectName || workType || 'Work Type').trim() || 'Work Type',
+    productName: '',
+    productPercent: null,
+    productAmount: 0,
+    allocationPercent: Math.max(0, Number(assignment.percentage) || 0),
+    hours: +Number(hours || 0).toFixed(4),
+    budget: +Number(budget || 0).toFixed(2),
+    year: Number(assignment.year),
+    month: Number(assignment.month),
+    week: Number(assignment.week),
+    monthKey: plannedActualMonthKey(assignment.year, assignment.month),
+    periodLabel: plannedActualDetailPeriodLabel(
+      assignment.year,
+      assignment.month,
+      assignment.week,
+    ),
+    startDate: range.start || '',
+    endDate: range.end || '',
+    workType: String(workType || '').trim(),
+    timesheetProjectName: '',
+    sourceHours: +Number(hours || 0).toFixed(4),
+  };
+}
+
+function buildPlannedActualWorkTypeActualDetail(
+  row,
+  parsedMonth,
+  resourceKey,
+  resourceName,
+  hours,
+  budget,
+) {
+  return {
+    kind: 'actual',
+    resourceKey,
+    resourceName,
+    projectName: String(row.workType || 'Work Type').trim(),
+    productName: '',
+    productPercent: null,
+    productAmount: 0,
+    allocationPercent: null,
+    hours: +Number(hours || 0).toFixed(4),
+    budget: +Number(budget || 0).toFixed(2),
+    year: Number(parsedMonth.year),
+    month: Number(parsedMonth.month),
+    week: null,
+    monthKey: plannedActualMonthKey(parsedMonth.year, parsedMonth.month),
+    periodLabel: String(row.month || plannedActualDetailPeriodLabel(
+      parsedMonth.year,
+      parsedMonth.month,
+    )).trim(),
+    startDate: '',
+    endDate: '',
+    workType: String(row.workType || '').trim(),
+    timesheetProjectName: String(row.projectName || '(No project name)').trim(),
+    sourceHours: +Number(hours || 0).toFixed(4),
+  };
+}
+
 function addPlannedActualProductPlanned(scope, assignment, employee, hours, budget, detail = null) {
   const resourceKey = `employee:${employee.id}`;
   addPlannedActualHours(scope.plannedByResource, resourceKey, employee.name, hours);
@@ -911,6 +986,15 @@ function buildPlannedActualEffortData() {
         const productHours = preSalePlanByEmployeeMonth.get(employeeMonthKey);
         productHours.set(productName, (productHours.get(productName) || 0) + hours);
       }
+    } else if (resolvedProject.key === 'work-type:skill-development') {
+      projectEntry.plannedDetails.push(buildPlannedActualWorkTypePlannedDetail(
+        assignment,
+        employee,
+        hours,
+        plannedBudget,
+        assignmentProjectName,
+        resolvedProject.workType,
+      ));
     }
   }
 
@@ -1031,6 +1115,15 @@ function buildPlannedActualEffortData() {
           hours,
         ));
       }
+    } else if (resolvedProject.key === 'work-type:skill-development') {
+      projectEntry.actualDetails.push(buildPlannedActualWorkTypeActualDetail(
+        row,
+        parsedMonth,
+        resourceKey,
+        resourceName,
+        hours,
+        actualBudget,
+      ));
     }
   }
 

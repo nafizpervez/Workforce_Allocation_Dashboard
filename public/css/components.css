@@ -1248,17 +1248,20 @@ button.committed-target-breakdown__item:focus-visible {
 
 /* ── Pre-Sale Product master ─────────────────────────────────── */
 .presale-products-modal-panel {
-  height: min(720px, calc(100dvh - 2rem));
+  width: min(1080px, calc(100vw - 2rem));
+  max-width: 1080px;
+  height: min(680px, calc(100dvh - 2rem));
 }
 .presale-products-modal__body {
+  overflow-x: auto;
   background: #f9fafb;
 }
 .presale-product-thresholds {
   display: grid;
-  grid-template-columns: minmax(220px, 1fr) repeat(3, minmax(130px, auto));
-  gap: 10px;
+  grid-template-columns: minmax(190px, 1fr) repeat(3, minmax(116px, auto));
+  gap: 8px;
   align-items: end;
-  padding: 10px 20px;
+  padding: 8px 16px;
   border-bottom: 1px solid #dbe3ee;
   background: #ffffff;
 }
@@ -1286,9 +1289,9 @@ button.committed-target-breakdown__item:focus-visible {
   display: grid;
   grid-template-columns: auto minmax(58px, 76px) auto;
   align-items: center;
-  gap: 6px;
-  min-height: 38px;
-  padding: 5px 8px;
+  gap: 5px;
+  min-height: 34px;
+  padding: 4px 7px;
   border: 1px solid #d7dee9;
   border-radius: 8px;
   background: #f8fafc;
@@ -1298,8 +1301,8 @@ button.committed-target-breakdown__item:focus-visible {
   white-space: nowrap;
 }
 .presale-product-threshold-field .field-input {
-  height: 28px;
-  min-height: 28px;
+  height: 26px;
+  min-height: 26px;
   padding: 3px 6px;
   font-size: 11px;
   font-weight: 700;
@@ -1331,15 +1334,16 @@ button.committed-target-breakdown__item:focus-visible {
 .presale-product-row,
 .presale-product-total-row {
   display: grid;
-  grid-template-columns: 28px minmax(180px, 1fr) minmax(130px, 190px) minmax(92px, 120px) 34px;
-  gap: 8px;
+  grid-template-columns: 24px minmax(145px, 0.85fr) minmax(108px, 130px) minmax(76px, 88px) minmax(300px, 1.45fr) 30px;
+  gap: 6px;
   align-items: center;
+  min-width: 900px;
 }
 .presale-product-table-header {
   position: sticky;
   top: 0;
   z-index: 2;
-  padding: 9px 20px;
+  padding: 7px 16px;
   border-bottom: 1px solid #e5e7eb;
   background: #f3f4f6;
   color: #6b7280;
@@ -1349,21 +1353,23 @@ button.committed-target-breakdown__item:focus-visible {
   text-transform: uppercase;
 }
 .presale-product-row {
-  padding: 3px 20px;
+  align-items: start;
+  padding: 2px 16px;
   border-bottom: 1px solid #e5e7eb;
   background: #fff;
 }
 .presale-product-row .field-input {
-  min-height: 32px;
-  height: 32px;
-  padding-top: 4px;
-  padding-bottom: 4px;
+  min-height: 29px;
+  height: 29px;
+  padding-top: 3px;
+  padding-bottom: 3px;
+  font-size: 12px;
 }
 .presale-product-total-row {
   position: sticky;
   bottom: 0;
   z-index: 2;
-  padding: 7px 20px;
+  padding: 6px 16px;
   border-top: 1px solid #cbd5e1;
   border-bottom: 1px solid #cbd5e1;
   background: #f8fafc;
@@ -1392,8 +1398,8 @@ button.committed-target-breakdown__item:focus-visible {
 }
 .presale-product-row__remove {
   display: inline-flex;
-  width: 30px;
-  height: 30px;
+  width: 27px;
+  height: 27px;
   align-items: center;
   justify-content: center;
   border-radius: 7px;
@@ -1405,6 +1411,81 @@ button.committed-target-breakdown__item:focus-visible {
 .presale-product-row__remove svg {
   width: 15px;
   height: 15px;
+}
+.presale-product-row__planning {
+  min-width: 0;
+}
+.presale-product-plan-list {
+  overflow: hidden;
+  border: 1px solid #dbe3ee;
+  border-radius: 8px;
+  background: #f8fafc;
+}
+.presale-product-plan-person {
+  display: grid;
+  grid-template-columns: minmax(112px, 1fr) minmax(68px, auto) minmax(92px, auto);
+  gap: 6px;
+  align-items: center;
+  padding: 4px 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+.presale-product-plan-person__identity,
+.presale-product-plan-person__hours,
+.presale-product-plan-person__revenue {
+  min-width: 0;
+}
+.presale-product-plan-person strong,
+.presale-product-plan-person span {
+  display: block;
+}
+.presale-product-plan-person strong {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 9px;
+  font-weight: 750;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.presale-product-plan-person span {
+  margin-top: 1px;
+  color: #64748b;
+  font-size: 8px;
+  line-height: 1.25;
+}
+.presale-product-plan-person__hours,
+.presale-product-plan-person__revenue {
+  text-align: right;
+  white-space: nowrap;
+}
+.presale-product-plan-person__revenue strong {
+  color: #047857;
+}
+.presale-product-plan-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px;
+  padding: 4px 6px;
+  background: #eef2ff;
+  color: #4338ca;
+  font-size: 8px;
+  font-weight: 700;
+}
+.presale-product-plan-total strong {
+  font-size: 9px;
+  font-weight: 850;
+  white-space: nowrap;
+}
+.presale-product-plan-empty {
+  padding: 7px 8px;
+  border: 1px dashed #cbd5e1;
+  border-radius: 8px;
+  background: #f8fafc;
+  color: #94a3b8;
+  font-size: 8px;
+  line-height: 1.35;
+  text-align: center;
 }
 .presale-product-amount-reference {
   margin-top: 6px;
@@ -1433,8 +1514,9 @@ button.committed-target-breakdown__item:focus-visible {
   .presale-product-table-header,
   .presale-product-row,
   .presale-product-total-row {
-    grid-template-columns: 22px minmax(120px, 1fr) 105px 82px 30px;
-    gap: 6px;
+    grid-template-columns: 22px 138px 105px 78px 290px 28px;
+    gap: 5px;
+    min-width: 720px;
     padding-right: 12px;
     padding-left: 12px;
   }

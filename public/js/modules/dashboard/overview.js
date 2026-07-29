@@ -337,6 +337,7 @@ async function openUtilizationDetailsModal(metric) {
         <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.local)}</td>
         <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.preSale)}</td>
         <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.training)}</td>
+        <td class="px-3 py-2 text-right text-xs text-gray-600">${formatUtilizationMetric(resource.allocation.skillDevelopment)}</td>
         <td class="px-3 py-2 text-right text-sm font-semibold text-gray-900">${formatUtilizationMetric(resource.metrics[metric])}</td>
       </tr>`).join('');
 
@@ -357,11 +358,11 @@ async function openUtilizationDetailsModal(metric) {
             <div class="mt-1 text-sm font-semibold text-gray-800">${Number(result.total_available_weeks).toLocaleString()} resource-weeks</div>
           </div>
           <div class="md:col-span-3 rounded-lg border border-blue-100 bg-blue-50 px-4 py-3 text-xs leading-5 text-blue-800">
-            ${esc(config.formula)} N/A weeks are removed only for the affected resource-week; General Admin is excluded from these three metrics.
+            ${esc(config.formula)} N/A weeks are removed only for the affected resource-week; Skill Development and General Admin are excluded from these three metrics.
           </div>
         </div>
         <div class="overflow-x-auto">
-          <table class="w-full min-w-[1120px] border-collapse text-left">
+          <table class="w-full min-w-[1240px] border-collapse text-left">
             <thead class="sticky top-0 bg-white shadow-sm">
               <tr>
                 <th class="px-3 py-2 text-xs font-semibold text-gray-500">#</th>
@@ -371,6 +372,7 @@ async function openUtilizationDetailsModal(metric) {
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Local</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Pre-Sale</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Training</th>
+                <th class="px-3 py-2 text-right text-xs font-semibold text-gray-500">Skill Development</th>
                 <th class="px-3 py-2 text-right text-xs font-semibold text-gray-700">${esc(config.title)}</th>
               </tr>
             </thead>

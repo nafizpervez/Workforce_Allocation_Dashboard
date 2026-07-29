@@ -399,20 +399,49 @@ function getPlannedActualProductScope(project) {
   return (project.preSaleProducts || []).find(product => product.productName === selectedProduct) || project;
 }
 
-function getPlannedActualScope(project) {
+function getPlannedActualScope(project, sourceProject = project) {
   if (!project) return null;
   const parentLabel = project.label;
+  const stableProjectKey = project.key;
+  const detailContextKey = String(
+    sourceProject?.key ||
+    project.detailContextKey ||
+    project.sourceProjectKey ||
+    project.key ||
+    '',
+  );
   const monthKey = document.getElementById('plannedActualMonthFilter')?.value || '';
   if (!monthKey) {
-    return { ...project, label: parentLabel, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
+    return {
+      ...project,
+      key: stableProjectKey,
+      detailContextKey,
+      label: parentLabel,
+      selectedMonthKey: '',
+      selectedMonthLabel: 'All Months',
+    };
   }
 
   const month = project.monthly.find(item => item.key === monthKey);
-  if (!month) return { ...project, label: parentLabel, selectedMonthKey: '', selectedMonthLabel: 'All Months' };
+  if (!month) {
+    return {
+      ...project,
+      key: stableProjectKey,
+      detailContextKey,
+      label: parentLabel,
+      selectedMonthKey: '',
+      selectedMonthLabel: 'All Months',
+    };
+  }
 
   return {
     ...project,
     ...month,
+    // A month also has a `key`, but it is a date key such as `2026-04`.
+    // Restore the project/product identity so detail actions can still
+    // determine whether this is Pre-Sale or Skill Development.
+    key: stableProjectKey,
+    detailContextKey,
     label: parentLabel,
     monthly: [month],
     selectedMonthKey: month.key,
@@ -511,7 +540,34 @@ function formatPlannedActualDetailDateRange(detail) {
   return `${detail.periodLabel || ''} · ${detail.startDate || detail.endDate}`.trim();
 }
 
-function getPlannedActualPreSaleDetailRows(project, mode, resourceKey = '') {
+function getPlannedActualResourceDetailContext(project) {
+  const contextKey = String(
+    project?.detailContextKey ||
+    project?.sourceProjectKey ||
+    project?.key ||
+    '',
+  );
+
+  if (project?.preSaleContext || contextKey === 'work-type:pre-sale') {
+    return {
+      key: 'pre-sale',
+      label: 'Pre-Sale',
+      includesProductData: true,
+    };
+  }
+
+  if (contextKey === 'work-type:skill-development') {
+    return {
+      key: 'skill-development',
+      label: 'Skill Development',
+      includesProductData: false,
+    };
+  }
+
+  return null;
+}
+
+function getPlannedActualResourceDetailRows(project, mode, resourceKey = '') {
   const resources = (
     mode === 'planned' ? project?.plannedResources : project?.actualResources
   ) || [];
@@ -534,48 +590,81 @@ function getPlannedActualPreSaleDetailRows(project, mode, resourceKey = '') {
     ));
 }
 
-function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
+function openPlannedActualResourceDetails(mode, resourceKey = '') {
   const project = plannedActualRenderedProject;
-  if (!project?.preSaleContext || !['planned', 'actual'].includes(mode)) return;
+  const context = getPlannedActualResourceDetailContext(project);
+  if (!context || !['planned', 'actual'].includes(mode)) return;
 
   const planned = mode === 'planned';
+  const preSale = context.includesProductData;
   const resources = planned ? project.plannedResources : project.actualResources;
   const resource = resources.find(item => item.key === resourceKey) || null;
-  const rows = getPlannedActualPreSaleDetailRows(project, mode, resourceKey);
+  const rows = getPlannedActualResourceDetailRows(project, mode, resourceKey);
   const totalHours = rows.reduce((sum, row) => sum + (Number(row.hours) || 0), 0);
   const totalBudget = rows.reduce((sum, row) => sum + (Number(row.budget) || 0), 0);
   const productAmountByName = new Map();
-  rows.forEach(row => {
-    const productName = String(row.productName || '').trim();
-    if (!productName || productName === 'Unmapped Product') return;
-    if (!productAmountByName.has(productName)) {
-      productAmountByName.set(productName, Number(row.productAmount) || 0);
-    }
-  });
+  if (preSale) {
+    rows.forEach(row => {
+      const productName = String(row.productName || '').trim();
+      if (!productName || productName === 'Unmapped Product') return;
+      if (!productAmountByName.has(productName)) {
+        productAmountByName.set(productName, Number(row.productAmount) || 0);
+      }
+    });
+  }
   const productImpact = [...productAmountByName.values()].reduce((sum, amount) => sum + amount, 0);
   const resourceCount = new Set(rows.map(row => row.resourceKey)).size;
-  const baseTitle = planned ? 'Pre-Sale Planned Details' : 'Pre-Sale Actual Details';
+  const baseTitle = planned
+    ? `${context.label} Planned Details`
+    : `${context.label} Actual Details`;
   const title = resource ? `${resource.name} — ${baseTitle}` : baseTitle;
   const subtitle = resource
     ? (planned
-      ? 'Weekly Resource Assignment entries for this resource under the current Pre-Sale filter.'
-      : 'Work Summary Time Sheet entries for this resource under the current Pre-Sale filter.')
+      ? `Weekly Resource Assignment entries for this resource under ${context.label}.`
+      : `Work Summary Time Sheet entries for this resource under ${context.label}.`)
     : (planned
-      ? 'Weekly Resource Assignment entries for the currently filtered Pre-Sale plan.'
-      : 'Work Summary Time Sheet entries allocated to the currently filtered Pre-Sale products.');
+      ? `Weekly Resource Assignment entries for the currently filtered ${context.label} plan.`
+      : preSale
+        ? 'Work Summary Time Sheet entries allocated to the currently filtered Pre-Sale products.'
+        : `Work Summary Time Sheet entries classified as ${context.label}.`);
+
+  const detailColumnCount = preSale ? (planned ? 9 : 8) : 6;
 
   const rowsHtml = rows.length
     ? rows.map((row, index) => {
-        const productMeta = row.productName === 'Unmapped Product'
-          ? 'No matching planned product'
-          : `${formatPlannedActualDetailPercent(row.productPercent)} confidence`;
+        const productMeta = preSale
+          ? (row.productName === 'Unmapped Product'
+            ? 'No matching planned product'
+            : `${formatPlannedActualDetailPercent(row.productPercent)} confidence`)
+          : '';
         const sourceDetail = planned
-          ? esc(row.projectName || 'Pre-Sale')
+          ? esc(row.projectName || context.label)
           : esc(row.timesheetProjectName || '(No project name)');
-        const sourceCaption = planned ? 'Assignment project' : esc(row.workType || 'Pre - Sales');
+        const sourceCaption = planned ? 'Assignment project' : esc(row.workType || context.label);
         const hourCaption = !planned && Number(row.sourceHours) > Number(row.hours) + 0.001
           ? `<small>of ${esc(formatPlannedActualHours(row.sourceHours))} time log</small>`
           : '';
+
+        const allocationCell = preSale
+          ? `
+            <td class="is-number">
+              <strong>${esc(formatPlannedActualDetailPercent(row.allocationPercent))}</strong>
+              <span>${planned ? 'Allocation' : 'Product share'}</span>
+            </td>
+          `
+          : planned
+            ? `
+              <td class="is-number">
+                <strong>${esc(formatPlannedActualDetailPercent(row.allocationPercent))}</strong>
+                <span>Allocation</span>
+              </td>
+            `
+            : `
+              <td>
+                <strong>${esc(row.workType || context.label)}</strong>
+                <span>Work Type</span>
+              </td>
+            `;
 
         return `
           <tr>
@@ -584,7 +673,7 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
               <strong>${esc(row.resourceName || 'Unknown resource')}</strong>
               <span>${esc(row.periodLabel || '')}</span>
             </td>
-            ${planned ? `
+            ${preSale && planned ? `
               <td>
                 <strong>${esc(row.productName || 'Unmapped Product')}</strong>
                 <span>${esc(productMeta)}</span>
@@ -594,22 +683,21 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
               <strong>${sourceDetail}</strong>
               <span>${sourceCaption}</span>
             </td>
-            <td class="is-number">
-              <strong>${esc(formatPlannedActualDetailPercent(row.allocationPercent))}</strong>
-              <span>${planned ? 'Allocation' : 'Product share'}</span>
-            </td>
+            ${allocationCell}
             <td class="is-number">
               <strong>${esc(formatPlannedActualHours(row.hours))}</strong>
               ${hourCaption}
             </td>
-            <td class="is-number">
-              <strong>${esc(formatPlannedActualBudgetExact(row.productAmount))}</strong>
-              <span>Reference amount</span>
-            </td>
-            <td class="is-number">
-              <strong>${esc(formatPlannedActualBudgetExact(row.budget))}</strong>
-              <span>Calculated budget</span>
-            </td>
+            ${preSale ? `
+              <td class="is-number">
+                <strong>${esc(formatPlannedActualBudgetExact(row.productAmount))}</strong>
+                <span>Reference amount</span>
+              </td>
+              <td class="is-number">
+                <strong>${esc(formatPlannedActualBudgetExact(row.budget))}</strong>
+                <span>Calculated budget</span>
+              </td>
+            ` : ''}
             <td>
               <strong>${esc(formatPlannedActualDetailDateRange(row))}</strong>
             </td>
@@ -618,7 +706,7 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
       }).join('')
     : `
       <tr>
-        <td colspan="${planned ? 9 : 8}" class="planned-actual-detail-empty">
+        <td colspan="${detailColumnCount}" class="planned-actual-detail-empty">
           No ${planned ? 'planned assignment' : 'actual time-log'} details are available for this filter.
         </td>
       </tr>
@@ -627,12 +715,14 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
   openModal(`
     ${mHdr(title, subtitle)}
     <div class="planned-actual-detail-modal-body">
-      <div class="planned-actual-detail-summary">
+      <div class="planned-actual-detail-summary${preSale ? '' : ' is-compact'}">
         <div><span>Resources</span><strong>${resourceCount}</strong></div>
         <div><span>Entries</span><strong>${rows.length}</strong></div>
         <div><span>Total Hours</span><strong>${esc(formatPlannedActualHours(totalHours))}</strong></div>
-        <div><span>Calculated Budget</span><strong>${esc(formatPlannedActualBudget(totalBudget))}</strong></div>
-        <div><span>Product Impact</span><strong>${esc(formatPlannedActualBudget(productImpact))}</strong></div>
+        ${preSale ? `
+          <div><span>Calculated Budget</span><strong>${esc(formatPlannedActualBudget(totalBudget))}</strong></div>
+          <div><span>Product Impact</span><strong>${esc(formatPlannedActualBudget(productImpact))}</strong></div>
+        ` : ''}
       </div>
       <div class="planned-actual-detail-table-wrap nice-scroll">
         <table class="planned-actual-detail-table">
@@ -640,12 +730,14 @@ function openPlannedActualPreSaleDetails(mode, resourceKey = '') {
             <tr>
               <th>#</th>
               <th>Resource</th>
-              ${planned ? '<th>Product</th>' : ''}
+              ${preSale && planned ? '<th>Product</th>' : ''}
               <th>${planned ? 'Assignment Project' : 'Time Sheet Project'}</th>
-              <th class="is-number">${planned ? 'Allocation' : 'Share'}</th>
+              <th class="${planned || preSale ? 'is-number' : ''}">${planned ? 'Allocation' : preSale ? 'Share' : 'Work Type'}</th>
               <th class="is-number">Hours</th>
-              <th class="is-number">Product Amount</th>
-              <th class="is-number">Budget</th>
+              ${preSale ? `
+                <th class="is-number">Product Amount</th>
+                <th class="is-number">Budget</th>
+              ` : ''}
               <th>Period</th>
             </tr>
           </thead>
@@ -667,6 +759,7 @@ function renderPlannedActualResourceCard(project, resource, mode, totalHours) {
   const deltaText = status.key === 'retained'
     ? `${delta > 0 ? '+' : ''}${formatPlannedActualHours(delta)} vs plan`
     : status.label;
+  const detailContext = getPlannedActualResourceDetailContext(project);
 
   return `
     <article
@@ -685,13 +778,13 @@ function renderPlannedActualResourceCard(project, resource, mode, totalHours) {
         <span>${esc(deltaText)}</span>
       </div>
       <div class="planned-actual-person-side">
-        ${project.preSaleContext ? `
+        ${detailContext ? `
           <button
             type="button"
             class="planned-actual-resource-detail-button is-${mode}"
-            data-presale-resource-detail="${mode}"
+            data-planned-actual-resource-detail="${mode}"
             data-resource-key="${esc(resource.key)}"
-            title="Open ${mode === 'planned' ? 'planned assignment' : 'actual time-log'} details for ${esc(resource.name)}"
+            title="Open ${detailContext.label} ${mode === 'planned' ? 'planned assignment' : 'actual time-log'} details for ${esc(resource.name)}"
           >${mode === 'planned' ? 'Planned Details' : 'Actual Details'}</button>
         ` : ''}
         <div class="planned-actual-person-effort">
@@ -1053,7 +1146,7 @@ function renderPlannedActualEffortChart() {
       plannedActualSelectedPreSaleCategory,
     )
     : productScopedProject;
-  const project = getPlannedActualScope(categoryScopedProject);
+  const project = getPlannedActualScope(categoryScopedProject, selectedProject);
 
   if (project && isPlannedActualPreSaleProject(selectedProject)) {
     const category = plannedActualPreSaleCategoryDefinition(
@@ -1234,12 +1327,12 @@ function initPlannedActualEffortEvents() {
     };
 
     flowRoot.addEventListener('click', event => {
-      const detailButton = event.target.closest('[data-presale-resource-detail]');
+      const detailButton = event.target.closest('[data-planned-actual-resource-detail]');
       if (detailButton) {
         event.preventDefault();
         event.stopPropagation();
-        openPlannedActualPreSaleDetails(
-          detailButton.dataset.presaleResourceDetail || '',
+        openPlannedActualResourceDetails(
+          detailButton.dataset.plannedActualResourceDetail || '',
           detailButton.dataset.resourceKey || '',
         );
         return;
@@ -1283,7 +1376,7 @@ function initPlannedActualEffortEvents() {
     });
 
     flowRoot.addEventListener('keydown', event => {
-      if (event.target.closest('[data-presale-resource-detail]')) return;
+      if (event.target.closest('[data-planned-actual-resource-detail]')) return;
       const card = event.target.closest('.planned-actual-person');
       if (!card || !['Enter', ' '].includes(event.key)) return;
       event.preventDefault();

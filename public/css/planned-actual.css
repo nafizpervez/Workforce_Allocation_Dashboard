@@ -997,7 +997,7 @@
 }
 
 
-/* Pre-Sale planned/actual drill-down modal */
+/* Planned/actual resource drill-down modal */
 .planned-actual-detail-modal-panel {
   height: min(780px, calc(100dvh - 2rem));
 }
@@ -1016,6 +1016,10 @@
   display: grid;
   grid-template-columns: repeat(5, minmax(0, 1fr));
   gap: 0.65rem;
+}
+
+.planned-actual-detail-summary.is-compact {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
 }
 
 .planned-actual-detail-summary > div {
@@ -1151,7 +1155,7 @@
   }
 }
 
-/* Per-resource Pre-Sale detail actions. */
+/* Per-resource planned/actual detail actions. */
 .planned-actual-person-side {
   display: flex;
   align-items: center;

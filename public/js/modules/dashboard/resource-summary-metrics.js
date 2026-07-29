@@ -7,6 +7,7 @@ const RESOURCE_SUMMARY_COLUMNS = Object.freeze({
     Object.freeze({ key: 'local', label: 'Local' }),
     Object.freeze({ key: 'preSale', label: 'Pre-Sale' }),
     Object.freeze({ key: 'training', label: 'Training' }),
+    Object.freeze({ key: 'skillDevelopment', label: 'Skill Development' }),
     Object.freeze({ key: 'generalAdmin', label: 'General Admin' }),
   ]),
   revenue: Object.freeze([
@@ -35,6 +36,12 @@ const RESOURCE_ALLOCATION_RULES = Object.freeze([
     label: 'Training',
     pattern: /training[\s-]*delivery/i,
     description: 'Project name contains “Training Delivery” or “Training-Delivery”.',
+  }),
+  Object.freeze({
+    key: 'skillDevelopment',
+    label: 'Skill Development',
+    pattern: /skill[\s-]*development/i,
+    description: 'Project name contains “Skill Development” or “Skill-Development”.',
   }),
   Object.freeze({
     key: 'generalAdmin',
