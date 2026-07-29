@@ -201,6 +201,7 @@ function runMigrations(db) {
   addColumn(db, "ALTER TABLE assignments ADD COLUMN product_name TEXT DEFAULT ''");
   addColumn(db, 'ALTER TABLE projects ADD COLUMN fiscal_period TEXT');
   addColumn(db, 'ALTER TABLE projects ADD COLUMN import_row_no INTEGER');
+  addColumn(db, 'ALTER TABLE projects ADD COLUMN not_local_project INTEGER NOT NULL DEFAULT 0');
   db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_fiscal_period ON projects(fiscal_period)').run();
   db.prepare('CREATE INDEX IF NOT EXISTS idx_projects_import_row_no ON projects(import_row_no)').run();
 

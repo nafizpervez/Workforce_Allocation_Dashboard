@@ -24,6 +24,7 @@ function createSchema(db) {
       progress INTEGER DEFAULT 0,
       color TEXT DEFAULT '#8B5CF6',
       priority TEXT DEFAULT 'Medium',
+      not_local_project INTEGER NOT NULL DEFAULT 0,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );
     CREATE TABLE IF NOT EXISTS assignments (
@@ -55,6 +56,7 @@ function createSchema(db) {
     "ALTER TABLE projects ADD COLUMN created_date TEXT DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN project_closing_date TEXT DEFAULT ''",
     "ALTER TABLE projects ADD COLUMN product_family TEXT DEFAULT ''",
+    "ALTER TABLE projects ADD COLUMN not_local_project INTEGER NOT NULL DEFAULT 0",
   ];
 
   for (const sql of projectColumns) {

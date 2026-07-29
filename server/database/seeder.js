@@ -17,15 +17,16 @@ function seed(db) {
     INSERT INTO projects (
       code, name, client, budget, spent_pct, end_date, stage, progress, color, priority,
       product_amount, account_name, product_name, product_family,
-      opportunity_owner, opp_amount, probability, project_closing_date
-    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
+      opportunity_owner, opp_amount, probability, project_closing_date, not_local_project
+    ) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?,?)
   `);
   for (const project of data.projects) {
     insertProject.run(
       project.code, project.name, project.account_name, project.opp_amount, 0,
       project.end_date, project.stage, project.progress, project.color, project.priority,
       project.product_amount, project.account_name, project.product_name, project.product_family || '',
-      project.opportunity_owner, project.opp_amount, project.probability, project.project_closing_date || ''
+      project.opportunity_owner, project.opp_amount, project.probability, project.project_closing_date || '',
+      project.not_local_project ? 1 : 0
     );
   }
 

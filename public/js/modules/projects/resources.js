@@ -213,6 +213,7 @@ function downloadAllProjectsExcel() {
         'Opportunity Owner': p.opportunity_owner || '',
         'Stage': p.stage || '',
         'Fiscal Period': p.fiscal_period || '',
+        'Not Local Project': Number(p.not_local_project) === 1 ? 'Yes' : 'No',
         'Deal Status': p.deal_status || '',
         'Priority': p.priority || '',
         'Probability (%)': Number(p.probability) || 0,
