@@ -302,3 +302,69 @@
     padding-bottom: 0.2rem;
   }
 }
+
+/* ================================================================
+   Fixed-format monthly Time Sheet report download
+   ================================================================ */
+.timesheet-report-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  padding: 0 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 12px;
+  font-weight: 800;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: all 0.15s ease;
+}
+
+.timesheet-report-btn:hover {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.timesheet-report-field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.timesheet-report-field > span {
+  color: #374151;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.timesheet-report-field select,
+.timesheet-report-field input {
+  width: 100%;
+  height: 38px;
+  border: 1px solid #d1d5db;
+  border-radius: 9px;
+  background: #ffffff;
+  color: #111827;
+  font-size: 13px;
+  padding: 0 11px;
+}
+
+.timesheet-report-field select:focus,
+.timesheet-report-field input:focus {
+  outline: none;
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 3px rgba(96, 165, 250, 0.2);
+}
+
+.timesheet-report-format-note {
+  border: 1px solid #dbeafe;
+  border-radius: 10px;
+  background: #eff6ff;
+  color: #475569;
+  font-size: 12px;
+  line-height: 1.55;
+  padding: 11px 12px;
+}

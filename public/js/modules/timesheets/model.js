@@ -114,6 +114,88 @@ function normalizeTimesheetRows(rows) {
   }).filter(r => r.month && r.worker && r.workType && r.qty > 0);
 }
 
+function normalizeTimesheetDateValue(value) {
+  if (value instanceof Date && !Number.isNaN(value.getTime())) {
+    return value.toISOString().slice(0, 10);
+  }
+
+  if (typeof value === 'number' && Number.isFinite(value) && typeof XLSX !== 'undefined') {
+    const parsed = XLSX.SSF?.parse_date_code?.(value);
+    if (parsed?.y && parsed?.m && parsed?.d) {
+      return `${String(parsed.y).padStart(4, '0')}-${String(parsed.m).padStart(2, '0')}-${String(parsed.d).padStart(2, '0')}`;
+    }
+  }
+
+  const text = String(value || '').trim();
+  if (!text) return '';
+
+  let match = text.match(/^(\d{4})[-/](\d{1,2})[-/](\d{1,2})/);
+  if (match) {
+    return `${match[1]}-${String(Number(match[2])).padStart(2, '0')}-${String(Number(match[3])).padStart(2, '0')}`;
+  }
+
+  match = text.match(/^(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})$/);
+  if (match) {
+    let year = Number(match[3]);
+    if (year < 100) year += 2000;
+    return `${year}-${String(Number(match[1])).padStart(2, '0')}-${String(Number(match[2])).padStart(2, '0')}`;
+  }
+
+  const parsed = new Date(text);
+  return Number.isNaN(parsed.getTime()) ? '' : parsed.toISOString().slice(0, 10);
+}
+
+function monthLabelFromIsoDate(isoDate) {
+  const match = String(isoDate || '').match(/^(\d{4})-(\d{2})-/);
+  if (!match) return '';
+  const monthIndex = Number(match[2]) - 1;
+  if (monthIndex < 0 || monthIndex > 11) return '';
+  return `${MN[monthIndex]} ${String(Number(match[1])).slice(-2)}`;
+}
+
+function normalizeTimesheetDetailRows(rows) {
+  return (rows || []).map((row, index) => {
+    const workDate = normalizeTimesheetDateValue(
+      getRowValue(row, ['Date', 'Work Date', 'Entry Date']),
+    );
+    const month = String(
+      getRowValue(row, ['Month', 'Months (Date)', 'Month (Date)']) ||
+      monthLabelFromIsoDate(workDate),
+    ).trim();
+    const workType = String(getRowValue(row, ['Work Type', 'WorkType']) || '').trim();
+    const worker = canonicalPersonName(
+      getRowValue(row, ['Worker', 'Employee', 'Resource']),
+    );
+    const qtyRaw = getRowValue(row, ['Qty (Hrs)', 'Qty Hrs', 'Quantity', 'Hours', 'Hrs']);
+    const qty = Number(String(qtyRaw).replace(/,/g, '')) || 0;
+
+    return {
+      month,
+      workDate,
+      worker,
+      workType,
+      workerCostCenter: String(getRowValue(row, ['Worker Cost Center']) || '').trim(),
+      qty,
+      status: String(getRowValue(row, ['Status']) || '').trim(),
+      timeEntryCode: String(getRowValue(row, ['Time Entry Code']) || '').trim(),
+      billable: String(getRowValue(row, ['Billable?', 'Billable']) || '').trim(),
+      projectHierarchy: String(getRowValue(row, ['Primary Project Hierarchy', 'Project Hierarchy']) || '').trim(),
+      projectId: String(getRowValue(row, ['Project ID']) || '').trim(),
+      externalProjectReference: String(getRowValue(row, ['External Project Reference']) || '').trim(),
+      projectName: String(getRowValue(row, ['Project Name', 'Project']) || '').trim(),
+      customer: String(getRowValue(row, ['Customer', 'Client']) || '').trim(),
+      projectPhaseName: String(getRowValue(row, ['Project Phase Name', 'Project Phase']) || '').trim(),
+      projectTask: String(getRowValue(row, ['Project Task']) || '').trim(),
+      customTaskName: String(getRowValue(row, ['Custom Task Name']) || '').trim(),
+      projectRole: String(getRowValue(row, ['Project Role']) || '').trim(),
+      comment: String(getRowValue(row, ['Comment', 'Comments', 'Description', 'Detail']) || '').trim(),
+      sourceRowNo: Number(row.__rowNum__) > 0 ? Number(row.__rowNum__) + 1 : index + 2,
+    };
+  }).filter(row => (
+    row.month && row.workDate && row.worker && row.workType && row.qty > 0
+  ));
+}
+
 function aggregateTimesheetRows(rows) {
   const map = new Map();
 

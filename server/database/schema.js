@@ -44,6 +44,36 @@ function createSchema(db) {
     CREATE INDEX IF NOT EXISTS idx_assignments_period ON assignments(year, month, week);
     CREATE INDEX IF NOT EXISTS idx_assignments_emp ON assignments(employee_id);
     CREATE INDEX IF NOT EXISTS idx_assignments_project ON assignments(project_id);
+    CREATE TABLE IF NOT EXISTS timesheet_detail_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      month TEXT NOT NULL,
+      work_date TEXT NOT NULL,
+      worker TEXT NOT NULL,
+      work_type TEXT NOT NULL,
+      worker_cost_center TEXT DEFAULT '',
+      qty REAL NOT NULL DEFAULT 0,
+      status TEXT DEFAULT '',
+      time_entry_code TEXT DEFAULT '',
+      billable TEXT DEFAULT '',
+      project_hierarchy TEXT DEFAULT '',
+      project_id TEXT DEFAULT '',
+      external_project_reference TEXT DEFAULT '',
+      project_name TEXT DEFAULT '',
+      customer TEXT DEFAULT '',
+      project_phase_name TEXT DEFAULT '',
+      project_task TEXT DEFAULT '',
+      custom_task_name TEXT DEFAULT '',
+      project_role TEXT DEFAULT '',
+      comment TEXT DEFAULT '',
+      source_row_no INTEGER NOT NULL DEFAULT 0,
+      source_file TEXT,
+      sheet_name TEXT,
+      uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    );
+    CREATE INDEX IF NOT EXISTS idx_timesheet_detail_month ON timesheet_detail_entries(month);
+    CREATE INDEX IF NOT EXISTS idx_timesheet_detail_project ON timesheet_detail_entries(month, project_name);
+    CREATE INDEX IF NOT EXISTS idx_timesheet_detail_worker_date ON timesheet_detail_entries(worker, work_date);
   `);
 
   const projectColumns = [
