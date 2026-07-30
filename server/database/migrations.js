@@ -71,6 +71,41 @@ function ensureTimesheetTable(db) {
   db.prepare('CREATE INDEX IF NOT EXISTS idx_timesheet_entries_work_type ON timesheet_entries(work_type)').run();
 }
 
+function ensureTimesheetDetailTable(db) {
+  db.prepare(`
+    CREATE TABLE IF NOT EXISTS timesheet_detail_entries (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      month TEXT NOT NULL,
+      work_date TEXT NOT NULL,
+      worker TEXT NOT NULL,
+      work_type TEXT NOT NULL,
+      worker_cost_center TEXT DEFAULT '',
+      qty REAL NOT NULL DEFAULT 0,
+      status TEXT DEFAULT '',
+      time_entry_code TEXT DEFAULT '',
+      billable TEXT DEFAULT '',
+      project_hierarchy TEXT DEFAULT '',
+      project_id TEXT DEFAULT '',
+      external_project_reference TEXT DEFAULT '',
+      project_name TEXT DEFAULT '',
+      customer TEXT DEFAULT '',
+      project_phase_name TEXT DEFAULT '',
+      project_task TEXT DEFAULT '',
+      custom_task_name TEXT DEFAULT '',
+      project_role TEXT DEFAULT '',
+      comment TEXT DEFAULT '',
+      source_row_no INTEGER NOT NULL DEFAULT 0,
+      source_file TEXT,
+      sheet_name TEXT,
+      uploaded_at TEXT DEFAULT CURRENT_TIMESTAMP,
+      updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+    )
+  `).run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_timesheet_detail_month ON timesheet_detail_entries(month)').run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_timesheet_detail_project ON timesheet_detail_entries(month, project_name)').run();
+  db.prepare('CREATE INDEX IF NOT EXISTS idx_timesheet_detail_worker_date ON timesheet_detail_entries(worker, work_date)').run();
+}
+
 
 function canonicalizeKnownPeople(db) {
   const employeeRows = db.prepare('SELECT id, name FROM employees').all();
@@ -170,6 +205,17 @@ function canonicalizeKnownPeople(db) {
       );
     }
   })();
+
+  const detailRows = db.prepare('SELECT id, worker FROM timesheet_detail_entries').all();
+  const updateDetailWorker = db.prepare('UPDATE timesheet_detail_entries SET worker = ? WHERE id = ?');
+  db.transaction(() => {
+    for (const row of detailRows) {
+      const canonicalName = canonicalPersonName(row.worker);
+      if (canonicalName && canonicalName !== row.worker) {
+        updateDetailWorker.run(canonicalName, row.id);
+      }
+    }
+  })();
 }
 
 function repairProjectFiscalPeriods(db) {
@@ -213,6 +259,8 @@ function runMigrations(db) {
   catch (error) { console.error('Project duplicate-code compatibility migration failed:', error); }
   try { ensureTimesheetTable(db); }
   catch (error) { console.error('Time Sheet table migration failed:', error); }
+  try { ensureTimesheetDetailTable(db); }
+  catch (error) { console.error('Time Sheet detail table migration failed:', error); }
   try { ensureRevenueRatesTable(db); }
   catch (error) { console.error('Revenue rate table migration failed:', error); }
   try { ensureCommittedTargetsTable(db); }

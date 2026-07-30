@@ -20,10 +20,17 @@ async function handleTimesheetUpload(file) {
       workbook.SheetNames.find(n => n.trim().toLowerCase() === 'time sheet') ||
       workbook.SheetNames[0];
 
+    const sheet = workbook.Sheets[sheetName];
     const parsedRows = normalizeTimesheetRows(
-      XLSX.utils.sheet_to_json(workbook.Sheets[sheetName], {
+      XLSX.utils.sheet_to_json(sheet, {
         defval: '',
         raw: false,
+      })
+    );
+    const detailRows = normalizeTimesheetDetailRows(
+      XLSX.utils.sheet_to_json(sheet, {
+        defval: '',
+        raw: true,
       })
     );
 
@@ -42,6 +49,7 @@ async function handleTimesheetUpload(file) {
       sheetName,
       replaceMonths: true,
       rows,
+      detailRows,
     });
 
     await loadSavedTimesheetFromDb();
@@ -49,7 +57,7 @@ async function handleTimesheetUpload(file) {
     switchWorkSummaryTab(S.workSummaryTab || 'team');
 
     toast(
-      `Saved ${saved.saved_rows} Time Sheet rows for ${saved.month_count} month${saved.month_count === 1 ? '' : 's'}`
+      `Saved ${saved.saved_rows} summary rows and ${saved.saved_detail_rows || 0} report-detail rows for ${saved.month_count} month${saved.month_count === 1 ? '' : 's'}`
     );
   } catch (e) {
     console.error(e);

@@ -371,6 +371,10 @@ function initEvents() {
     renderIndividualSummaryChart();
   });
 
+  document.getElementById('timesheetReportBtn')?.addEventListener('click', () => {
+    openTimesheetReportModal();
+  });
+
   document.getElementById('timesheetUpload')?.addEventListener('change', e => {
     const file = e.target.files && e.target.files[0];
     handleTimesheetUpload(file);
