@@ -102,6 +102,7 @@ function getFilteredMatrixEmployees() {
 }
 
 function renderMatrixHeader(months, employees, unavailableSlots) {
+  const allocationColumns = getResourceSummaryAllocationColumns();
   let header = '<tr class="months">';
 
   header += `
@@ -114,11 +115,12 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
     </th>
     <th
       class="sticky-allocation-group matrix-summary-group matrix-allocation-group"
-      colspan="${RESOURCE_SUMMARY_COLUMNS.allocation.length}"
+      colspan="${allocationColumns.length}"
     >Allocation (%)</th>
     <th
       class="sticky-revenue-group matrix-summary-group matrix-revenue-group"
       colspan="${RESOURCE_SUMMARY_COLUMNS.revenue.length}"
+      style="${getMatrixRevenueStickyStyle(0, allocationColumns.length)}"
     >Revenue ($)</th>
   `;
 
@@ -143,11 +145,16 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
 
   header += '</tr><tr class="weeks">';
 
-  RESOURCE_SUMMARY_COLUMNS.allocation.forEach((column, index) => {
+  allocationColumns.forEach((column, index) => {
+    const projectReference = column.isNotLocalProject && column.projectCode
+      ? `${column.projectCode} — ${column.label}`
+      : column.label;
     header += `
       <th
-        class="sticky-allocation-${index + 1} col-allocation matrix-summary-subheading matrix-allocation-subheading"
-        title="${esc(column.label)}"
+        class="sticky-allocation-cell col-allocation matrix-summary-subheading matrix-allocation-subheading ${column.isNotLocalProject ? 'matrix-not-local-subheading' : ''}"
+        style="${getMatrixAllocationStickyStyle(index)}"
+        title="${esc(projectReference)}"
+        data-not-local-project-id="${column.isNotLocalProject ? column.projectId : ''}"
       ><span>${esc(column.label)}</span></th>
     `;
   });
@@ -155,7 +162,8 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
   RESOURCE_SUMMARY_COLUMNS.revenue.forEach((column, index) => {
     header += `
       <th
-        class="sticky-revenue-${index + 1} col-revenue matrix-summary-subheading matrix-revenue-subheading"
+        class="sticky-revenue-cell col-revenue matrix-summary-subheading matrix-revenue-subheading ${index === RESOURCE_SUMMARY_COLUMNS.revenue.length - 1 ? 'matrix-summary-end' : ''}"
+        style="${getMatrixRevenueStickyStyle(index, allocationColumns.length)}"
         title="${esc(column.label)}"
       ><span>${esc(column.label)}</span></th>
     `;
@@ -176,21 +184,23 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
 }
 
 function renderResourceSummaryCells(employee, summary = getResourceSummaryViewData(employee)) {
-  const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation.map((column, index) => {
-    const rule = RESOURCE_ALLOCATION_RULE_BY_KEY[column.key];
-    const description = rule?.description ||
-      'All projects not classified as Intrasourcing, Pre-Sale, Training, Skill Development, or General Admin.';
-    const percentageTotal = summary.allocationMeta.percentageTotals[column.key];
-    const title = `${description} ${percentageTotal.toFixed(1)} total weekly percentage points ÷ ${summary.allocationMeta.fiscalWeekCount} available FY weeks = ${summary.allocation[column.key].toFixed(1)}%.`;
+  const allocationColumns = summary.allocationColumns || getResourceSummaryAllocationColumns();
+  const allocationCells = allocationColumns.map((column, index) => {
+    const description = getAllocationColumnDescription(column);
+    const percentageTotal = Number(summary.allocationMeta.percentageTotals[column.key]) || 0;
+    const allocationValue = Number(summary.allocation[column.key]) || 0;
+    const title = `${description} ${percentageTotal.toFixed(1)} total weekly percentage points ÷ ${summary.allocationMeta.fiscalWeekCount} available FY weeks = ${allocationValue.toFixed(1)}%.`;
 
     return `
       <td
-        class="matrix-fixed-cell sticky-allocation-${index + 1} col-allocation matrix-summary-cell matrix-allocation-cell"
+        class="matrix-fixed-cell sticky-allocation-cell col-allocation matrix-summary-cell matrix-allocation-cell ${column.isNotLocalProject ? 'matrix-not-local-cell' : ''}"
+        style="${getMatrixAllocationStickyStyle(index)}"
         data-employee-id="${employee.id}"
         data-summary-group="allocation"
-        data-summary-metric="${column.key}"
+        data-summary-metric="${esc(column.key)}"
+        data-not-local-project-id="${column.isNotLocalProject ? column.projectId : ''}"
         title="${esc(title)}"
-      >${formatMatrixAllocationCellValue(summary.allocation[column.key])}</td>
+      >${formatMatrixAllocationCellValue(allocationValue)}</td>
     `;
   }).join('');
 
@@ -203,7 +213,8 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
 
     return `
       <td
-        class="matrix-fixed-cell sticky-revenue-${index + 1} col-revenue matrix-summary-cell matrix-revenue-cell"
+        class="matrix-fixed-cell sticky-revenue-cell col-revenue matrix-summary-cell matrix-revenue-cell ${index === RESOURCE_SUMMARY_COLUMNS.revenue.length - 1 ? 'matrix-summary-end' : ''}"
+        style="${getMatrixRevenueStickyStyle(index, allocationColumns.length)}"
         data-action="open-revenue-breakdown"
         data-employee-id="${employee.id}"
         data-revenue-key="${column.key}"
@@ -315,12 +326,20 @@ function renderMatrix() {
   const rows = employees.map((employee, index) => {
     const rowClass = index % 2 === 0 ? 'row-even' : 'row-odd';
     const summary = getResourceSummaryViewData(employee);
+    const allocationColumns = summary.allocationColumns || getResourceSummaryAllocationColumns();
     const totalAllocationTitle = [
-      `${employee.name} total allocation is the sum of the ${RESOURCE_SUMMARY_COLUMNS.allocation.length} visible allocation categories.`,
-      `${RESOURCE_SUMMARY_COLUMNS.allocation.map(column => (
-        `${column.label} ${summary.allocation[column.key].toFixed(1)}%`
+      `${employee.name} total allocation is the sum of the ${allocationColumns.length} visible allocation categories.`,
+      `${allocationColumns.map(column => (
+        `${column.label} ${(Number(summary.allocation[column.key]) || 0).toFixed(1)}%`
       )).join(' + ')} = ${summary.allocationMeta.total.toFixed(1)}%.`,
     ].join(' ');
+    const notLocalProjects = summary.allocationMeta.notLocalProjects || [];
+    const notLocalProjectTitle = notLocalProjects
+      .map(project => `${project.code ? `${project.code} — ` : ''}${project.name}: ${project.allocation.toFixed(1)}%`)
+      .join(' | ');
+    const notLocalProjectPreview = notLocalProjects.length
+      ? `<span class="matrix-resource-not-local" title="${esc(notLocalProjectTitle)}"><strong>Not Local:</strong> ${notLocalProjects.map(project => esc(project.name)).join(', ')}</span>`
+      : '';
 
     return `
       <tr class="matrix-row ${rowClass}" data-emp="${employee.id}">
@@ -340,6 +359,7 @@ function renderMatrix() {
             <span class="matrix-resource-copy">
               <span class="matrix-resource-name">${esc(employee.name)}</span>
               <span class="matrix-resource-designation">${esc(employee.designation || 'No designation')}</span>
+              ${notLocalProjectPreview}
             </span>
           </button>
         </td>
@@ -350,7 +370,7 @@ function renderMatrix() {
   });
 
   const columnCount = 2 +
-    RESOURCE_SUMMARY_COLUMNS.allocation.length +
+    getResourceSummaryAllocationColumns().length +
     RESOURCE_SUMMARY_COLUMNS.revenue.length +
     (months.length * 4);
 

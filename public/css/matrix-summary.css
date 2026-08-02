@@ -63,6 +63,11 @@
   background: #f8fafc !important;
 }
 
+.matrix-not-local-subheading {
+  background: #f5f3ff !important;
+  color: #5b21b6;
+}
+
 .matrix-revenue-subheading {
   background: #dbeafe !important;
 }
@@ -154,6 +159,23 @@
   line-height: 1.25;
 }
 
+.matrix-resource-not-local {
+  display: block;
+  max-width: 100%;
+  margin-top: 3px;
+  overflow: hidden;
+  color: #6d28d9;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 9px;
+  font-weight: 500;
+  line-height: 1.2;
+}
+
+.matrix-resource-not-local strong {
+  font-weight: 700;
+}
+
 .matrix-summary-cell {
   padding: 10px 1px;
   color: #94a3b8;
@@ -166,6 +188,11 @@
 
 .matrix-allocation-cell {
   background-color: #fbfcfe;
+}
+
+.matrix-not-local-cell {
+  background-color: #faf7ff !important;
+  color: #6d28d9;
 }
 
 .matrix-revenue-cell {
@@ -227,6 +254,11 @@
   color: #334155;
 }
 
+.matrix-total-row .matrix-not-local-total-cell {
+  background: #ede9fe !important;
+  color: #5b21b6;
+}
+
 .matrix-total-row .matrix-total-revenue-cell {
   background: #dbeafe;
   color: #1d4ed8;
@@ -252,7 +284,7 @@
   font-weight: 700;
 }
 
-.matrix-total-row .sticky-revenue-4 {
+.matrix-total-row .matrix-summary-end {
   box-shadow: 5px 0 7px rgba(15, 23, 42, 0.1);
 }
 
