@@ -1,52 +1,64 @@
 const express = require('express');
 const { getAppDb } = require('../database');
 const { fyLabel, getProjectFiscalYear } = require('../services/fiscal');
+const { getPSEngagementType, isPSOnlyProject } = require('../services/project-analytics');
 const router = express.Router();
 const db = getAppDb();
 
 router.get('/api/dashboard/ps-type-chart', (_, res) => {
   const rows = db.prepare(`
-    SELECT end_date, fiscal_period, product_name, product_family, name, code, stage
+    SELECT id, end_date, fiscal_period, product_name, product_family, name, code, stage
     FROM projects
-    WHERE stage = 'Closed Won'
+    WHERE LOWER(TRIM(stage)) = 'closed won'
   `).all();
 
   const fyData = {};
-  for (const r of rows) {
-    const fy = getProjectFiscalYear(r);
-    if (fy === null) continue;
+  for (const project of rows) {
+    const fy = getProjectFiscalYear(project);
+    if (fy === null || !isPSOnlyProject(project)) continue;
 
-    const productText = (r.product_name || '').trim().toUpperCase();
-    const nameText = (r.name || '').trim().toUpperCase();
-    const combinedText = `${productText} ${nameText}`;
-    const family = (r.product_family || '').trim().toUpperCase();
+    const engagementType = getPSEngagementType(project);
+    if (!engagementType) continue;
 
-    const isSupport = combinedText.includes('PS SYSTEM SUPPORT') ||
-      (family === 'PROFESSIONAL SERVICES' && combinedText.includes('SYSTEM SUPPORT'));
-    const isImpl = combinedText.includes('PS PROJECT IMPLEMENTATION') ||
-      combinedText.includes('PS PROJECT IMPLEMETATION') ||
-      (family === 'PROFESSIONAL SERVICES' && combinedText.includes('PROJECT IMPLEMENT'));
+    if (!fyData[fy]) {
+      fyData[fy] = {
+        support: 0,
+        impl: 0,
+        supportProjects: [],
+        implProjects: [],
+      };
+    }
 
-    if (!isSupport && !isImpl) continue;
-    if (!fyData[fy]) fyData[fy] = { support: 0, impl: 0, supportProjects: [], implProjects: [] };
-    const projName = (r.name || r.code || 'Unknown').trim();
-    if (isSupport) { fyData[fy].support++; fyData[fy].supportProjects.push(projName); }
-    if (isImpl) { fyData[fy].impl++; fyData[fy].implProjects.push(projName); }
+    const projectDetails = {
+      id: Number(project.id),
+      code: String(project.code || '').trim(),
+      name: String(project.name || project.code || 'Unknown').trim(),
+      product_name: String(project.product_name || '').trim(),
+      product_family: String(project.product_family || '').trim(),
+    };
+
+    if (engagementType === 'SUPPORT') {
+      fyData[fy].support += 1;
+      fyData[fy].supportProjects.push(projectDetails);
+    } else if (engagementType === 'IMPLEMENTATION') {
+      fyData[fy].impl += 1;
+      fyData[fy].implProjects.push(projectDetails);
+    }
   }
 
+  const byProjectName = (left, right) => left.name.localeCompare(right.name);
   const result = Object.entries(fyData)
     .sort((a, b) => +a[0] - +b[0])
-    .map(([fy, d]) => ({
+    .map(([fy, data]) => ({
       fy: +fy,
       label: fyLabel(+fy),
-      support: d.support,
-      impl: d.impl,
-      supportProjects: d.supportProjects.sort(),
-      implProjects: d.implProjects.sort(),
+      support: data.support,
+      impl: data.impl,
+      supportProjects: data.supportProjects.sort(byProjectName),
+      implProjects: data.implProjects.sort(byProjectName),
     }));
 
   res.json(result);
 });
-
 
 module.exports = router;

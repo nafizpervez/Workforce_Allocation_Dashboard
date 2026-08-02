@@ -30,17 +30,23 @@ function dealStatusBadge(status) {
  * Priority order: PS > Personal Use > Student Use > Subscription > Software > OTHER
  */
 function classifyProduct(pn, pf) {
-  const n = (pn || '').toUpperCase();
-  const f = (pf || '').toUpperCase();
-  // PS Only: PS System Support or PS Project Implementation (covers typo variant)
-  if (n.includes('PS SYSTEM SUPPORT') || n.includes('PS PROJECT IMPLEMENT')) return 'PS';
-  // Personal Use
-  if (n.includes('ARCGIS FOR PERSONAL USE ONE YEAR ANNUAL SUBSCRIPTION')) return 'PERSONAL';
-  // Student Use
-  if (n.includes('ARCGIS FOR STUDENT USE ONE YEAR TIMEOUT LICENSE')) return 'STUDENT';
-  // Subscription: has license/renew/subscription keywords but not caught above
+  const n = String(pn || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const compactName = n.replace(/[^A-Z0-9]/g, '');
+  const f = String(pf || '').trim().replace(/\s+/g, ' ').toUpperCase();
+  const isPsSupport = compactName.includes('PSSYSTEMSUPPORT');
+  const isPsImplementation = [
+    'PSPROJECTIMPLEMENTATION',
+    'PSPROJECTIMPLEMENT',
+    'PSPROJECTIMPLEMETATION',
+    'PSPROJECTIMPLEMENTAION',
+  ].some(variant => compactName.includes(variant));
+
+  // Product Name is the sole source of truth for PS Only. Product Family does
+  // not qualify a record, and Opportunity Number is never used for matching.
+  if (isPsSupport || isPsImplementation) return 'PS';
+  if (n.includes('PERSONAL USE')) return 'PERSONAL';
+  if (n.includes('STUDENT USE')) return 'STUDENT';
   if (n.includes('LICENSE') || n.includes('RENEW') || n.includes('SUBSCRIPTION')) return 'SUBSCRIPTION';
-  // Software: product_family is Software
   if (f === 'SOFTWARE') return 'SOFTWARE';
   return 'OTHER';
 }
@@ -58,12 +64,15 @@ function openDealModal(fyData) {
 
   const rowHtml = (p) => {
     const name = typeof p === 'string' ? p : (p.name || '');
+    const projectId = typeof p === 'object' && Number.isFinite(Number(p.id)) ? Number(p.id) : null;
     const saCode = typeof p === 'object' && p.code ? p.code : '';
     const oppName = typeof p === 'object' && p.opp_name ? p.opp_name : '';
     const prodName = typeof p === 'object' ? (p.product_name || '') : '';
     const prodFam = typeof p === 'object' ? (p.product_family || '') : '';
-    const proj = saCode ? S.projects.find(x => x.code === saCode) : null;
-    const projId = proj ? proj.id : null;
+    // Project ID is the only lookup key. Opportunity Number is not unique and
+    // must never be used to resolve a drill-down row.
+    const proj = projectId ? S.projects.find(x => Number(x.id) === projectId) : null;
+    const projId = proj ? Number(proj.id) : projectId;
     const clickable = projId ? 'cursor-pointer deal-modal-row hover:bg-blue-50 hover:border-blue-200' : '';
     const dataAttr = projId ? ('data-proj-id="' + projId + '"') : '';
     const sub = [prodName, prodFam].filter(Boolean).join(' · ');
