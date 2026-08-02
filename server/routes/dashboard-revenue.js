@@ -31,6 +31,7 @@ router.get('/api/dashboard/ps-revenue-chart', (_, res) => {
       const amount = getRevenueAmount(r);
       fyData[fy].total += amount;
       fyData[fy].allProjects.push({
+        id: Number(r.id),
         name: r.name || r.code,
         code: r.code,
         amount,
@@ -40,12 +41,12 @@ router.get('/api/dashboard/ps-revenue-chart', (_, res) => {
         amount_source: safeNum(r.product_amount, 0) > 0 ? 'Product Amount' : 'Amount',
       });
 
-      // PS Amount follows the same amount rule, but only for Professional Services rows.
-      // If Product Name is missing, Product Family = Professional Services is enough
-      // to classify the row as PS revenue.
+      // PS Amount follows the same amount rule, but only when Product Name
+      // identifies PS System Support or PS Project Implementation.
       if (isPSRevenueProject(r)) {
         fyData[fy].ps += amount;
         fyData[fy].psProjects.push({
+          id: Number(r.id),
           name: r.name || r.code,
           code: r.code,
           amount,

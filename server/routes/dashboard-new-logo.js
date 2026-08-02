@@ -17,25 +17,47 @@ router.get('/api/dashboard/new-logo-chart', (_, res) => {
 
   const CATEGORIES = ['ALL', 'ALLCLEAN', 'SOFTWARE', 'PS', 'PERSONAL', 'STUDENT'];
 
+  // Deal status is an account-history property, not a product-category property.
+  // Calculate it once from every Closed Won deal, then apply the category filter
+  // only to the rows shown/counting in each chart view.
+  const closedWonHistory = allProjects.filter(project => (
+    String(project.stage || '').trim().toLowerCase() === 'closed won' &&
+    getProjectFiscalYear(project) !== null
+  ));
+  const globalStatusMap = calcDealStatusesForSubset(closedWonHistory);
+  const globalAcctFYStatus = {};
+
+  const globallySortedHistory = [...closedWonHistory].sort((a, b) => {
+    const fiscalDiff = fiscalSortValue(a) - fiscalSortValue(b);
+    if (fiscalDiff !== 0) return fiscalDiff;
+    if ((a.end_date || '') !== (b.end_date || '')) return String(a.end_date || '').localeCompare(String(b.end_date || ''));
+    return a.id - b.id;
+  });
+
+  for (const project of globallySortedHistory) {
+    const fy = getProjectFiscalYear(project);
+    if (fy === null) continue;
+    const acctKey = (project.account_name || project.client || '').trim().toLowerCase();
+    if (!globalAcctFYStatus[acctKey]) globalAcctFYStatus[acctKey] = {};
+    if (!(fy in globalAcctFYStatus[acctKey])) {
+      globalAcctFYStatus[acctKey][fy] = globalStatusMap[project.id] || 'NEW LOGO';
+    }
+  }
+
   /*
    * For each category:
-   *   1. Build the Closed Won account history used for NEW LOGO / REPEAT / REACTIVE
+   *   1. Filter the globally classified Closed Won history to the selected category
    *   2. Keep active Running Projects out of the chart until Progress reaches 100%
    *   3. Derive its fiscal year from Closed Won Date through getProjectFiscalYear()
    *   4. Build FY counts and project lists with the canonical-status dedup:
    *      - One bar count per unique account per FY
-   *      - Canonical status = status of the FIRST SA code for that account in that FY
+   *      - Canonical status = status of the first database project row for that account in that FY
    *      - Project list: one entry per (account + product_category) per FY per status
    */
   const buildChartForCategory = (cat) => {
     // Closed Won deals establish account history as soon as they are won.
     // Active Running Projects are promoted into the acquisition chart when Progress reaches 100%.
-    const categoryHistory = allProjects.filter(project => (
-      String(project.stage || '').trim().toLowerCase() === 'closed won' &&
-      getProjectFiscalYear(project) !== null &&
-      matchesCategory(project, cat)
-    ));
-    const statusMap = calcDealStatusesForSubset(categoryHistory);
+    const categoryHistory = closedWonHistory.filter(project => matchesCategory(project, cat));
     const completedSubset = categoryHistory.filter(isDealAcquisitionChartEligible);
 
     // Sort completed deals chronologically by the fiscal period derived from Closed Won Date.
@@ -63,10 +85,10 @@ router.get('/api/dashboard/new-logo-chart', (_, res) => {
       const prodFam = (p.product_family || '').trim();
       const prodCat = productCategory(prodName, prodFam, p.name);
 
-      // Canonical status: locked to first SA code for this account in this FY
+      // Canonical status: locked to the first database project row for this account in this FY
       if (!acctFYStatus[acctKey]) acctFYStatus[acctKey] = {};
       if (!(fy in acctFYStatus[acctKey])) {
-        acctFYStatus[acctKey][fy] = statusMap[p.id] || 'NEW LOGO';
+        acctFYStatus[acctKey][fy] = globalAcctFYStatus[acctKey]?.[fy] || globalStatusMap[p.id] || 'NEW LOGO';
       }
       const st = acctFYStatus[acctKey][fy];
 
@@ -86,6 +108,7 @@ router.get('/api/dashboard/new-logo-chart', (_, res) => {
       if (!fySeenCombo[fy][st].has(combo)) {
         fySeenCombo[fy][st].add(combo);
         fyProjects[fy][st].push({
+          id: Number(p.id),
           name: acctDisp,
           code: (p.code || '').trim(),
           opp_name: (p.name || '').trim(),

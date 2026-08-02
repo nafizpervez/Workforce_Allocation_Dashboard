@@ -1,19 +1,64 @@
-const { fiscalSortValue, getProjectFiscalYear } = require('./fiscal');
+const { fiscalSortValue, getCurrentFiscalYearEnd, getProjectFiscalYear } = require('./fiscal');
 const { safeNum } = require('./values');
 
+function normalizeProductText(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toUpperCase();
+}
+
+function normalizeProjectFamily(value) {
+  return String(value || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase();
+}
+
+function getPSProductType(value) {
+  // Product Name is the sole source of truth for PS classification.
+  // Removing punctuation and whitespace allows harmless formatting variations
+  // such as "PS-System-Support", "ps_system_support", or extra spaces.
+  const compact = normalizeProductText(value).replace(/[^A-Z0-9]/g, '');
+
+  if (compact.includes('PSSYSTEMSUPPORT')) return 'SUPPORT';
+
+  const implementationVariants = [
+    'PSPROJECTIMPLEMENTATION',
+    'PSPROJECTIMPLEMENT',
+    'PSPROJECTIMPLEMETATION',
+    'PSPROJECTIMPLEMENTAION',
+  ];
+  if (implementationVariants.some(variant => compact.includes(variant))) return 'IMPLEMENTATION';
+
+  return null;
+}
+
+function isPSProductText(value) {
+  return getPSProductType(value) !== null;
+}
+
 function getProductText(project) {
-  return String(project?.product_name || project?.name || '').toUpperCase();
+  return normalizeProductText(project?.product_name || '');
+}
+
+function isPSOnlyProject(project) {
+  return isPSProductText(project?.product_name);
+}
+
+function getPSEngagementType(project) {
+  return getPSProductType(project?.product_name);
 }
 
 function productCategory(productName, productFamily, projectName = '') {
-  const name = (productName || '').toUpperCase();
-  const text = name || (projectName || '').toUpperCase();
-  const family = (productFamily || '').toUpperCase();
-  if (text.includes('PERSONAL USE')) return 'PERSONAL';
-  if (text.includes('STUDENT USE')) return 'STUDENT';
-  if (family === 'PROFESSIONAL SERVICES' || text.includes('PS SYSTEM SUPPORT') || text.includes('PS PROJECT IMPLEMENT')) return 'PS';
-  if (family === 'SOFTWARE') return 'SOFTWARE';
-  if (text.includes('LICENSE') || text.includes('RENEW') || text.includes('SUBSCRIPTION')) return 'SUBSCRIPTION';
+  const productText = normalizeProductText(productName);
+  const fallbackText = productText || normalizeProductText(projectName);
+  const family = normalizeProjectFamily(productFamily);
+  if (isPSProductText(productText)) return 'PS';
+  if (productText.includes('PERSONAL USE')) return 'PERSONAL';
+  if (productText.includes('STUDENT USE')) return 'STUDENT';
+  if (family === 'software') return 'SOFTWARE';
+  if (fallbackText.includes('LICENSE') || fallbackText.includes('RENEW') || fallbackText.includes('SUBSCRIPTION')) return 'SUBSCRIPTION';
   return 'OTHER';
 }
 
@@ -23,27 +68,21 @@ function getRevenueAmount(project) {
 }
 
 function isPSRevenueProject(project) {
-  const family = String(project?.product_family || '').toUpperCase();
-  const text = getProductText(project);
-  return family === 'PROFESSIONAL SERVICES' || text.includes('PS SYSTEM SUPPORT') || text.includes('PS PROJECT IMPLEMENT');
+  return isPSOnlyProject(project);
 }
 
 const RUNNING_CLOSED_WON_START_DATE = '2025-03-01';
 
-function normalizeProjectFamily(value) {
-  return String(value || '')
-    .trim()
-    .replace(/\s+/g, ' ')
-    .toLowerCase();
-}
-
 function isProfessionalServiceRunningProject(project) {
-  const family = normalizeProjectFamily(project?.product_family);
   const closedWonDate = String(project?.end_date || '').trim();
+  const projectFiscalYear = getProjectFiscalYear(project);
+  const currentFiscalYear = getCurrentFiscalYearEnd();
   return (
     String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
-    (family === 'professional service' || family === 'professional services') &&
+    isPSOnlyProject(project) &&
     Number(project?.progress) < 100 &&
+    projectFiscalYear !== null &&
+    projectFiscalYear >= currentFiscalYear &&
     /^\d{4}-\d{2}-\d{2}$/.test(closedWonDate) &&
     closedWonDate >= RUNNING_CLOSED_WON_START_DATE
   );
@@ -59,14 +98,14 @@ function isDealAcquisitionChartEligible(project) {
 
 function matchesCategory(project, category) {
   const text = getProductText(project);
-  const family = (project.product_family || '').toUpperCase();
+  const family = normalizeProjectFamily(project?.product_family);
   const personal = text.includes('PERSONAL USE');
   const student = text.includes('STUDENT USE');
   const professionalServices = isPSRevenueProject(project);
   switch (category) {
     case 'ALL': return true;
     case 'ALLCLEAN': return !personal && !student;
-    case 'SOFTWARE': return family === 'SOFTWARE' && !personal && !student;
+    case 'SOFTWARE': return family === 'software' && !personal && !student;
     case 'PS': return professionalServices;
     case 'PERSONAL': return personal;
     case 'STUDENT': return student;
@@ -76,7 +115,7 @@ function matchesCategory(project, category) {
 
 function calcDealStatusesForSubset(projects) {
   const closedWon = projects
-    .filter(project => project.stage === 'Closed Won' && getProjectFiscalYear(project) !== null)
+    .filter(project => String(project?.stage || '').trim().toLowerCase() === 'closed won' && getProjectFiscalYear(project) !== null)
     .map(project => ({ ...project, fy: getProjectFiscalYear(project) }))
     .sort((left, right) => {
       if (left.fy !== right.fy) return left.fy - right.fy;
@@ -113,7 +152,7 @@ function calcDealStatusesForSubset(projects) {
     if (!accountLastFiscalYear[key] || project.fy > accountLastFiscalYear[key]) accountLastFiscalYear[key] = project.fy;
   }
   for (const project of projects) {
-    if (project.stage === 'Closed Won') continue;
+    if (String(project?.stage || '').trim().toLowerCase() === 'closed won') continue;
     const fiscalYear = getProjectFiscalYear(project) || new Date().getFullYear();
     const key = (project.account_name || project.client || '').trim().toLowerCase();
     const lastFiscalYear = accountLastFiscalYear[key];
@@ -130,9 +169,11 @@ module.exports = {
   calcDealStatuses,
   calcDealStatusesForSubset,
   getProductText,
+  getPSEngagementType,
   getRevenueAmount,
   isDealAcquisitionChartEligible,
   isProfessionalServiceRunningProject,
+  isPSOnlyProject,
   isPSRevenueProject,
   matchesCategory,
   productCategory,

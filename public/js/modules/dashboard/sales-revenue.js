@@ -52,10 +52,10 @@ function renderPsRevenueChart(data, prodFilter) {
         continue;
       }
 
-      const seenProjects = new Set(entry.all_projects.map(project => String(project?.code || project?.name || '')));
+      const seenProjects = new Set(entry.all_projects.map(project => Number(project?.id)));
       for (const project of (Array.isArray(fiscalYear?.all_projects) ? fiscalYear.all_projects : [])) {
-        const projectKey = String(project?.code || project?.name || '');
-        if (seenProjects.has(projectKey)) continue;
+        const projectKey = Number(project?.id);
+        if (!Number.isFinite(projectKey) || seenProjects.has(projectKey)) continue;
         seenProjects.add(projectKey);
         entry.all_projects.push(project);
         entry.total_amount += Number(project?.amount) || 0;
@@ -205,11 +205,17 @@ function openPsTypeModal(d) {
       </div>
       <div class="space-y-1 max-h-60 overflow-y-auto nice-scroll pr-1">
         ${projects.length
-        ? projects.map((name, i) => `
-            <div class="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 hover:bg-gray-100 transition-colors">
+        ? projects.map((project, i) => {
+            const projectName = typeof project === 'string' ? project : (project?.name || project?.code || 'Unknown');
+            const projectId = typeof project === 'object' && Number.isFinite(Number(project?.id)) ? Number(project.id) : null;
+            const clickableClass = projectId ? 'cursor-pointer ps-type-project-row hover:bg-blue-50 hover:border-blue-200' : '';
+            const dataAttribute = projectId ? `data-proj-id="${projectId}"` : '';
+            return `
+            <div class="flex items-center gap-2 py-1.5 px-3 rounded-lg bg-gray-50 border border-gray-100 transition-colors ${clickableClass}" ${dataAttribute}>
               <span class="text-xs font-medium text-gray-400 w-5 flex-shrink-0">${i + 1}.</span>
-              <span class="text-sm text-gray-800">${esc(name)}</span>
-            </div>`).join('')
+              <span class="text-sm text-gray-800">${esc(projectName)}</span>
+            </div>`;
+          }).join('')
         : empty}
       </div>
     </div>`;
@@ -224,5 +230,12 @@ function openPsTypeModal(d) {
     <div class="px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
       <button onclick="closeModal()" class="btn-gray">Close</button>
     </div>`, 'max-w-lg');
+
+  document.querySelectorAll('#modalRoot .ps-type-project-row[data-proj-id]').forEach(row => {
+    row.addEventListener('click', () => {
+      closeModal();
+      openProjectModal({ id: Number(row.dataset.projId) });
+    });
+  });
 }
 
