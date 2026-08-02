@@ -217,41 +217,166 @@ tr.matrix-row:hover td.cell {
   min-height: var(--matrix-month-header-h);
 }
 
-.matrix-month-heading .matrix-month-label,
-.matrix-month-heading .matrix-month-revenue {
+.matrix-month-heading .matrix-month-label {
   display: block;
   line-height: 1.2;
+  white-space: nowrap;
 }
 
-.matrix-month-heading .matrix-month-revenue {
+.matrix-month-heading .matrix-month-allocation {
+  color: #2563eb;
+  font-weight: 700;
+}
+
+.matrix-month-heading .matrix-month-metrics {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 4px;
   margin-top: 3px;
-  color: #0f766e;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+
+.matrix-month-heading .matrix-month-revenue,
+.matrix-month-heading .matrix-month-unallocated,
+.matrix-month-heading .matrix-month-separator {
+  display: inline;
+  margin: 0;
   font-size: 10px;
   font-weight: 700;
 }
 
-.matrix-month-heading .matrix-month-label,
 .matrix-month-heading .matrix-month-revenue {
-  display: block;
-  line-height: 1.2;
+  color: #0f766e;
 }
 
-.matrix-month-heading .matrix-month-revenue {
-  margin-top: 3px;
-  color: #0f766e;
+.matrix-month-heading .matrix-month-separator {
+  color: #94a3b8;
+}
+
+.matrix-month-heading .matrix-month-unallocated {
+  color: #b45309;
+}
+
+.matrix-month-heading[data-month-breakdown="true"] {
+  cursor: help;
+  outline-offset: -2px;
+}
+
+.matrix-month-heading[data-month-breakdown="true"]:focus-visible {
+  outline: 2px solid #2563eb;
+}
+
+.matrix-month-breakdown-tooltip {
+  position: fixed;
+  z-index: 10000;
+  width: min(380px, calc(100vw - 20px));
+  overflow: hidden;
+  padding: 9px;
+  border: 1px solid rgba(148, 163, 184, 0.34);
+  border-radius: 12px;
+  background: rgba(15, 23, 42, 0.96);
+  box-shadow: 0 18px 45px rgba(15, 23, 42, 0.28);
+  color: #e2e8f0;
   font-size: 10px;
+  line-height: 1.3;
+  opacity: 0;
+  visibility: hidden;
+  pointer-events: none;
+  transform: translateY(4px);
+  transition: opacity 90ms ease, transform 90ms ease, visibility 90ms ease;
+  backdrop-filter: blur(8px);
+}
+
+.matrix-month-breakdown-tooltip.is-visible {
+  opacity: 1;
+  visibility: visible;
+  transform: translateY(0);
+}
+
+.matrix-month-breakdown-tooltip__title {
+  margin-bottom: 6px;
+  color: #ffffff;
+  font-size: 11px;
   font-weight: 700;
 }
 
-.matrix-month-heading .matrix-month-label,
-.matrix-month-heading .matrix-month-revenue {
-  display: block;
-  line-height: 1.2;
+.matrix-month-breakdown-tooltip__table {
+  width: 100%;
+  overflow: hidden;
+  border: 1px solid rgba(148, 163, 184, 0.22);
+  border-radius: 8px;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+  font-size: 9.5px;
 }
 
-.matrix-month-heading .matrix-month-revenue {
-  margin-top: 3px;
-  color: #0f766e;
+.matrix-month-breakdown-tooltip__table th,
+.matrix-month-breakdown-tooltip__table td {
+  padding: 7px 8px;
+  border-right: 1px solid rgba(148, 163, 184, 0.16);
+  border-bottom: 1px solid rgba(148, 163, 184, 0.16);
+  vertical-align: middle;
+}
+
+.matrix-month-breakdown-tooltip__table tbody tr:last-child th,
+.matrix-month-breakdown-tooltip__table tbody tr:last-child td {
+  border-bottom: 0;
+  background: rgba(51, 65, 85, 0.42);
+}
+
+.matrix-month-breakdown-tooltip__table th:last-child,
+.matrix-month-breakdown-tooltip__table td:last-child {
+  border-right: 0;
+}
+
+.matrix-month-breakdown-tooltip__table thead th {
+  background: rgba(30, 41, 59, 0.92);
+  color: #cbd5e1;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: 0.05em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.matrix-month-breakdown-tooltip__table thead th:first-child {
+  width: 34%;
+  text-align: left;
+}
+
+.matrix-month-breakdown-tooltip__table thead th:nth-child(2),
+.matrix-month-breakdown-tooltip__table thead th:nth-child(3) {
+  width: 33%;
+}
+
+.matrix-month-breakdown-tooltip__table tbody th[scope="row"] {
+  color: #e2e8f0;
+  font-weight: 600;
+  line-height: 1.15;
+  text-align: left;
+  white-space: normal;
+}
+
+.matrix-month-breakdown-tooltip__table tbody td {
+  color: #ffffff;
   font-size: 10px;
   font-weight: 700;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+  white-space: nowrap;
+}
+
+@media (max-width: 600px) {
+  .matrix-month-breakdown-tooltip {
+    width: calc(100vw - 16px);
+    padding: 9px;
+  }
+
+  .matrix-month-breakdown-tooltip__table th,
+  .matrix-month-breakdown-tooltip__table td {
+    padding: 6px;
+  }
 }

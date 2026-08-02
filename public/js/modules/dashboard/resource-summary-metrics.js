@@ -339,6 +339,10 @@ function getMatrixAssignmentPlannedRevenue(employee, assignment, unavailableSlot
 function getMatrixWeekPlannedRevenue(employeeRows, month, week, unavailableSlots = null) {
   let amount = 0;
   let unpricedHours = 0;
+  const byCategory = {
+    intrasourcing: 0,
+    local: 0,
+  };
 
   for (const employee of employeeRows || []) {
     const key = `${month.y}-${month.m}-${week}`;
@@ -351,17 +355,28 @@ function getMatrixWeekPlannedRevenue(employeeRows, month, week, unavailableSlots
         unavailableSlots,
       );
       if (!revenue.eligible) continue;
-      if (!revenue.hasRate) unpricedHours += revenue.hours;
-      else amount += revenue.amount;
+      if (!revenue.hasRate) {
+        unpricedHours += revenue.hours;
+        continue;
+      }
+
+      amount += revenue.amount;
+      if (Object.prototype.hasOwnProperty.call(byCategory, revenue.categoryKey)) {
+        byCategory[revenue.categoryKey] += revenue.amount;
+      }
     }
   }
 
-  return { amount, unpricedHours };
+  return { amount, unpricedHours, byCategory };
 }
 
 function getMatrixMonthPlannedRevenue(employeeRows, month, unavailableSlots = null) {
   let amount = 0;
   let unpricedHours = 0;
+  const byCategory = {
+    intrasourcing: 0,
+    local: 0,
+  };
 
   for (let week = 1; week <= RESOURCE_SUMMARY_WEEKS_PER_MONTH; week += 1) {
     const weeklyRevenue = getMatrixWeekPlannedRevenue(
@@ -372,9 +387,11 @@ function getMatrixMonthPlannedRevenue(employeeRows, month, unavailableSlots = nu
     );
     amount += weeklyRevenue.amount;
     unpricedHours += weeklyRevenue.unpricedHours;
+    byCategory.intrasourcing += Number(weeklyRevenue.byCategory?.intrasourcing) || 0;
+    byCategory.local += Number(weeklyRevenue.byCategory?.local) || 0;
   }
 
-  return { amount, unpricedHours };
+  return { amount, unpricedHours, byCategory };
 }
 
 function getResourceSummaryViewData(employee) {
