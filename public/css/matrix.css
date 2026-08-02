@@ -23,9 +23,10 @@ table.matrix th {
   white-space: nowrap;
 }
 
-/* Fixed summary block: SN + Resource + six allocation columns +
-   four independently calculated revenue columns. Total Allocation is
-   displayed inside each resource's circular indicator. */
+/* Fixed summary block: SN + Resource + the six standard allocation columns +
+   one dynamic allocation column for every project marked Not Local + four
+   independently calculated revenue columns. Total Allocation is displayed
+   inside each resource's circular indicator. */
 :root {
   --sn-w: 38px;
   --name-w: 190px;
@@ -69,8 +70,8 @@ table.matrix th {
 /* ── Sticky left summary block ───────────────────────────────── */
 .sticky-sn,
 .sticky-name,
-[class*="sticky-allocation-"],
-[class*="sticky-revenue-"] {
+.sticky-allocation-cell,
+.sticky-revenue-cell {
   position: sticky;
   z-index: 2;
 }
@@ -78,71 +79,9 @@ table.matrix th {
 .sticky-sn { left: 0; }
 .sticky-name { left: var(--sn-w); }
 
-.sticky-allocation-1 {
-  left: calc(var(--sn-w) + var(--name-w));
-}
-.sticky-allocation-2 {
-  left: calc(var(--sn-w) + var(--name-w) + var(--allocation-w));
-}
-.sticky-allocation-3 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w)
-  );
-}
-.sticky-allocation-4 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
-  );
-}
-.sticky-allocation-5 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
-  );
-}
-.sticky-allocation-6 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w)
-  );
-}
-
-.sticky-revenue-1 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
-  );
-}
-
-.sticky-revenue-2 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) + var(--revenue-w)
-  );
-}
-
-.sticky-revenue-3 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--revenue-w) + var(--revenue-w)
-  );
-}
-
-.sticky-revenue-4 {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--revenue-w) + var(--revenue-w) + var(--revenue-w)
-  );
-  box-shadow: 5px 0 7px rgba(15, 23, 42, 0.08);
+.sticky-allocation-cell,
+.sticky-revenue-cell {
+  left: var(--matrix-sticky-left);
 }
 
 .sticky-allocation-group,
@@ -156,11 +95,7 @@ table.matrix th {
 }
 
 .sticky-revenue-group {
-  left: calc(
-    var(--sn-w) + var(--name-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w) +
-    var(--allocation-w) + var(--allocation-w) + var(--allocation-w)
-  );
+  left: var(--matrix-sticky-left);
   box-shadow: 5px 0 7px rgba(15, 23, 42, 0.08);
 }
 
@@ -182,8 +117,8 @@ table.matrix thead tr.weeks th {
 
 table.matrix thead .sticky-sn,
 table.matrix thead .sticky-name,
-table.matrix thead [class*="sticky-allocation-"],
-table.matrix thead [class*="sticky-revenue-"] {
+table.matrix thead .sticky-allocation-cell,
+table.matrix thead .sticky-revenue-cell {
   z-index: 8;
 }
 
@@ -192,8 +127,8 @@ table.matrix thead [class*="sticky-revenue-"] {
    intentionally more specific than the shared sticky-header rules. */
 table.matrix tbody td.sticky-sn,
 table.matrix tbody td.sticky-name,
-table.matrix tbody td[class*="sticky-allocation-"],
-table.matrix tbody td[class*="sticky-revenue-"] {
+table.matrix tbody td.sticky-allocation-cell,
+table.matrix tbody td.sticky-revenue-cell {
   z-index: 10;
 }
 
@@ -205,8 +140,8 @@ table.matrix thead tr.months th.sticky-revenue-group {
   background-clip: border-box;
 }
 
-table.matrix thead tr.weeks th[class*="sticky-allocation-"],
-table.matrix thead tr.weeks th[class*="sticky-revenue-"] {
+table.matrix thead tr.weeks th.sticky-allocation-cell,
+table.matrix thead tr.weeks th.sticky-revenue-cell {
   z-index: 39;
   background-clip: border-box;
 }

@@ -46,6 +46,7 @@ function sumCalculatedRevenue(summaries, revenueKey) {
 }
 
 function getMatrixTotalsViewData(employees, months) {
+  const allocationColumns = getResourceSummaryAllocationColumns();
   const unavailableSlots = getUnavailableAssignmentSlotSet(S.matrixAssignments);
   const summaries = employees.map(employee => getResourceSummaryViewData(employee));
   const availableSummaries = summaries.filter(
@@ -53,7 +54,7 @@ function getMatrixTotalsViewData(employees, months) {
   );
 
   const allocation = Object.fromEntries(
-    RESOURCE_SUMMARY_COLUMNS.allocation.map(column => [
+    allocationColumns.map(column => [
       column.key,
       averageMatrixValues(
         availableSummaries.map(summary => summary.allocation[column.key]),
@@ -103,6 +104,7 @@ function getMatrixTotalsViewData(employees, months) {
   );
 
   return {
+    allocationColumns,
     employeeCount: employees.length,
     availableFiscalResourceCount: availableSummaries.length,
     allocation,
@@ -119,16 +121,19 @@ function renderMatrixTotalsRow(employees, months) {
   const resourceLabel = `${totals.employeeCount} visible resource${totals.employeeCount === 1 ? '' : 's'}`;
   const fiscalResourceLabel = `${totals.availableFiscalResourceCount} available resource${totals.availableFiscalResourceCount === 1 ? '' : 's'}`;
 
-  const allocationCells = RESOURCE_SUMMARY_COLUMNS.allocation
+  const allocationColumns = totals.allocationColumns || getResourceSummaryAllocationColumns();
+  const allocationCells = allocationColumns
     .map((column, index) => {
       const value = totals.allocation[column.key];
       const title = `Average ${column.label} allocation across ${fiscalResourceLabel}. N/A availability weeks are removed from each employee’s fiscal-year denominator: ${value.toFixed(1)}%.`;
 
       return `
         <td
-          class="matrix-fixed-cell sticky-allocation-${index + 1} col-allocation matrix-total-cell matrix-total-allocation-cell"
+          class="matrix-fixed-cell sticky-allocation-cell col-allocation matrix-total-cell matrix-total-allocation-cell ${column.isNotLocalProject ? 'matrix-not-local-total-cell' : ''}"
+          style="${getMatrixAllocationStickyStyle(index)}"
           data-total-group="allocation"
-          data-total-metric="${column.key}"
+          data-total-metric="${esc(column.key)}"
+          data-not-local-project-id="${column.isNotLocalProject ? column.projectId : ''}"
           title="${esc(title)}"
         >${formatMatrixAllocationCellValue(value)}</td>
       `;
@@ -144,7 +149,8 @@ function renderMatrixTotalsRow(employees, months) {
 
       return `
         <td
-          class="matrix-fixed-cell sticky-revenue-${index + 1} col-revenue matrix-total-cell matrix-total-revenue-cell"
+          class="matrix-fixed-cell sticky-revenue-cell col-revenue matrix-total-cell matrix-total-revenue-cell ${index === RESOURCE_SUMMARY_COLUMNS.revenue.length - 1 ? 'matrix-summary-end' : ''}"
+          style="${getMatrixRevenueStickyStyle(index, allocationColumns.length)}"
           data-action="open-revenue-breakdown"
           data-total-group="revenue"
           data-total-metric="${column.key}"

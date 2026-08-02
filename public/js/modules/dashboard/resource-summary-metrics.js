@@ -55,6 +55,77 @@ const RESOURCE_ALLOCATION_RULE_BY_KEY = Object.freeze(
   Object.fromEntries(RESOURCE_ALLOCATION_RULES.map(rule => [rule.key, rule])),
 );
 
+const NOT_LOCAL_ALLOCATION_KEY_PREFIX = 'notLocalProject:';
+
+function getSummaryAssignmentProject(assignment) {
+  return S.projects.find(item =>
+    Number(item.id) === Number(assignment?.project_id),
+  ) || null;
+}
+
+function getNotLocalAllocationKey(projectId) {
+  return `${NOT_LOCAL_ALLOCATION_KEY_PREFIX}${Number(projectId)}`;
+}
+
+function isNotLocalAllocationKey(key) {
+  return String(key || '').startsWith(NOT_LOCAL_ALLOCATION_KEY_PREFIX);
+}
+
+function getMatrixNotLocalProjects() {
+  return (S.projects || [])
+    .filter(project => Number(project?.not_local_project) === 1 && Number.isFinite(Number(project?.id)))
+    .slice()
+    .sort((left, right) => {
+      const leftLabel = String(left?.name || left?.code || '').trim();
+      const rightLabel = String(right?.name || right?.code || '').trim();
+      const byLabel = leftLabel.localeCompare(rightLabel, undefined, { sensitivity: 'base' });
+      return byLabel || Number(left.id) - Number(right.id);
+    });
+}
+
+function getResourceSummaryAllocationColumns() {
+  const notLocalColumns = getMatrixNotLocalProjects().map(project => ({
+    key: getNotLocalAllocationKey(project.id),
+    label: String(project.name || project.code || `Project ${project.id}`).trim(),
+    description: `Assignments for the Not Local project “${String(project.name || project.code || project.id).trim()}”.`,
+    projectId: Number(project.id),
+    projectCode: String(project.code || '').trim(),
+    isNotLocalProject: true,
+  }));
+
+  return [...RESOURCE_SUMMARY_COLUMNS.allocation, ...notLocalColumns];
+}
+
+function getAllocationColumnDescription(column) {
+  if (column?.description) return column.description;
+  const rule = RESOURCE_ALLOCATION_RULE_BY_KEY[column?.key];
+  return rule?.description ||
+    'All projects not classified as Intrasourcing, Pre-Sale, Training, Skill Development, General Admin, or a named Not Local project.';
+}
+
+function buildMatrixStickyLeftExpression(allocationColumnCount, revenueColumnIndex = null) {
+  const allocationTerms = Array.from(
+    { length: Math.max(0, Number(allocationColumnCount) || 0) },
+    () => 'var(--allocation-w)',
+  );
+  const revenueTerms = revenueColumnIndex === null
+    ? []
+    : Array.from(
+      { length: Math.max(0, Number(revenueColumnIndex) || 0) },
+      () => 'var(--revenue-w)',
+    );
+  const terms = ['var(--sn-w)', 'var(--name-w)', ...allocationTerms, ...revenueTerms];
+  return `calc(${terms.join(' + ')})`;
+}
+
+function getMatrixAllocationStickyStyle(index) {
+  return `--matrix-sticky-left:${buildMatrixStickyLeftExpression(index)};`;
+}
+
+function getMatrixRevenueStickyStyle(index, allocationColumnCount) {
+  return `--matrix-sticky-left:${buildMatrixStickyLeftExpression(allocationColumnCount, index)};`;
+}
+
 /* The matrix keeps four separate revenue result columns. Intrasourcing uses
  * its own hourly rate; Local, Pre-Sale and Training share the Local rate. */
 const RESOURCE_REVENUE_RATE_FIELDS = Object.freeze({
@@ -71,13 +142,8 @@ const RESOURCE_REVENUE_LABEL_BY_KEY = Object.freeze(
 );
 
 function getSummaryAssignmentProjectName(assignment) {
-  if (assignment.project_name) return String(assignment.project_name).trim();
-
-  const project = S.projects.find(item =>
-    Number(item.id) === Number(assignment.project_id),
-  );
-
-  return String(project?.name || '').trim();
+  if (assignment?.project_name) return String(assignment.project_name).trim();
+  return String(getSummaryAssignmentProject(assignment)?.name || '').trim();
 }
 
 function normalizeAllocationProjectName(value) {
@@ -99,15 +165,33 @@ function classifyAllocationProject(projectName) {
   return matchingRule?.key || 'local';
 }
 
+function classifyResourceSummaryAssignment(assignment) {
+  const projectName = getSummaryAssignmentProjectName(assignment);
+  if (isUnavailableProjectName(normalizeAllocationProjectName(projectName))) {
+    return 'unavailable';
+  }
+
+  const project = getSummaryAssignmentProject(assignment);
+  const isNotLocalProject = Number(
+    assignment?.project_not_local_project ?? project?.not_local_project,
+  ) === 1;
+
+  if (isNotLocalProject && Number.isFinite(Number(assignment?.project_id ?? project?.id))) {
+    return getNotLocalAllocationKey(assignment?.project_id ?? project?.id);
+  }
+
+  return classifyAllocationProject(projectName);
+}
+
 const RESOURCE_SUMMARY_WEEKS_PER_MONTH = 4;
 
 function getResourceSummaryFiscalWeekCount() {
   return fiscalMonths(S.matrixFiscalYear).length * RESOURCE_SUMMARY_WEEKS_PER_MONTH;
 }
 
-function createEmptyAllocationTotals() {
+function createEmptyAllocationTotals(allocationColumns = getResourceSummaryAllocationColumns()) {
   return Object.fromEntries(
-    RESOURCE_SUMMARY_COLUMNS.allocation.map(column => [column.key, 0]),
+    allocationColumns.map(column => [column.key, 0]),
   );
 }
 
@@ -117,9 +201,9 @@ function createEmptyRevenueTotals() {
   );
 }
 
-function getEmployeeFiscalAssignmentTotals(employeeId) {
-  const percentageTotals = createEmptyAllocationTotals();
-  const hourTotals = createEmptyAllocationTotals();
+function getEmployeeFiscalAssignmentTotals(employeeId, allocationColumns = getResourceSummaryAllocationColumns()) {
+  const percentageTotals = createEmptyAllocationTotals(allocationColumns);
+  const hourTotals = createEmptyAllocationTotals(allocationColumns);
 
   getEffectiveFiscalAssignments(S.matrixFiscalYear, S.matrixAssignments).forEach(assignment => {
     if (Number(assignment.employee_id) !== Number(employeeId)) return;
@@ -127,13 +211,20 @@ function getEmployeeFiscalAssignmentTotals(employeeId) {
     const percentage = Number(assignment.percentage);
     if (!Number.isFinite(percentage)) return;
 
-    const categoryKey = classifyAllocationProject(
-      getSummaryAssignmentProjectName(assignment),
-    );
+    const categoryKey = classifyResourceSummaryAssignment(assignment);
     if (!Object.prototype.hasOwnProperty.call(percentageTotals, categoryKey)) return;
 
     percentageTotals[categoryKey] += percentage;
-    hourTotals[categoryKey] += WORK_HOURS_PER_WEEK * (percentage / 100);
+
+    // Revenue remains in the existing Intrasourcing / Local / Pre-Sale / Training
+    // buckets. A Not Local project gets its own Allocation column without changing
+    // the established revenue calculation or creating additional Revenue columns.
+    const revenueCategoryKey = classifyAllocationProject(
+      getSummaryAssignmentProjectName(assignment),
+    );
+    if (Object.prototype.hasOwnProperty.call(hourTotals, revenueCategoryKey)) {
+      hourTotals[revenueCategoryKey] += WORK_HOURS_PER_WEEK * (percentage / 100);
+    }
   });
 
   return { percentageTotals, hourTotals };
@@ -287,15 +378,19 @@ function getMatrixMonthPlannedRevenue(employeeRows, month, unavailableSlots = nu
 }
 
 function getResourceSummaryViewData(employee) {
+  const allocationColumns = getResourceSummaryAllocationColumns();
   const fiscalWeekCount = getEmployeeAvailableFiscalWeekCount(
     employee.id,
     S.matrixFiscalYear,
     S.matrixAssignments,
   );
-  const { percentageTotals, hourTotals } = getEmployeeFiscalAssignmentTotals(employee.id);
+  const { percentageTotals, hourTotals } = getEmployeeFiscalAssignmentTotals(
+    employee.id,
+    allocationColumns,
+  );
 
   const allocation = Object.fromEntries(
-    RESOURCE_SUMMARY_COLUMNS.allocation.map(column => [
+    allocationColumns.map(column => [
       column.key,
       fiscalWeekCount ? percentageTotals[column.key] / fiscalWeekCount : 0,
     ]),
@@ -323,12 +418,23 @@ function getResourceSummaryViewData(employee) {
     };
   });
 
+  const notLocalProjects = allocationColumns
+    .filter(column => column.isNotLocalProject && Number(percentageTotals[column.key]) > 0)
+    .map(column => ({
+      id: column.projectId,
+      code: column.projectCode,
+      name: column.label,
+      allocation: Number(allocation[column.key]) || 0,
+    }));
+
   return {
+    allocationColumns,
     allocation,
     allocationMeta: {
       percentageTotals,
       fiscalWeekCount,
       total: Object.values(allocation).reduce((sum, value) => sum + value, 0),
+      notLocalProjects,
     },
     revenue,
     revenueMeta,
