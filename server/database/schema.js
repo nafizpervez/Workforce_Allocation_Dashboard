@@ -1,3 +1,4 @@
+const { DEFAULT_ANNUAL_WORKDAYS } = require('../../config');
 const { ensureRevenueRatesTable } = require('../services/revenue-rates');
 
 function createSchema(db) {
@@ -8,7 +9,8 @@ function createSchema(db) {
       name TEXT NOT NULL,
       dept TEXT NOT NULL,
       designation TEXT DEFAULT '',
-      workdays INTEGER NOT NULL DEFAULT 220,
+      workdays INTEGER NOT NULL DEFAULT ${DEFAULT_ANNUAL_WORKDAYS},
+      workdays_is_custom INTEGER NOT NULL DEFAULT 0,
       email TEXT,
       created_at TEXT DEFAULT CURRENT_TIMESTAMP
     );

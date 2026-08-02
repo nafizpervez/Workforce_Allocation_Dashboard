@@ -128,7 +128,7 @@ function getAdjustedEmployeeWorkdays(
 ) {
   const normalizedBaseWorkdays = Number.isFinite(Number(baseWorkdays)) && Number(baseWorkdays) >= 0
     ? Number(baseWorkdays)
-    : 220;
+    : getDefaultAnnualWorkdays();
   const unavailableMonthCount = getEmployeeUnavailableFiscalMonthCount(
     employeeId,
     fiscalYear,

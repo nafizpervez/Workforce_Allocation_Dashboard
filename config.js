@@ -7,16 +7,26 @@ const HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0';
 const PORT = Number(process.env.PORT) || 9002;
 const DASHBOARD_PASSWORD = process.env.DASHBOARD_PASSWORD || 'Esr!@9122';
 const MODAL_ACCESS_PASSWORD = process.env.MODAL_ACCESS_PASSWORD || 'Esr!@9122';
+
+// Global default annual capacity for a resource.
+// Change this single value to update every resource that still uses the default Workdays setting.
+const DEFAULT_ANNUAL_WORKDAYS = 220;
+
 const AUTH_COOKIE_NAME = 'wa_auth';
 const AUTH_MAX_AGE_SECONDS = 60 * 60 * 12;
 const AUTH_SECRET = process.env.DASHBOARD_AUTH_SECRET ||
   crypto.createHash('sha256').update(`${DASHBOARD_PASSWORD}:${ROOT_DIR}`).digest('hex');
+
+if (!Number.isInteger(DEFAULT_ANNUAL_WORKDAYS) || DEFAULT_ANNUAL_WORKDAYS < 0) {
+  throw new Error('DEFAULT_ANNUAL_WORKDAYS in config.js must be a non-negative whole number.');
+}
 
 module.exports = {
   AUTH_COOKIE_NAME,
   AUTH_MAX_AGE_SECONDS,
   AUTH_SECRET,
   DASHBOARD_PASSWORD,
+  DEFAULT_ANNUAL_WORKDAYS,
   HOST,
   MODAL_ACCESS_PASSWORD,
   PORT,

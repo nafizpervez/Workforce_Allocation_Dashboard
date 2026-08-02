@@ -59,6 +59,121 @@ function setTimesheetEmptyState(kind, hasData) {
   const empty = document.getElementById(`${kind}SummaryEmpty`); const wrap = document.getElementById(`${kind}SummaryChartWrap`);
   if (empty) empty.classList.toggle('hidden', hasData); if (wrap) wrap.classList.toggle('hidden', !hasData);
 }
+
+function getTimesheetTableTooltip(chart) {
+  const tooltipId = `timesheet-table-tooltip-${chart.canvas.id}`;
+  let element = document.getElementById(tooltipId);
+
+  if (!element) {
+    element = document.createElement('div');
+    element.id = tooltipId;
+    element.className = 'timesheet-table-tooltip';
+    element.setAttribute('role', 'tooltip');
+    document.body.appendChild(element);
+  }
+
+  return element;
+}
+
+function formatTimesheetTooltipPercentage(value) {
+  const number = Number(value) || 0;
+  return `${number.toFixed(1)}%`;
+}
+
+function renderTimesheetTableTooltip(context) {
+  const { chart, tooltip } = context;
+  const element = getTimesheetTableTooltip(chart);
+
+  if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) {
+    element.classList.remove('is-visible');
+    element.setAttribute('aria-hidden', 'true');
+    return;
+  }
+
+  const dataIndex = tooltip.dataPoints[0].dataIndex;
+  const label = String(tooltip.dataPoints[0].label || '');
+  const rows = tooltip.dataPoints.map(point => {
+    const dataset = point.dataset || {};
+    const allocation = Number(point.parsed?.y) || 0;
+    const hours = Number(dataset.hoursData?.[dataIndex]) || 0;
+    const color = dataset.timesheetColor || dataset.backgroundColor || '#94A3B8';
+
+    return {
+      workType: String(dataset.label || ''),
+      allocation,
+      hours,
+      color: String(color),
+    };
+  });
+  const totalHours = rows.reduce((sum, row) => sum + row.hours, 0);
+  const totalAllocation = rows.reduce((sum, row) => sum + row.allocation, 0);
+
+  element.innerHTML = `
+    <div class="timesheet-table-tooltip__title">
+      <span>${esc(label)}</span>
+      <strong>${totalHours.toLocaleString('en-US', {
+        minimumFractionDigits: 1,
+        maximumFractionDigits: 1,
+      })} hrs</strong>
+    </div>
+    <table class="timesheet-table-tooltip__table">
+      <thead>
+        <tr>
+          <th scope="col">Work type</th>
+          <th scope="col">Allocation</th>
+          <th scope="col">Hours</th>
+        </tr>
+      </thead>
+      <tbody>
+        ${rows.map(row => `
+          <tr>
+            <th scope="row">
+              <span class="timesheet-table-tooltip__label">
+                <span class="timesheet-table-tooltip__swatch" style="background:${esc(row.color)}"></span>
+                <span>${esc(row.workType)}</span>
+              </span>
+            </th>
+            <td>${formatTimesheetTooltipPercentage(row.allocation)}</td>
+            <td>${row.hours.toLocaleString('en-US', {
+              minimumFractionDigits: 1,
+              maximumFractionDigits: 1,
+            })}</td>
+          </tr>
+        `).join('')}
+        <tr class="timesheet-table-tooltip__total">
+          <th scope="row">Total</th>
+          <td>${formatTimesheetTooltipPercentage(totalAllocation)}</td>
+          <td>${totalHours.toLocaleString('en-US', {
+            minimumFractionDigits: 1,
+            maximumFractionDigits: 1,
+          })}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+
+  element.style.left = '0px';
+  element.style.top = '0px';
+  element.classList.add('is-visible');
+  element.setAttribute('aria-hidden', 'false');
+
+  const canvasRect = chart.canvas.getBoundingClientRect();
+  const tooltipRect = element.getBoundingClientRect();
+  const gap = 14;
+  let left = canvasRect.left + tooltip.caretX + gap;
+  let top = canvasRect.top + tooltip.caretY + gap;
+
+  if (left + tooltipRect.width > window.innerWidth - 8) {
+    left = canvasRect.left + tooltip.caretX - tooltipRect.width - gap;
+  }
+  if (top + tooltipRect.height > window.innerHeight - 8) {
+    top = canvasRect.top + tooltip.caretY - tooltipRect.height - gap;
+  }
+
+  element.style.left = `${Math.max(8, Math.min(left, window.innerWidth - tooltipRect.width - 8))}px`;
+  element.style.top = `${Math.max(8, Math.min(top, window.innerHeight - tooltipRect.height - 8))}px`;
+}
+
 function renderTeamSummaryChart() {
   const canvas = document.getElementById('teamSummaryChart');
   if (!canvas) return;
@@ -123,10 +238,8 @@ function renderTeamSummaryChart() {
           labels: timesheetLegendLabels(),
         },
         tooltip: {
-          callbacks: {
-            title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`,
-            label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)`,
-          },
+          enabled: false,
+          external: renderTimesheetTableTooltip,
         },
       },
       scales: {
@@ -236,10 +349,8 @@ function renderIndividualSummaryChart() {
           labels: timesheetLegendLabels(),
         },
         tooltip: {
-          callbacks: {
-            title: items => `${items[0].label} · ${pivot.totals[items[0].label].toFixed(1)} hrs`,
-            label: ctx => ` ${ctx.dataset.label}: ${(ctx.parsed.y || 0).toFixed(1)}% (${(ctx.dataset.hoursData[ctx.dataIndex] || 0).toFixed(1)} hrs)`,
-          },
+          enabled: false,
+          external: renderTimesheetTableTooltip,
         },
       },
       scales: {
