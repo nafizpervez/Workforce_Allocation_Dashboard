@@ -17,9 +17,8 @@ router.get('/api/dashboard/new-logo-chart', (_, res) => {
 
   const CATEGORIES = ['ALL', 'ALLCLEAN', 'SOFTWARE', 'PS', 'PERSONAL', 'STUDENT'];
 
-  // Deal status is an account-history property, not a product-category property.
-  // Calculate it once from every Closed Won deal, then apply the category filter
-  // only to the rows shown/counting in each chart view.
+  // Deal status is calculated from the complete Closed Won account history.
+  // Category filtering only controls which individual rows are displayed and counted.
   const closedWonHistory = allProjects.filter(project => (
     String(project.stage || '').trim().toLowerCase() === 'closed won' &&
     getProjectFiscalYear(project) !== null
@@ -45,24 +44,19 @@ router.get('/api/dashboard/new-logo-chart', (_, res) => {
   }
 
   /*
-   * For each category:
-   *   1. Filter the globally classified Closed Won history to the selected category
-   *   2. Keep active Running Projects out of the chart until Progress reaches 100%
-   *   3. Derive its fiscal year from Closed Won Date through getProjectFiscalYear()
-   *   4. Build FY counts and project lists with the canonical-status dedup:
-   *      - One bar count per unique account per FY
-   *      - Canonical status = status of the first database project row for that account in that FY
-   *      - Project list: one entry per (account + product_category) per FY per status
+   * PS Only is a project-level view so that its FY total matches the PS
+   * Engagement Breakdown. Every qualifying project database ID is counted and
+   * listed exactly once. Opportunity Number is never used for deduplication.
+   *
+   * The other product-category views retain their existing account-level count.
    */
   const buildChartForCategory = (cat) => {
-    // Closed Won deals establish account history as soon as they are won.
-    // Active Running Projects are promoted into the acquisition chart when Progress reaches 100%.
+    const countProjects = cat === 'PS';
     const categoryHistory = closedWonHistory.filter(project => matchesCategory(project, cat));
-    const completedSubset = categoryHistory.filter(isDealAcquisitionChartEligible);
+    const eligibleSubset = categoryHistory.filter(isDealAcquisitionChartEligible);
 
-    // Sort completed deals chronologically by the fiscal period derived from Closed Won Date.
-    const cwSorted = completedSubset
-      .filter(p => getProjectFiscalYear(p) !== null)
+    const cwSorted = eligibleSubset
+      .filter(project => getProjectFiscalYear(project) !== null)
       .sort((a, b) => {
         const fiscalDiff = fiscalSortValue(a) - fiscalSortValue(b);
         if (fiscalDiff !== 0) return fiscalDiff;
@@ -70,48 +64,61 @@ router.get('/api/dashboard/new-logo-chart', (_, res) => {
         return a.id - b.id;
       });
 
-    const acctFYStatus = {}; // [acctKey][fy] = canonical status (locked to first SA code)
-    const fySeenCombo = {}; // [fy][status] = Set of "acctKey|prodCat"
-    const fyAcctSeen = {}; // [fy] = Set of acctKey
+    const acctFYStatus = {};
+    const fyDetailSeen = {};
+    const fyAcctSeen = {};
+    const fyProjectSeen = {};
     const fyData = {};
     const fyProjects = {};
 
-    for (const p of cwSorted) {
-      const fy = getProjectFiscalYear(p);
+    for (const project of cwSorted) {
+      const fy = getProjectFiscalYear(project);
       if (fy === null) continue;
-      const acctKey = (p.account_name || p.client || '').trim().toLowerCase();
-      const acctDisp = (p.account_name || p.client || p.name || p.code || 'Unknown').trim();
-      const prodName = (p.product_name || '').trim();
-      const prodFam = (p.product_family || '').trim();
-      const prodCat = productCategory(prodName, prodFam, p.name);
 
-      // Canonical status: locked to the first database project row for this account in this FY
+      const projectId = Number(project.id);
+      const acctKey = (project.account_name || project.client || '').trim().toLowerCase();
+      const acctDisp = (project.account_name || project.client || project.name || project.code || 'Unknown').trim();
+      const prodName = (project.product_name || '').trim();
+      const prodFam = (project.product_family || '').trim();
+      const prodCat = productCategory(prodName, prodFam, project.name);
+
       if (!acctFYStatus[acctKey]) acctFYStatus[acctKey] = {};
       if (!(fy in acctFYStatus[acctKey])) {
-        acctFYStatus[acctKey][fy] = globalAcctFYStatus[acctKey]?.[fy] || globalStatusMap[p.id] || 'NEW LOGO';
+        acctFYStatus[acctKey][fy] = globalAcctFYStatus[acctKey]?.[fy] || globalStatusMap[project.id] || 'NEW LOGO';
       }
-      const st = acctFYStatus[acctKey][fy];
+
+      // For PS, retain the status assigned to this exact project occurrence.
+      // This also preserves the existing duplicate rule after a REACTIVE return.
+      const status = countProjects
+        ? (globalStatusMap[project.id] || 'NEW LOGO')
+        : acctFYStatus[acctKey][fy];
 
       if (!fyData[fy]) fyData[fy] = { 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0 };
       if (!fyProjects[fy]) fyProjects[fy] = { 'NEW LOGO': [], 'REPEAT': [], 'REACTIVE': [] };
-      if (!fySeenCombo[fy]) fySeenCombo[fy] = { 'NEW LOGO': new Set(), 'REPEAT': new Set(), 'REACTIVE': new Set() };
+      if (!fyDetailSeen[fy]) fyDetailSeen[fy] = { 'NEW LOGO': new Set(), 'REPEAT': new Set(), 'REACTIVE': new Set() };
       if (!fyAcctSeen[fy]) fyAcctSeen[fy] = new Set();
+      if (!fyProjectSeen[fy]) fyProjectSeen[fy] = new Set();
 
-      // Bar count: once per unique account per FY
-      if (!fyAcctSeen[fy].has(acctKey)) {
-        fyData[fy][st]++;
+      if (countProjects) {
+        if (!fyProjectSeen[fy].has(projectId)) {
+          fyData[fy][status] += 1;
+          fyProjectSeen[fy].add(projectId);
+        }
+      } else if (!fyAcctSeen[fy].has(acctKey)) {
+        fyData[fy][status] += 1;
         fyAcctSeen[fy].add(acctKey);
       }
 
-      // Project list: once per (account + prodCat) per FY per status
-      const combo = acctKey + '|' + prodCat;
-      if (!fySeenCombo[fy][st].has(combo)) {
-        fySeenCombo[fy][st].add(combo);
-        fyProjects[fy][st].push({
-          id: Number(p.id),
+      // PS details are one row per unique database project ID. Other category
+      // views keep the existing account + product-category detail grouping.
+      const detailKey = countProjects ? String(projectId) : `${acctKey}|${prodCat}`;
+      if (!fyDetailSeen[fy][status].has(detailKey)) {
+        fyDetailSeen[fy][status].add(detailKey);
+        fyProjects[fy][status].push({
+          id: projectId,
           name: acctDisp,
-          code: (p.code || '').trim(),
-          opp_name: (p.name || '').trim(),
+          code: (project.code || '').trim(),
+          opp_name: (project.name || '').trim(),
           product_name: prodName,
           product_family: prodFam,
         });
@@ -120,28 +127,25 @@ router.get('/api/dashboard/new-logo-chart', (_, res) => {
 
     return Object.entries(fyData)
       .sort((a, b) => +a[0] - +b[0])
-      .map(([fy, c]) => ({
+      .map(([fy, counts]) => ({
         fy: +fy,
         label: fyLabel(+fy),
-        'NEW LOGO': c['NEW LOGO'],
-        'REPEAT': c['REPEAT'],
-        'REACTIVE': c['REACTIVE'],
+        count_unit: countProjects ? 'projects' : 'accounts',
+        'NEW LOGO': counts['NEW LOGO'],
+        'REPEAT': counts['REPEAT'],
+        'REACTIVE': counts['REACTIVE'],
         projects: {
           'NEW LOGO': (fyProjects[+fy]?.['NEW LOGO'] || []).sort((a, b) => a.name.localeCompare(b.name)),
           'REPEAT': (fyProjects[+fy]?.['REPEAT'] || []).sort((a, b) => a.name.localeCompare(b.name)),
           'REACTIVE': (fyProjects[+fy]?.['REACTIVE'] || []).sort((a, b) => a.name.localeCompare(b.name)),
-        }
+        },
       }));
   };
 
-  // Build chart data for all categories in one request
   const result = {};
-  for (const cat of CATEGORIES) {
-    result[cat] = buildChartForCategory(cat);
-  }
+  for (const cat of CATEGORIES) result[cat] = buildChartForCategory(cat);
 
   res.json(result);
 });
-
 
 module.exports = router;

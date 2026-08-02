@@ -39,14 +39,16 @@ function renderNewLogoChart(data, filter, prodFilter) {
   for (const cat of cats) {
     const catData = S.newLogoChartData[cat] || [];
     for (const fy of catData) {
-      if (!fyMap[fy.fy]) fyMap[fy.fy] = { fy: fy.fy, label: fy.label, 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0, projects: { 'NEW LOGO': [], 'REPEAT': [], 'REACTIVE': [] } };
+      if (!fyMap[fy.fy]) fyMap[fy.fy] = { fy: fy.fy, label: fy.label, count_unit: 'accounts', 'NEW LOGO': 0, 'REPEAT': 0, 'REACTIVE': 0, projects: { 'NEW LOGO': [], 'REPEAT': [], 'REACTIVE': [] } };
       const entry = fyMap[fy.fy];
       const projects = fy?.projects && typeof fy.projects === 'object' ? fy.projects : {};
       for (const st of ['NEW LOGO', 'REPEAT', 'REACTIVE']) {
         if (isAllMode || cats.length === 1) {
+          entry.count_unit = fy?.count_unit === 'projects' ? 'projects' : 'accounts';
           entry[st] = Number(fy?.[st]) || 0;
           entry.projects[st] = Array.isArray(projects[st]) ? projects[st] : [];
         } else {
+          entry.count_unit = 'accounts';
           // Multi-category: deduplicate accounts across categories
           const existing = new Set(entry.projects[st].map(p => (p.name || '').toLowerCase()));
           for (const proj of (Array.isArray(projects[st]) ? projects[st] : [])) {
@@ -145,7 +147,12 @@ function renderNewLogoChart(data, filter, prodFilter) {
         },
         tooltip: {
           bodyFont: { size: 12 }, titleFont: { size: 12, weight: '600' }, padding: 10,
-          callbacks: { label: c => `  ${c.dataset.label}: ${c.parsed.y} account${c.parsed.y === 1 ? '' : 's'}` },
+          callbacks: {
+            label: c => {
+              const unit = d[c.dataIndex]?.count_unit === 'projects' ? 'project' : 'account';
+              return `  ${c.dataset.label}: ${c.parsed.y} ${unit}${c.parsed.y === 1 ? '' : 's'}`;
+            },
+          },
         },
       },
       scales: {

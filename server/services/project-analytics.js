@@ -89,10 +89,11 @@ function isProfessionalServiceRunningProject(project) {
 }
 
 function isDealAcquisitionChartEligible(project) {
+  // Deal Acquisition is driven by Closed Won status and fiscal year only.
+  // Project progress must not hide an otherwise valid deal from the chart.
   return (
     String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
-    getProjectFiscalYear(project) !== null &&
-    !isProfessionalServiceRunningProject(project)
+    getProjectFiscalYear(project) !== null
   );
 }
 
