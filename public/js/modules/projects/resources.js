@@ -47,6 +47,16 @@ function openResourceModal() {
           ${isActive ? '✓ Active' : '✗ Inactive'}
         </button>
       </td>
+      <td class="py-2.5 px-4">
+        <button
+          type="button"
+          onclick="openEmployeeModal({ id: ${e.id} })"
+          class="text-xs font-semibold px-3 py-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 hover:border-blue-300"
+          aria-label="Edit ${esc(e.name)}"
+        >
+          Edit
+        </button>
+      </td>
     </tr>`;
   };
 
@@ -60,6 +70,7 @@ function openResourceModal() {
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Workdays</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Util</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Status</th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Edit</th>
         </tr></thead>
         <tbody>${emps.map(empRow).join('')}</tbody>
       </table>`
@@ -99,7 +110,7 @@ function openResourceModal() {
       <div class="modal-footer px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>`,
-    'max-w-6xl'
+    'max-w-7xl'
   );
 
   filterTeamResources('');
