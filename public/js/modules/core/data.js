@@ -136,7 +136,8 @@ async function loadAll() {
       ? fixedAssignmentsRequest
       : api('GET', `/api/assignments?fiscalYear=${matrixFy}`);
 
-    const [emps, projs, asgs, matrixAsgs, revenueRates, committedTargets, preSaleProducts, preSaleProductThresholds, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
+    const [appConfig, emps, projs, asgs, matrixAsgs, revenueRates, committedTargets, preSaleProducts, preSaleProductThresholds, stats, trends, wl, util, pipe, dl, nlChart, psRevChart, psTypeChart] = await Promise.all([
+      api('GET', '/api/app-config'),
       api('GET', '/api/employees'), api('GET', '/api/projects'),
       fixedAssignmentsRequest,
       matrixAssignmentsRequest,
@@ -154,6 +155,7 @@ async function loadAll() {
       api('GET', '/api/dashboard/ps-revenue-chart'),
       api('GET', '/api/dashboard/ps-type-chart'),
     ]);
+    S.appConfig = appConfig || S.appConfig;
     S.employees = emps.map(employee => ({
       ...employee,
       name: canonicalPersonName(employee.name),

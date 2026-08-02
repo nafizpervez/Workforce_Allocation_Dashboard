@@ -1,3 +1,4 @@
+const { DEFAULT_ANNUAL_WORKDAYS } = require('../../config');
 const { ensureRevenueRatesTable } = require('../services/revenue-rates');
 const { ensureCommittedTargetsTable } = require('../services/committed-targets');
 const { ensurePreSaleProductsTable } = require('../services/presale-products');
@@ -14,6 +15,17 @@ function quoteIdent(name) {
 
 function addColumn(db, sql) {
   try { db.prepare(sql).run(); } catch (_) { /* already present */ }
+}
+
+function getTableColumn(db, tableName, columnName) {
+  return db.prepare(`PRAGMA table_info(${quoteIdent(tableName)})`).all().find(column => (
+    column.name === columnName
+  )) || null;
+}
+
+function numericColumnDefault(column, fallback) {
+  const value = Number(String(column?.dflt_value ?? '').replace(/[()'"]/g, '').trim());
+  return Number.isFinite(value) && value >= 0 ? value : fallback;
 }
 
 function ensureDuplicateProjectCodes(db) {
@@ -240,9 +252,36 @@ function repairProjectFiscalPeriods(db) {
 }
 
 function runMigrations(db) {
+  const existingWorkdaysColumn = getTableColumn(db, 'employees', 'workdays');
+  const existingWorkdaysCustomColumn = getTableColumn(db, 'employees', 'workdays_is_custom');
+  const previousDefaultWorkdays = numericColumnDefault(
+    existingWorkdaysColumn,
+    DEFAULT_ANNUAL_WORKDAYS,
+  );
+
   addColumn(db, 'ALTER TABLE employees ADD COLUMN active INTEGER NOT NULL DEFAULT 1');
   addColumn(db, "ALTER TABLE employees ADD COLUMN designation TEXT DEFAULT ''");
-  addColumn(db, 'ALTER TABLE employees ADD COLUMN workdays INTEGER NOT NULL DEFAULT 220');
+  addColumn(
+    db,
+    `ALTER TABLE employees ADD COLUMN workdays INTEGER NOT NULL DEFAULT ${DEFAULT_ANNUAL_WORKDAYS}`,
+  );
+  addColumn(db, 'ALTER TABLE employees ADD COLUMN workdays_is_custom INTEGER NOT NULL DEFAULT 0');
+
+  if (!existingWorkdaysCustomColumn) {
+    db.prepare(`
+      UPDATE employees
+      SET workdays_is_custom = CASE
+        WHEN workdays IS NULL OR workdays = ? THEN 0
+        ELSE 1
+      END
+    `).run(previousDefaultWorkdays);
+  }
+
+  db.prepare(`
+    UPDATE employees
+    SET workdays = ?
+    WHERE COALESCE(workdays_is_custom, 0) = 0
+  `).run(DEFAULT_ANNUAL_WORKDAYS);
   addColumn(db, "ALTER TABLE assignments ADD COLUMN customer_name TEXT DEFAULT ''");
   addColumn(db, "ALTER TABLE assignments ADD COLUMN product_name TEXT DEFAULT ''");
   addColumn(db, 'ALTER TABLE projects ADD COLUMN fiscal_period TEXT');

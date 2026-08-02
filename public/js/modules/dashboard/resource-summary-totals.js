@@ -104,7 +104,7 @@ function getMatrixMonthAllocationMetrics(employeeRows, month, unavailableSlots =
       const annualWorkdays = Number.isFinite(configuredAnnualWorkdays) &&
         configuredAnnualWorkdays >= 0
         ? configuredAnnualWorkdays
-        : 220;
+        : getDefaultAnnualWorkdays();
       const workdaysPerWeek = annualWorkdays / 12 /
         RESOURCE_SUMMARY_WEEKS_PER_MONTH;
 

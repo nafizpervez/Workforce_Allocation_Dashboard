@@ -1,4 +1,5 @@
 const express = require('express');
+const { DEFAULT_ANNUAL_WORKDAYS } = require('../../config');
 const { getAppDb } = require('../database');
 const { canonicalPersonName } = require('../services/person-identity');
 
@@ -12,12 +13,28 @@ const EMPLOYEE_SELECT = `
     name,
     dept,
     designation,
-    COALESCE(workdays, 220) AS workdays,
+    CASE
+      WHEN COALESCE(workdays_is_custom, 0) = 0 THEN ${DEFAULT_ANNUAL_WORKDAYS}
+      ELSE COALESCE(workdays, ${DEFAULT_ANNUAL_WORKDAYS})
+    END AS workdays,
+    COALESCE(workdays_is_custom, 0) AS workdays_is_custom,
     email,
     COALESCE(active, 1) AS active,
     created_at
   FROM employees
 `;
+
+function normalizeWorkdays(value, fallback = DEFAULT_ANNUAL_WORKDAYS) {
+  const isMissing = value === undefined || value === null || value === '';
+  if (isMissing && fallback === null) return null;
+
+  const normalized = Number(isMissing ? fallback : value);
+  return Number.isInteger(normalized) && normalized >= 0 ? normalized : null;
+}
+
+function workdaysCustomFlag(workdays) {
+  return Number(workdays) === DEFAULT_ANNUAL_WORKDAYS ? 0 : 1;
+}
 
 router.get('/api/employees', (_, res) => {
   const employees = db.prepare(`${EMPLOYEE_SELECT} ORDER BY id`).all();
@@ -30,18 +47,18 @@ router.post('/api/employees', (req, res) => {
     name,
     dept,
     designation,
-    workdays = 220,
+    workdays = DEFAULT_ANNUAL_WORKDAYS,
     email,
   } = req.body || {};
 
   const canonicalName = canonicalPersonName(name);
-  const normalizedWorkdays = Number(workdays);
+  const normalizedWorkdays = normalizeWorkdays(workdays);
 
   if (!canonicalName || !dept) {
     return res.status(400).json({ error: 'name and dept are required' });
   }
 
-  if (!Number.isInteger(normalizedWorkdays) || normalizedWorkdays < 0) {
+  if (normalizedWorkdays === null) {
     return res.status(400).json({ error: 'workdays must be a non-negative whole number' });
   }
 
@@ -52,14 +69,16 @@ router.post('/api/employees', (req, res) => {
       dept,
       designation,
       workdays,
+      workdays_is_custom,
       email
-    ) VALUES (?, ?, ?, ?, ?, ?)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?)
   `).run(
     employee_code || '',
     canonicalName,
     dept,
     designation || '',
     normalizedWorkdays,
+    workdaysCustomFlag(normalizedWorkdays),
     email || null,
   );
 
@@ -84,13 +103,10 @@ router.put('/api/employees/:id', (req, res) => {
     email,
   } = req.body || {};
 
-  const normalizedWorkdays = workdays === undefined || workdays === null
-    ? null
-    : Number(workdays);
+  const hasWorkdays = workdays !== undefined && workdays !== null && workdays !== '';
+  const normalizedWorkdays = hasWorkdays ? normalizeWorkdays(workdays) : null;
 
-  if (normalizedWorkdays !== null && (
-    !Number.isInteger(normalizedWorkdays) || normalizedWorkdays < 0
-  )) {
+  if (hasWorkdays && normalizedWorkdays === null) {
     return res.status(400).json({ error: 'workdays must be a non-negative whole number' });
   }
 
@@ -101,7 +117,8 @@ router.put('/api/employees/:id', (req, res) => {
       name = COALESCE(?, name),
       dept = COALESCE(?, dept),
       designation = COALESCE(?, designation),
-      workdays = COALESCE(?, workdays),
+      workdays = CASE WHEN ? = 1 THEN ? ELSE workdays END,
+      workdays_is_custom = CASE WHEN ? = 1 THEN ? ELSE workdays_is_custom END,
       email = COALESCE(?, email)
     WHERE id = ?
   `).run(
@@ -109,7 +126,10 @@ router.put('/api/employees/:id', (req, res) => {
     name === undefined || name === null ? null : canonicalPersonName(name),
     dept ?? null,
     designation ?? null,
+    hasWorkdays ? 1 : 0,
     normalizedWorkdays,
+    hasWorkdays ? 1 : 0,
+    hasWorkdays ? workdaysCustomFlag(normalizedWorkdays) : null,
     email ?? null,
     id,
   );
@@ -120,18 +140,23 @@ router.put('/api/employees/:id', (req, res) => {
 
 router.patch('/api/employees/:id/workdays', (req, res) => {
   const id = Number(req.params.id);
-  const workdays = Number(req.body?.workdays);
+  const workdays = normalizeWorkdays(req.body?.workdays, null);
   const existing = db.prepare('SELECT id FROM employees WHERE id = ?').get(id);
 
   if (!existing) {
     return res.status(404).json({ error: 'not found' });
   }
 
-  if (!Number.isInteger(workdays) || workdays < 0) {
+  if (workdays === null) {
     return res.status(400).json({ error: 'workdays must be a non-negative whole number' });
   }
 
-  db.prepare('UPDATE employees SET workdays = ? WHERE id = ?').run(workdays, id);
+  db.prepare(`
+    UPDATE employees
+    SET workdays = ?, workdays_is_custom = ?
+    WHERE id = ?
+  `).run(workdays, workdaysCustomFlag(workdays), id);
+
   const employee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id);
   res.json(employee);
 });
