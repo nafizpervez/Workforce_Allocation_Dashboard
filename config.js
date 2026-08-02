@@ -10,7 +10,7 @@ const MODAL_ACCESS_PASSWORD = process.env.MODAL_ACCESS_PASSWORD || 'Esr!@9122';
 
 // Global default annual capacity for a resource.
 // Change this single value to update every resource that still uses the default Workdays setting.
-const DEFAULT_ANNUAL_WORKDAYS = 210;
+const DEFAULT_ANNUAL_WORKDAYS = 220;
 
 const AUTH_COOKIE_NAME = 'wa_auth';
 const AUTH_MAX_AGE_SECONDS = 60 * 60 * 12;
