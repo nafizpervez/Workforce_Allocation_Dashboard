@@ -61,6 +61,8 @@ function classifyProduct(pn, pf) {
 /* ── Deal breakdown modal ─────────────────────────────────────── */
 function openDealModal(fyData) {
   const { label, projects } = fyData;
+  const countUnit = fyData?.count_unit === 'projects' ? 'projects' : 'accounts';
+  const singularUnit = countUnit === 'projects' ? 'project' : 'account';
 
   const rowHtml = (p) => {
     const name = typeof p === 'string' ? p : (p.name || '');
@@ -91,17 +93,21 @@ function openDealModal(fyData) {
     const list = projects[status] || [];
     if (!list.length) return '<div class="mb-4"><div class="flex items-center gap-2 mb-1.5">'
       + '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + badgeCls + '">' + icon + ' ' + status + '</span>'
-      + '<span class="text-xs text-gray-400">0 accounts</span></div></div>';
+      + '<span class="text-xs text-gray-400">0 ' + countUnit + '</span></div></div>';
     return '<div class="mb-5">'
       + '<div class="flex items-center gap-2 mb-2">'
       + '<span class="px-2 py-0.5 rounded-full text-xs font-semibold ' + badgeCls + '">' + icon + ' ' + status + '</span>'
-      + '<span class="text-xs text-gray-400">' + list.length + ' account' + (list.length === 1 ? '' : 's') + '</span>'
+      + '<span class="text-xs text-gray-400">' + list.length + ' ' + singularUnit + (list.length === 1 ? '' : 's') + '</span>'
       + '</div>'
       + '<div class="space-y-1.5">' + list.map(rowHtml).join('') + '</div>'
       + '</div>';
   };
 
-  openModal(mHdr(label + ' \u2014 Deal Breakdown', 'Unique accounts \u00b7 click a row to open project details')
+  const breakdownSubtitle = countUnit === 'projects'
+    ? 'Qualifying PS projects \u00b7 click a row to open project details'
+    : 'Unique accounts \u00b7 click a row to open project details';
+
+  openModal(mHdr(label + ' \u2014 Deal Breakdown', breakdownSubtitle)
     + '<div class="p-6 overflow-y-auto nice-scroll" style="max-height:65vh">'
     + section('NEW LOGO', 'bg-emerald-100 text-emerald-700', '\u2b50')
     + section('REPEAT', 'bg-blue-100 text-blue-700', '\u21ba')

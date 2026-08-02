@@ -1,4 +1,4 @@
-const { fiscalSortValue, getCurrentFiscalYearEnd, getProjectFiscalYear } = require('./fiscal');
+const { fiscalSortValue, getProjectFiscalYear } = require('./fiscal');
 const { safeNum } = require('./values');
 
 function normalizeProductText(value) {
@@ -75,24 +75,21 @@ const RUNNING_CLOSED_WON_START_DATE = '2025-03-01';
 
 function isProfessionalServiceRunningProject(project) {
   const closedWonDate = String(project?.end_date || '').trim();
-  const projectFiscalYear = getProjectFiscalYear(project);
-  const currentFiscalYear = getCurrentFiscalYearEnd();
   return (
     String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
     isPSOnlyProject(project) &&
     Number(project?.progress) < 100 &&
-    projectFiscalYear !== null &&
-    projectFiscalYear >= currentFiscalYear &&
     /^\d{4}-\d{2}-\d{2}$/.test(closedWonDate) &&
     closedWonDate >= RUNNING_CLOSED_WON_START_DATE
   );
 }
 
 function isDealAcquisitionChartEligible(project) {
+  // Deal Acquisition is driven by Closed Won status and fiscal year only.
+  // Project progress must not hide an otherwise valid deal from the chart.
   return (
     String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
-    getProjectFiscalYear(project) !== null &&
-    !isProfessionalServiceRunningProject(project)
+    getProjectFiscalYear(project) !== null
   );
 }
 
