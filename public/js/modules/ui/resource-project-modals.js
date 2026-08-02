@@ -13,7 +13,7 @@ function openEmployeeModal(opts = {}) {
     designation: employee?.designation || '',
     workdays: Number.isInteger(Number(employee?.workdays))
       ? Number(employee.workdays)
-      : 220,
+      : getDefaultAnnualWorkdays(),
   };
 
   const departments = [

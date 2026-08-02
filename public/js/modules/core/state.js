@@ -6,6 +6,7 @@
 
 /* ================================================================ STATE */
 const FISCAL_YEAR_START_MONTH = 4;
+const DEFAULT_ANNUAL_WORKDAYS_FALLBACK = 0;
 
 function getCurrentFiscalYearStart(date = new Date()) {
   const year = date.getFullYear();
@@ -36,6 +37,7 @@ const S = {
   fiscalYear: 2026,
   // Only the Resource Assignment Matrix may move across fiscal years.
   matrixFiscalYear: getCurrentFiscalYearStart(),
+  appConfig: { defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS_FALLBACK },
   employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
   preSaleProductThresholds: { securedMinPercent: 90, bestCaseMinPercent: 70 },
   matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},
@@ -72,6 +74,14 @@ const S = {
   // established FY27 view. A numeric value is a fiscal-year start year.
   monthlyPlannedWorkFiscalYear: '',
 };
+
+
+function getDefaultAnnualWorkdays() {
+  const configured = Number(S.appConfig?.defaultAnnualWorkdays);
+  return Number.isInteger(configured) && configured >= 0
+    ? configured
+    : DEFAULT_ANNUAL_WORKDAYS_FALLBACK;
+}
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];

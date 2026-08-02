@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
-const { MODAL_ACCESS_PASSWORD } = require('../../config');
+const { DEFAULT_ANNUAL_WORKDAYS, MODAL_ACCESS_PASSWORD } = require('../../config');
 const { getAppDb } = require('../database');
 const router = express.Router();
 const db = getAppDb();
@@ -10,6 +10,10 @@ function secureTextEqual(left, right) {
   const rightBuffer = Buffer.from(String(right ?? ''), 'utf8');
   return leftBuffer.length === rightBuffer.length && crypto.timingSafeEqual(leftBuffer, rightBuffer);
 }
+
+router.get('/api/app-config', (_, res) => {
+  res.json({ defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS });
+});
 
 router.get('/api/fiscal-years', (_, res) => {
   const rows = db.prepare(`SELECT DISTINCT CASE WHEN month>=4 THEN year ELSE year-1 END AS fiscal_year FROM assignments ORDER BY fiscal_year ASC`).all();
