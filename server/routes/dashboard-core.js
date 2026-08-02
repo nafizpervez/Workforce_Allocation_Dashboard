@@ -348,6 +348,7 @@ router.get('/api/dashboard/stats', (req, res) => {
       progress,
       probability,
       end_date,
+      product_name,
       product_family,
       product_amount,
       opp_amount,
