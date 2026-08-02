@@ -101,6 +101,156 @@ function getFilteredMatrixEmployees() {
   return employees;
 }
 
+function formatMatrixMonthHeaderAllocation(value) {
+  const numericValue = Number(value);
+  return `${Math.round(Number.isFinite(numericValue) ? numericValue : 0)}%`;
+}
+
+function formatMatrixMandays(value) {
+  const numericValue = Number(value);
+  return (Number.isFinite(numericValue) ? numericValue : 0).toLocaleString(
+    'en-US',
+    { minimumFractionDigits: 0, maximumFractionDigits: 1 },
+  );
+}
+
+const MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID = 'matrixMonthBreakdownTooltip';
+
+function formatMatrixBreakdownNumber(value, maximumFractionDigits = 1) {
+  const numericValue = Number(value);
+  return (Number.isFinite(numericValue) ? numericValue : 0).toLocaleString(
+    'en-US',
+    { minimumFractionDigits: 0, maximumFractionDigits },
+  );
+}
+
+function getMatrixMonthBreakdownTooltip() {
+  let tooltip = document.getElementById(MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID);
+  if (tooltip) return tooltip;
+
+  tooltip = document.createElement('div');
+  tooltip.id = MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID;
+  tooltip.className = 'matrix-month-breakdown-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function getMatrixMonthBreakdownData(heading) {
+  const number = key => {
+    const value = Number(heading?.dataset?.[key]);
+    return Number.isFinite(value) ? value : 0;
+  };
+
+  return {
+    monthLabel: String(heading?.dataset?.monthLabel || ''),
+    intrasourcingAverageAllocation: number('intrasourcingAverageAllocation'),
+    localAverageAllocation: number('localAverageAllocation'),
+    intrasourcingRevenue: number('intrasourcingRevenue'),
+    localRevenue: number('localRevenue'),
+  };
+}
+
+function renderMatrixMonthBreakdownTooltip(data) {
+  return `
+    <div class="matrix-month-breakdown-tooltip__title">${esc(data.monthLabel)}</div>
+    <table class="matrix-month-breakdown-tooltip__table">
+      <thead>
+        <tr>
+          <th scope="col"></th>
+          <th scope="col">Intrasourcing</th>
+          <th scope="col">Local</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <th scope="row">Allocation</th>
+          <td>${esc(`${formatMatrixBreakdownNumber(data.intrasourcingAverageAllocation, 1)}%`)}</td>
+          <td>${esc(`${formatMatrixBreakdownNumber(data.localAverageAllocation, 1)}%`)}</td>
+        </tr>
+        <tr>
+          <th scope="row">Revenue</th>
+          <td>${esc(formatRevenueViewValue(data.intrasourcingRevenue))}</td>
+          <td>${esc(formatRevenueViewValue(data.localRevenue))}</td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function positionMatrixMonthBreakdownTooltip(tooltip, heading) {
+  const margin = 12;
+  const gap = 8;
+  const headingRect = heading.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  let left = headingRect.left + (headingRect.width / 2) - (tooltipRect.width / 2);
+  let top = headingRect.bottom + gap;
+
+  left = Math.max(margin, Math.min(left, viewportWidth - tooltipRect.width - margin));
+  if (top + tooltipRect.height > viewportHeight - margin) {
+    top = Math.max(margin, headingRect.top - tooltipRect.height - gap);
+  }
+
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
+function showMatrixMonthBreakdownTooltip(heading) {
+  const tooltip = getMatrixMonthBreakdownTooltip();
+  tooltip.innerHTML = renderMatrixMonthBreakdownTooltip(
+    getMatrixMonthBreakdownData(heading),
+  );
+  tooltip.classList.add('is-visible');
+  tooltip.setAttribute('aria-hidden', 'false');
+  heading.setAttribute('aria-describedby', MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID);
+  positionMatrixMonthBreakdownTooltip(tooltip, heading);
+}
+
+function hideMatrixMonthBreakdownTooltip() {
+  const tooltip = document.getElementById(MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID);
+  if (!tooltip) return;
+  tooltip.classList.remove('is-visible');
+  tooltip.setAttribute('aria-hidden', 'true');
+  document.querySelectorAll(`.matrix-month-heading[aria-describedby="${MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID}"]`)
+    .forEach(heading => heading.removeAttribute('aria-describedby'));
+}
+
+function installMatrixMonthBreakdownTooltip() {
+  if (window.__matrixMonthBreakdownTooltipInstalled) return;
+  window.__matrixMonthBreakdownTooltipInstalled = true;
+
+  document.addEventListener('pointerover', event => {
+    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
+    if (!heading || heading.contains(event.relatedTarget)) return;
+    showMatrixMonthBreakdownTooltip(heading);
+  });
+
+  document.addEventListener('pointerout', event => {
+    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
+    if (!heading || heading.contains(event.relatedTarget)) return;
+    hideMatrixMonthBreakdownTooltip();
+  });
+
+  document.addEventListener('focusin', event => {
+    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
+    if (heading) showMatrixMonthBreakdownTooltip(heading);
+  });
+
+  document.addEventListener('focusout', event => {
+    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
+    if (!heading || heading.contains(event.relatedTarget)) return;
+    hideMatrixMonthBreakdownTooltip();
+  });
+
+  window.addEventListener('resize', hideMatrixMonthBreakdownTooltip);
+  window.addEventListener('scroll', hideMatrixMonthBreakdownTooltip, true);
+}
+
+installMatrixMonthBreakdownTooltip();
+
 function renderMatrixHeader(months, employees, unavailableSlots) {
   const allocationColumns = getResourceSummaryAllocationColumns();
   let header = '<tr class="months">';
@@ -126,19 +276,33 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
 
   months.forEach((month, index) => {
     const revenue = getMatrixMonthPlannedRevenue(employees, month, unavailableSlots);
-    const unpricedNote = revenue.unpricedHours > 0
-      ? ` · ${revenue.unpricedHours.toLocaleString('en-US', { maximumFractionDigits: 1 })}h unpriced`
-      : '';
-    const title = `${month.label} planned revenue: ${formatExactRevenueValue(revenue.amount)}${unpricedNote}. Includes Intrasourcing and Local only.`;
-
+    const allocation = getMatrixMonthAllocationMetrics(
+      employees,
+      month,
+      unavailableSlots,
+    );
     header += `
       <th
         colspan="4"
         class="matrix-month-heading border-b border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-700 bg-gray-50 ${index < months.length - 1 ? 'border-r border-gray-200' : ''}"
-        title="${esc(title)}"
+        data-month-breakdown="true"
+        data-month-label="${esc(month.label)}"
+        data-intrasourcing-average-allocation="${allocation.categoryAllocation.intrasourcing.averageAllocation}"
+        data-local-average-allocation="${allocation.categoryAllocation.local.averageAllocation}"
+        data-intrasourcing-revenue="${Number(revenue.byCategory?.intrasourcing) || 0}"
+        data-local-revenue="${Number(revenue.byCategory?.local) || 0}"
+        tabindex="0"
+        aria-label="${esc(`${month.label} Intrasourcing and Local allocation and revenue breakdown. Hover or focus to view the table.`)}"
       >
-        <span class="matrix-month-label">${esc(month.label)}</span>
-        <span class="matrix-month-revenue">${formatRevenueViewValue(revenue.amount)}</span>
+        <span class="matrix-month-label">
+          ${esc(month.label)}
+          <span class="matrix-month-allocation">(${formatMatrixMonthHeaderAllocation(allocation.averageAllocation)})</span>
+        </span>
+        <span class="matrix-month-metrics">
+          <span class="matrix-month-revenue">${formatRevenueViewValue(revenue.amount)}</span>
+          <span class="matrix-month-separator" aria-hidden="true">·</span>
+          <span class="matrix-month-unallocated">${formatMatrixMandays(allocation.unallocatedMandays)} unallocated days</span>
+        </span>
       </th>
     `;
   });

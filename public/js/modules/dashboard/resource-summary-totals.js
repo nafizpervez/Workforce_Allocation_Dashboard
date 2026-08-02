@@ -14,20 +14,146 @@ function averageMatrixValues(values) {
     numericValues.length;
 }
 
-function getEmployeeWeekAllocation(employeeId, month, week, unavailableSlots) {
+function getEmployeeWeekAllocationBreakdown(employeeId, month, week, unavailableSlots) {
   if (isEmployeeUnavailableForSlot(employeeId, month.y, month.m, week, unavailableSlots)) {
     return null;
   }
 
   const key = `${month.y}-${month.m}-${week}`;
   const assignments = S.matrix[employeeId]?.[key] || [];
+  const allocation = {
+    total: 0,
+    intrasourcing: 0,
+    local: 0,
+  };
 
-  return assignments
+  assignments
     .filter(assignment => !isUnavailableAssignment(assignment))
-    .reduce(
-      (total, assignment) => total + (Number(assignment.percentage) || 0),
-      0,
-    );
+    .forEach(assignment => {
+      const percentage = Number(assignment.percentage) || 0;
+      const categoryKey = classifyResourceSummaryAssignment(assignment);
+
+      allocation.total += percentage;
+      if (categoryKey === 'intrasourcing' || categoryKey === 'local') {
+        allocation[categoryKey] += percentage;
+      }
+    });
+
+  return allocation;
+}
+
+function getEmployeeWeekAllocation(employeeId, month, week, unavailableSlots) {
+  return getEmployeeWeekAllocationBreakdown(
+    employeeId,
+    month,
+    week,
+    unavailableSlots,
+  )?.total ?? null;
+}
+
+function getMatrixMonthAllocationMetrics(employeeRows, month, unavailableSlots = null) {
+  const slots = unavailableSlots || getUnavailableAssignmentSlotSet(S.matrixAssignments);
+  const visibleResourceCount = (employeeRows || []).length;
+  const totalResourceWeeks = visibleResourceCount * RESOURCE_SUMMARY_WEEKS_PER_MONTH;
+  let allocationPercentageTotal = 0;
+  let availableResourceWeeks = 0;
+  let allocatedResourceWeeks = 0;
+  let unassignedResourceWeeks = 0;
+  let overallocatedResourceWeeks = 0;
+  let overallocatedPercentageTotal = 0;
+  let availableMandays = 0;
+  let allocatedMandays = 0;
+  let unallocatedMandays = 0;
+  const categoryAllocationPercentageTotals = {
+    intrasourcing: 0,
+    local: 0,
+  };
+
+  for (let week = 1; week <= RESOURCE_SUMMARY_WEEKS_PER_MONTH; week += 1) {
+    for (const employee of employeeRows || []) {
+      if (isEmployeeUnavailableForSlot(
+        employee.id,
+        month.y,
+        month.m,
+        week,
+        slots,
+      )) {
+        continue;
+      }
+
+      const allocationBreakdown = getEmployeeWeekAllocationBreakdown(
+        employee.id,
+        month,
+        week,
+        slots,
+      ) || { total: 0, intrasourcing: 0, local: 0 };
+      const allocation = Number(allocationBreakdown.total);
+      const normalizedAllocation = Number.isFinite(allocation)
+        ? Math.max(0, allocation)
+        : 0;
+      categoryAllocationPercentageTotals.intrasourcing += Math.max(
+        0,
+        Number(allocationBreakdown.intrasourcing) || 0,
+      );
+      categoryAllocationPercentageTotals.local += Math.max(
+        0,
+        Number(allocationBreakdown.local) || 0,
+      );
+      const capacityUsed = Math.min(100, normalizedAllocation);
+      const configuredAnnualWorkdays = Number(employee?.workdays);
+      const annualWorkdays = Number.isFinite(configuredAnnualWorkdays) &&
+        configuredAnnualWorkdays >= 0
+        ? configuredAnnualWorkdays
+        : 220;
+      const workdaysPerWeek = annualWorkdays / 12 /
+        RESOURCE_SUMMARY_WEEKS_PER_MONTH;
+
+      allocationPercentageTotal += normalizedAllocation;
+      availableResourceWeeks += 1;
+      if (normalizedAllocation > 0) allocatedResourceWeeks += 1;
+      else unassignedResourceWeeks += 1;
+      if (normalizedAllocation > 100) {
+        overallocatedResourceWeeks += 1;
+        overallocatedPercentageTotal += normalizedAllocation - 100;
+      }
+      availableMandays += workdaysPerWeek;
+      allocatedMandays += workdaysPerWeek * (capacityUsed / 100);
+      unallocatedMandays += workdaysPerWeek * ((100 - capacityUsed) / 100);
+    }
+  }
+
+  return {
+    averageAllocation: availableResourceWeeks
+      ? allocationPercentageTotal / availableResourceWeeks
+      : 0,
+    allocationPercentageTotal: +allocationPercentageTotal.toFixed(2),
+    visibleResourceCount,
+    weeksPerMonth: RESOURCE_SUMMARY_WEEKS_PER_MONTH,
+    totalResourceWeeks,
+    unavailableResourceWeeks: Math.max(0, totalResourceWeeks - availableResourceWeeks),
+    availableResourceWeeks,
+    allocatedResourceWeeks,
+    unassignedResourceWeeks,
+    overallocatedResourceWeeks,
+    overallocatedPercentageTotal: +overallocatedPercentageTotal.toFixed(2),
+    availableMandays: +availableMandays.toFixed(2),
+    allocatedMandays: +allocatedMandays.toFixed(2),
+    unallocatedMandays: +unallocatedMandays.toFixed(2),
+    categoryAllocation: {
+      intrasourcing: {
+        percentageTotal: +categoryAllocationPercentageTotals.intrasourcing.toFixed(2),
+        averageAllocation: availableResourceWeeks
+          ? categoryAllocationPercentageTotals.intrasourcing / availableResourceWeeks
+          : 0,
+      },
+      local: {
+        percentageTotal: +categoryAllocationPercentageTotals.local.toFixed(2),
+        averageAllocation: availableResourceWeeks
+          ? categoryAllocationPercentageTotals.local / availableResourceWeeks
+          : 0,
+      },
+    },
+  };
 }
 
 function sumCalculatedRevenue(summaries, revenueKey) {
