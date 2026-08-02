@@ -2,7 +2,7 @@ const cors = require('cors');
 const express = require('express');
 const path = require('path');
 const { createAuthRouter, requireDashboardAuth } = require('./auth');
-const { PUBLIC_DIR } = require('./config');
+const { PUBLIC_DIR } = require('../config');
 const routes = require('./routes');
 
 function createApp() {

@@ -5,7 +5,7 @@ const {
   AUTH_MAX_AGE_SECONDS,
   AUTH_SECRET,
   DASHBOARD_PASSWORD,
-} = require('../config');
+} = require('../../config');
 const { renderLoginPage } = require('./login-page');
 
 function parseCookies(header = '') {

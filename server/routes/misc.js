@@ -1,6 +1,6 @@
 const crypto = require('crypto');
 const express = require('express');
-const { MODAL_ACCESS_PASSWORD } = require('../config');
+const { MODAL_ACCESS_PASSWORD } = require('../../config');
 const { getAppDb } = require('../database');
 const router = express.Router();
 const db = getAppDb();

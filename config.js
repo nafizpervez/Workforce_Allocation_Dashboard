@@ -1,7 +1,7 @@
 const crypto = require('crypto');
 const path = require('path');
 
-const ROOT_DIR = path.join(__dirname, '..');
+const ROOT_DIR = __dirname;
 const PUBLIC_DIR = path.join(ROOT_DIR, 'public');
 const HOST = String(process.env.HOST || '0.0.0.0').trim() || '0.0.0.0';
 const PORT = Number(process.env.PORT) || 9002;
