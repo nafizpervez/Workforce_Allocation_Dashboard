@@ -9,13 +9,14 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=uniform-period-tooltip-v2" />
+    <link rel="stylesheet" href="/css/style.css?v=all-card-collapse-v3" />
   </head>
   <body>
     <div data-fragment="/views/header.html?v=local-matrix-fy-v2"></div>
     <main class="p-8 max-w-[1920px] mx-auto">
       <div id="dashboard-canvas" class="space-y-6">
-        <div data-fragment="/views/sections/stats.html"></div>
+        <div data-fragment="/views/sections/stats.html?v=card-collapse-exec-v2"></div>
+        <div data-fragment="/views/sections/capacity-executive.html?v=card-collapse-exec-v2"></div>
         <div data-fragment="/views/sections/resource-matrix.html?v=local-matrix-fy-v2"></div>
         <div data-fragment="/views/sections/allocation-charts.html?v=local-planned-actual-fy-v2"></div>
         <div data-fragment="/views/sections/work-summary.html?v=timesheet-report-v1"></div>
@@ -45,7 +46,8 @@
     <script src="/js/modules/dashboard/resource-summary-metrics.js?v=not-local-revenue-period-tooltip-v1"></script>
     <script src="/js/modules/dashboard/resource-summary-totals.js?v=not-local-revenue-period-tooltip-v1"></script>
     <script src="/js/modules/dashboard/resource-summary.js?v=vertical-period-tooltip-v1"></script>
-    <script src="/js/modules/dashboard/overview.js?v=planned-revenue-v1"></script>
+    <script src="/js/modules/dashboard/overview.js?v=card-collapse-exec-v2"></script>
+    <script src="/js/modules/dashboard/capacity-executive.js?v=card-collapse-exec-v2"></script>
     <script src="/js/modules/dashboard/monthly-planned-work.js?v=local-planned-actual-fy-v2"></script>
     <script src="/js/modules/timesheets/model.js?v=actual-burn-charts-v1"></script>
     <script src="/js/modules/timesheets/planned-actual-model.js?v=skill-development-details-v1"></script>
@@ -70,7 +72,7 @@
     <script src="/js/modules/ui/protected-modal-access.js?v=modal-password-v1"></script>
     <script src="/js/modules/ui/committed-targets-modal.js?v=target-storage-v1"></script>
     <script src="/js/modules/ui/resource-project-modals.js?v=config-workdays-v1"></script>
-    <script src="/js/modules/ui/events.js?v=timesheet-report-v1"></script>
+    <script src="/js/modules/ui/events.js?v=all-card-collapse-v3"></script>
     <script src="/js/modules/projects/resources.js?v=team-resource-edit-action-v1"></script>
     <script src="/js/app.js?v=workweek-36-66-v1"></script>
   </body>

@@ -1,0 +1,357 @@
+/* Capacity Allocation and Executive Metrics cards. */
+.capacity-executive-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1.15fr) minmax(420px, 0.85fr);
+  gap: 20px;
+  align-items: stretch;
+}
+
+.capacity-executive-card {
+  min-width: 0;
+  min-height: 470px;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid #dbe3ef;
+  border-radius: 14px;
+  background: #ffffff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+}
+
+.capacity-executive-card--loading {
+  display: flex;
+  align-items: stretch;
+  padding: 20px;
+}
+
+.capacity-executive-skeleton {
+  width: 100%;
+  border-radius: 10px;
+  background: linear-gradient(90deg, #f1f5f9 25%, #e2e8f0 40%, #f1f5f9 65%);
+  background-size: 300% 100%;
+  animation: capacityExecutiveSkeleton 1.35s ease-in-out infinite;
+}
+
+@keyframes capacityExecutiveSkeleton {
+  from { background-position: 100% 0; }
+  to { background-position: 0 0; }
+}
+
+.capacity-executive-card__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 18px 20px 14px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.capacity-executive-card__eyebrow {
+  margin: 0 0 3px;
+  color: #2563eb;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.07em;
+  text-transform: uppercase;
+}
+
+.capacity-executive-card__title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 700;
+  line-height: 1.25;
+}
+
+.capacity-executive-card__subtitle {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 12px;
+  line-height: 1.45;
+}
+
+.capacity-executive-card__fy {
+  flex: 0 0 auto;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #eff6ff;
+  padding: 5px 10px;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.capacity-financial-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  margin: 16px 18px 0;
+  overflow: hidden;
+  border: 1px solid #cbd5e1;
+  border-radius: 10px;
+  background: #f8fafc;
+}
+
+.capacity-financial-metric {
+  min-width: 0;
+  padding: 14px 12px 12px;
+  text-align: center;
+}
+
+.capacity-financial-metric + .capacity-financial-metric {
+  border-left: 1px solid #cbd5e1;
+}
+
+.capacity-financial-metric__value {
+  overflow: hidden;
+  color: #173a67;
+  font-size: clamp(16px, 1.35vw, 23px);
+  font-weight: 800;
+  line-height: 1.12;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capacity-financial-metric__label {
+  margin-top: 8px;
+  color: #52627a;
+  font-size: 10px;
+  font-weight: 500;
+  line-height: 1.25;
+}
+
+.capacity-allocation-visual {
+  display: grid;
+  grid-template-columns: minmax(260px, 1fr) minmax(190px, 0.72fr);
+  align-items: center;
+  gap: 12px;
+  min-height: 325px;
+  padding: 14px 22px 18px;
+}
+
+.capacity-allocation-chart-column {
+  min-width: 0;
+}
+
+.capacity-allocation-chart-wrap {
+  position: relative;
+  width: 100%;
+  min-width: 0;
+  height: 270px;
+}
+
+.capacity-allocation-chart-caption {
+  margin-top: 3px;
+  color: #173a67;
+  font-size: 11px;
+  font-style: italic;
+  font-weight: 700;
+  text-align: center;
+}
+
+.capacity-allocation-chart-wrap canvas {
+  width: 100% !important;
+  height: 100% !important;
+}
+
+.capacity-allocation-legend {
+  display: flex;
+  max-height: 286px;
+  flex-direction: column;
+  gap: 8px;
+  overflow-y: auto;
+  padding: 4px 4px 4px 0;
+}
+
+.capacity-allocation-legend__item {
+  display: grid;
+  grid-template-columns: 11px minmax(0, 1fr) auto;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.capacity-allocation-legend__swatch {
+  width: 11px;
+  height: 11px;
+  border-radius: 2px;
+}
+
+.capacity-allocation-legend__label {
+  overflow: hidden;
+  color: #334155;
+  font-size: 11px;
+  font-weight: 600;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.capacity-allocation-legend__value {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.capacity-executive-table-wrap {
+  padding: 16px 18px 18px;
+}
+
+.capacity-executive-table {
+  width: 100%;
+  overflow: hidden;
+  border-collapse: separate;
+  border: 1px solid #b8c8dc;
+  border-spacing: 0;
+  border-radius: 8px;
+  table-layout: fixed;
+}
+
+.capacity-executive-table th,
+.capacity-executive-table td {
+  border-bottom: 1px solid #c7d3e3;
+  padding: 11px 13px;
+  font-size: 12px;
+  line-height: 1.3;
+}
+
+.capacity-executive-table thead th {
+  background: #173d69;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.03em;
+  text-align: center;
+  text-transform: uppercase;
+}
+
+.capacity-executive-table th + th,
+.capacity-executive-table td + td {
+  border-left: 1px solid #c7d3e3;
+}
+
+.capacity-executive-table tbody tr:nth-child(even) td {
+  background: #f4f7fb;
+}
+
+.capacity-executive-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+.capacity-executive-table__metric {
+  color: #1e293b;
+  font-weight: 500;
+}
+
+.capacity-executive-table__value,
+.capacity-executive-table__fte {
+  color: #0f172a;
+  font-variant-numeric: tabular-nums;
+  text-align: right;
+}
+
+.capacity-executive-table__fte {
+  white-space: nowrap;
+}
+
+.capacity-executive-table__row--headline .capacity-executive-table__metric,
+.capacity-executive-table__row--headline .capacity-executive-table__value,
+.capacity-executive-table__row--headline .capacity-executive-table__fte {
+  font-size: 13px;
+  font-weight: 750;
+}
+
+.capacity-executive-table__assumption {
+  display: block;
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 10px;
+  font-style: italic;
+  font-weight: 500;
+}
+
+.capacity-executive-note {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 8px;
+  margin-top: 12px;
+}
+
+.capacity-executive-note__item {
+  border: 1px solid #e2e8f0;
+  border-radius: 8px;
+  background: #f8fafc;
+  padding: 9px 10px;
+}
+
+.capacity-executive-note__label {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 700;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+}
+
+.capacity-executive-note__value {
+  margin-top: 3px;
+  color: #1e293b;
+  font-size: 10px;
+  font-weight: 600;
+  line-height: 1.35;
+}
+
+@media (max-width: 1320px) {
+  .capacity-executive-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .capacity-executive-card {
+    min-height: 440px;
+  }
+}
+
+@media (max-width: 860px) {
+  .capacity-financial-strip {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
+  .capacity-financial-metric:nth-child(3) {
+    border-left: 0;
+    border-top: 1px solid #cbd5e1;
+  }
+
+  .capacity-financial-metric:nth-child(4) {
+    border-top: 1px solid #cbd5e1;
+  }
+
+  .capacity-allocation-visual {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .capacity-allocation-legend {
+    display: grid;
+    max-height: none;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
+@media (max-width: 560px) {
+  .capacity-executive-card__header {
+    padding: 15px;
+  }
+
+  .capacity-financial-strip {
+    margin: 14px 12px 0;
+  }
+
+  .capacity-allocation-visual,
+  .capacity-executive-table-wrap {
+    padding-right: 12px;
+    padding-left: 12px;
+  }
+
+  .capacity-allocation-legend,
+  .capacity-executive-note {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
