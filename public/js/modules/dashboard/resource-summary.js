@@ -580,4 +580,8 @@ function renderMatrix() {
         <td colspan="${columnCount}" class="matrix-empty-state">No resources found.</td>
       </tr>
     `;
+
+  if (typeof renderCapacityExecutiveCards === 'function') {
+    renderCapacityExecutiveCards();
+  }
 }

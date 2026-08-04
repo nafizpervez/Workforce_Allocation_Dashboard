@@ -1,5 +1,5 @@
         <!-- [1] STATS -->
-        <div class="ds" data-section="stats">
+        <div class="ds card-collapse-section" data-section="stats" data-card-row-key="top-kpi-cards">
           <div class="drag-handle" title="Drag row">
             <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
               <circle cx="5" cy="3" r="1.4" />
@@ -10,7 +10,11 @@
               <circle cx="11" cy="13" r="1.4" />
             </svg>
           </div>
-          <div class="stats-grid" id="statsRow">
+          <button class="card-row-expand-button" type="button" data-card-row-expand hidden aria-expanded="false">
+            <span class="card-row-expand-button__icon" aria-hidden="true">⌄</span>
+            <span>Expand KPI cards</span>
+          </button>
+          <div class="stats-grid" id="statsRow" data-card-drag-group="top-kpi-cards" data-card-collapse-group="top-kpi-cards" data-card-row-label="KPI cards">
             <div class="skel h-[140px]"></div>
             <div class="skel h-[140px]"></div>
             <div class="skel h-[140px]"></div>

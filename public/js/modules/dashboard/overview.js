@@ -1114,6 +1114,11 @@ function renderStats(s) {
     const isAssignedProjectCard = c.detailType === 'assigned-project-breakdown';
     const isCommittedTargetCard = c.detailType === 'committed-target-breakdown';
     const isCapacityAllocationCard = c.detailType === 'capacity-allocation-breakdown';
+    const collapsedValue = isCommittedTargetCard
+      ? formatCommittedTargetRevenue(committedTargetSummary.total)
+      : isCapacityAllocationCard
+        ? formatCommittedTargetRevenue(capacityAllocationSummary.remainingCapacity)
+        : (c.v ?? '');
     const wrapperClass = [
       'dc',
       'dc-stat',
@@ -1143,20 +1148,33 @@ function renderStats(s) {
                 : renderStatSummary(c, td);
 
     return `
-      <div class="${wrapperClass}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>
-        <div class="dc-handle" title="Drag card">
-          <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+      <div class="${wrapperClass}" data-card-key="${esc(c.detailType || c.label)}" data-card-title="${esc(c.label)}"${c.action ? ` data-stat-action="${c.action}" style="cursor:pointer"` : ''}>
+        <div class="dc-handle" title="Drag card left or right" aria-label="Drag ${esc(c.label)} card left or right">
+          <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
             <circle cx="4" cy="3" r="1"/><circle cx="8" cy="3" r="1"/>
             <circle cx="4" cy="6" r="1"/><circle cx="8" cy="6" r="1"/>
             <circle cx="4" cy="9" r="1"/><circle cx="8" cy="9" r="1"/>
           </svg>
         </div>
-        <div class="stat-card-inner bg-white rounded-xl border border-gray-200 p-5 relative" style="box-shadow:0 1px 3px rgba(0,0,0,0.1);">
-          <div class="stat-tooltip">${esc(c.formula)}</div>
-          ${cardContent}
+        <button class="card-collapse-toggle" type="button" aria-expanded="true" title="Minimize ${esc(c.label)}" aria-label="Minimize ${esc(c.label)}">
+          <span aria-hidden="true">⌃</span>
+        </button>
+        <div class="card-collapsed-shell" aria-hidden="true">
+          <span class="card-collapsed-shell__title">${esc(c.label)}</span>
+          <span class="card-collapsed-shell__value">${esc(collapsedValue)}</span>
+        </div>
+        <div class="card-expandable-content">
+          <div class="stat-card-inner bg-white rounded-xl border border-gray-200 p-5 relative" style="box-shadow:0 1px 3px rgba(0,0,0,0.1);">
+            <div class="stat-tooltip">${esc(c.formula)}</div>
+            ${cardContent}
+          </div>
         </div>
       </div>`;
   }).join('');
+
+  if (typeof renderCapacityExecutiveCards === 'function') {
+    renderCapacityExecutiveCards();
+  }
 }
 
 /* ================================================================ CHARTS */
