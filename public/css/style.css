@@ -1,7 +1,7 @@
 @import url("./foundation.css");
 @import url("./layout.css");
-@import url("./matrix.css?v=dark-month-allocation-tooltip-v1");
-@import url("./matrix-summary.css?v=not-local-project-columns-v1");
+@import url("./matrix.css?v=uniform-period-tooltip-v2");
+@import url("./matrix-summary.css?v=not-local-revenue-columns-v1");
 @import url("./matrix-assignments.css?v=assignment-multiselect-v1");
 @import url("./components.css?v=presale-compact-resource-revenue-v2");
 @import url("./drag-drop.css");

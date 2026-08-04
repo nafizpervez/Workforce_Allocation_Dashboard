@@ -19,27 +19,25 @@ function getEmployeeWeekAllocationBreakdown(employeeId, month, week, unavailable
     return null;
   }
 
+  const allocationColumns = getResourceSummaryAllocationColumns();
   const key = `${month.y}-${month.m}-${week}`;
   const assignments = S.matrix[employeeId]?.[key] || [];
-  const allocation = {
-    total: 0,
-    intrasourcing: 0,
-    local: 0,
-  };
+  const byCategory = createEmptyAllocationTotals(allocationColumns);
+  let total = 0;
 
   assignments
     .filter(assignment => !isUnavailableAssignment(assignment))
     .forEach(assignment => {
-      const percentage = Number(assignment.percentage) || 0;
+      const percentage = Math.max(0, Number(assignment.percentage) || 0);
       const categoryKey = classifyResourceSummaryAssignment(assignment);
 
-      allocation.total += percentage;
-      if (categoryKey === 'intrasourcing' || categoryKey === 'local') {
-        allocation[categoryKey] += percentage;
+      total += percentage;
+      if (Object.prototype.hasOwnProperty.call(byCategory, categoryKey)) {
+        byCategory[categoryKey] += percentage;
       }
     });
 
-  return allocation;
+  return { total, byCategory };
 }
 
 function getEmployeeWeekAllocation(employeeId, month, week, unavailableSlots) {
@@ -51,10 +49,58 @@ function getEmployeeWeekAllocation(employeeId, month, week, unavailableSlots) {
   )?.total ?? null;
 }
 
+function getMatrixWeekAllocationMetrics(employeeRows, month, week, unavailableSlots = null) {
+  const slots = unavailableSlots || getUnavailableAssignmentSlotSet(S.matrixAssignments);
+  const allocationColumns = getResourceSummaryAllocationColumns();
+  const categoryAllocationPercentageTotals = createEmptyAllocationTotals(allocationColumns);
+  let allocationPercentageTotal = 0;
+  let availableResourceWeeks = 0;
+
+  for (const employee of employeeRows || []) {
+    const breakdown = getEmployeeWeekAllocationBreakdown(
+      employee.id,
+      month,
+      week,
+      slots,
+    );
+    if (!breakdown) continue;
+
+    availableResourceWeeks += 1;
+    allocationPercentageTotal += Math.max(0, Number(breakdown.total) || 0);
+    allocationColumns.forEach(column => {
+      categoryAllocationPercentageTotals[column.key] += Math.max(
+        0,
+        Number(breakdown.byCategory?.[column.key]) || 0,
+      );
+    });
+  }
+
+  return {
+    averageAllocation: availableResourceWeeks
+      ? allocationPercentageTotal / availableResourceWeeks
+      : 0,
+    allocationPercentageTotal: +allocationPercentageTotal.toFixed(2),
+    availableResourceWeeks,
+    categoryAllocation: Object.fromEntries(
+      allocationColumns.map(column => {
+        const percentageTotal = categoryAllocationPercentageTotals[column.key];
+        return [column.key, {
+          percentageTotal: +percentageTotal.toFixed(2),
+          averageAllocation: availableResourceWeeks
+            ? percentageTotal / availableResourceWeeks
+            : 0,
+        }];
+      }),
+    ),
+  };
+}
+
 function getMatrixMonthAllocationMetrics(employeeRows, month, unavailableSlots = null) {
   const slots = unavailableSlots || getUnavailableAssignmentSlotSet(S.matrixAssignments);
+  const allocationColumns = getResourceSummaryAllocationColumns();
   const visibleResourceCount = (employeeRows || []).length;
   const totalResourceWeeks = visibleResourceCount * RESOURCE_SUMMARY_WEEKS_PER_MONTH;
+  const categoryAllocationPercentageTotals = createEmptyAllocationTotals(allocationColumns);
   let allocationPercentageTotal = 0;
   let availableResourceWeeks = 0;
   let allocatedResourceWeeks = 0;
@@ -64,41 +110,28 @@ function getMatrixMonthAllocationMetrics(employeeRows, month, unavailableSlots =
   let availableMandays = 0;
   let allocatedMandays = 0;
   let unallocatedMandays = 0;
-  const categoryAllocationPercentageTotals = {
-    intrasourcing: 0,
-    local: 0,
-  };
 
   for (let week = 1; week <= RESOURCE_SUMMARY_WEEKS_PER_MONTH; week += 1) {
     for (const employee of employeeRows || []) {
-      if (isEmployeeUnavailableForSlot(
-        employee.id,
-        month.y,
-        month.m,
-        week,
-        slots,
-      )) {
-        continue;
-      }
-
       const allocationBreakdown = getEmployeeWeekAllocationBreakdown(
         employee.id,
         month,
         week,
         slots,
-      ) || { total: 0, intrasourcing: 0, local: 0 };
+      );
+      if (!allocationBreakdown) continue;
+
       const allocation = Number(allocationBreakdown.total);
       const normalizedAllocation = Number.isFinite(allocation)
         ? Math.max(0, allocation)
         : 0;
-      categoryAllocationPercentageTotals.intrasourcing += Math.max(
-        0,
-        Number(allocationBreakdown.intrasourcing) || 0,
-      );
-      categoryAllocationPercentageTotals.local += Math.max(
-        0,
-        Number(allocationBreakdown.local) || 0,
-      );
+      allocationColumns.forEach(column => {
+        categoryAllocationPercentageTotals[column.key] += Math.max(
+          0,
+          Number(allocationBreakdown.byCategory?.[column.key]) || 0,
+        );
+      });
+
       const capacityUsed = Math.min(100, normalizedAllocation);
       const configuredAnnualWorkdays = Number(employee?.workdays);
       const annualWorkdays = Number.isFinite(configuredAnnualWorkdays) &&
@@ -139,21 +172,40 @@ function getMatrixMonthAllocationMetrics(employeeRows, month, unavailableSlots =
     availableMandays: +availableMandays.toFixed(2),
     allocatedMandays: +allocatedMandays.toFixed(2),
     unallocatedMandays: +unallocatedMandays.toFixed(2),
-    categoryAllocation: {
-      intrasourcing: {
-        percentageTotal: +categoryAllocationPercentageTotals.intrasourcing.toFixed(2),
-        averageAllocation: availableResourceWeeks
-          ? categoryAllocationPercentageTotals.intrasourcing / availableResourceWeeks
-          : 0,
-      },
-      local: {
-        percentageTotal: +categoryAllocationPercentageTotals.local.toFixed(2),
-        averageAllocation: availableResourceWeeks
-          ? categoryAllocationPercentageTotals.local / availableResourceWeeks
-          : 0,
-      },
-    },
+    categoryAllocation: Object.fromEntries(
+      allocationColumns.map(column => {
+        const percentageTotal = categoryAllocationPercentageTotals[column.key];
+        return [column.key, {
+          percentageTotal: +percentageTotal.toFixed(2),
+          averageAllocation: availableResourceWeeks
+            ? percentageTotal / availableResourceWeeks
+            : 0,
+        }];
+      }),
+    ),
   };
+}
+
+function buildMatrixPeriodBreakdownData(periodLabel, allocationMetrics, revenueMetrics) {
+  const revenueColumnsByKey = new Map(
+    getResourceSummaryRevenueColumns().map(column => [column.key, column]),
+  );
+
+  return {
+    periodLabel,
+    columns: getResourceSummaryBreakdownColumns().map(column => ({
+      key: column.key,
+      label: column.label,
+      isNotLocalProject: Boolean(column.isNotLocalProject),
+      allocation: Number(allocationMetrics?.categoryAllocation?.[column.key]?.averageAllocation) || 0,
+      hasRevenueColumn: revenueColumnsByKey.has(column.key),
+      revenue: Number(revenueMetrics?.byCategory?.[column.key]) || 0,
+    })),
+  };
+}
+
+function encodeMatrixPeriodBreakdownData(data) {
+  return encodeURIComponent(JSON.stringify(data));
 }
 
 function sumCalculatedRevenue(summaries, revenueKey) {
@@ -173,6 +225,7 @@ function sumCalculatedRevenue(summaries, revenueKey) {
 
 function getMatrixTotalsViewData(employees, months) {
   const allocationColumns = getResourceSummaryAllocationColumns();
+  const revenueColumns = getResourceSummaryRevenueColumns();
   const unavailableSlots = getUnavailableAssignmentSlotSet(S.matrixAssignments);
   const summaries = employees.map(employee => getResourceSummaryViewData(employee));
   const availableSummaries = summaries.filter(
@@ -192,7 +245,7 @@ function getMatrixTotalsViewData(employees, months) {
   );
 
   const revenue = Object.fromEntries(
-    RESOURCE_SUMMARY_COLUMNS.revenue.map(column => [
+    revenueColumns.map(column => [
       column.key,
       sumCalculatedRevenue(availableSummaries, column.key),
     ]),
@@ -201,17 +254,12 @@ function getMatrixTotalsViewData(employees, months) {
   const weeklyAllocation = months.flatMap(month =>
     Array.from({ length: RESOURCE_SUMMARY_WEEKS_PER_MONTH }, (_, index) => {
       const week = index + 1;
-      const availableEmployees = getAvailableEmployeesForSlot(
+      const allocationMetrics = getMatrixWeekAllocationMetrics(
         employees,
-        month.y,
-        month.m,
+        month,
         week,
-        S.matrixAssignments,
+        unavailableSlots,
       );
-      const employeeAllocations = availableEmployees.map(employee =>
-        getEmployeeWeekAllocation(employee.id, month, week, unavailableSlots),
-      );
-
       const plannedRevenue = getMatrixWeekPlannedRevenue(
         employees,
         month,
@@ -222,8 +270,9 @@ function getMatrixTotalsViewData(employees, months) {
       return {
         month,
         week,
-        value: averageMatrixValues(employeeAllocations),
-        availableResourceCount: availableEmployees.length,
+        value: allocationMetrics.averageAllocation,
+        availableResourceCount: allocationMetrics.availableResourceWeeks,
+        allocationMetrics,
         plannedRevenue,
       };
     }),
@@ -231,6 +280,7 @@ function getMatrixTotalsViewData(employees, months) {
 
   return {
     allocationColumns,
+    revenueColumns,
     employeeCount: employees.length,
     availableFiscalResourceCount: availableSummaries.length,
     allocation,
@@ -248,6 +298,7 @@ function renderMatrixTotalsRow(employees, months) {
   const fiscalResourceLabel = `${totals.availableFiscalResourceCount} available resource${totals.availableFiscalResourceCount === 1 ? '' : 's'}`;
 
   const allocationColumns = totals.allocationColumns || getResourceSummaryAllocationColumns();
+  const revenueColumns = totals.revenueColumns || getResourceSummaryRevenueColumns();
   const allocationCells = allocationColumns
     .map((column, index) => {
       const value = totals.allocation[column.key];
@@ -255,7 +306,7 @@ function renderMatrixTotalsRow(employees, months) {
 
       return `
         <td
-          class="matrix-fixed-cell sticky-allocation-cell col-allocation matrix-total-cell matrix-total-allocation-cell ${column.isNotLocalProject ? 'matrix-not-local-total-cell' : ''}"
+          class="matrix-fixed-cell sticky-allocation-cell col-allocation matrix-total-cell matrix-total-allocation-cell"
           style="${getMatrixAllocationStickyStyle(index)}"
           data-total-group="allocation"
           data-total-metric="${esc(column.key)}"
@@ -266,7 +317,7 @@ function renderMatrixTotalsRow(employees, months) {
     })
     .join('');
 
-  const revenueCells = RESOURCE_SUMMARY_COLUMNS.revenue
+  const revenueCells = revenueColumns
     .map((column, index) => {
       const total = totals.revenue[column.key];
       const title = total.value === null
@@ -275,12 +326,13 @@ function renderMatrixTotalsRow(employees, months) {
 
       return `
         <td
-          class="matrix-fixed-cell sticky-revenue-cell col-revenue matrix-total-cell matrix-total-revenue-cell ${index === RESOURCE_SUMMARY_COLUMNS.revenue.length - 1 ? 'matrix-summary-end' : ''}"
+          class="matrix-fixed-cell sticky-revenue-cell col-revenue matrix-total-cell matrix-total-revenue-cell ${index === revenueColumns.length - 1 ? 'matrix-summary-end' : ''}"
           style="${getMatrixRevenueStickyStyle(index, allocationColumns.length)}"
           data-action="open-revenue-breakdown"
           data-total-group="revenue"
-          data-total-metric="${column.key}"
-          data-revenue-key="${column.key}"
+          data-total-metric="${esc(column.key)}"
+          data-revenue-key="${esc(column.key)}"
+          data-not-local-project-id="${column.isNotLocalProject ? column.projectId : ''}"
           role="button"
           tabindex="0"
           aria-label="Open ${esc(column.label)} revenue breakdown"
@@ -292,19 +344,21 @@ function renderMatrixTotalsRow(employees, months) {
 
   const weeklyCells = totals.weeklyAllocation
     .map(item => {
-      const availableLabel = `${item.availableResourceCount} available resource${item.availableResourceCount === 1 ? '' : 's'}`;
-      const unpricedNote = item.plannedRevenue.unpricedHours > 0
-        ? ` ${item.plannedRevenue.unpricedHours.toFixed(1)} eligible hours are unpriced because an hourly rate is not configured.`
-        : '';
-      const title = `Average total allocation for ${item.month.label} W${item.week} across ${availableLabel}: ${item.value.toFixed(1)}%. Planned revenue: ${formatExactRevenueValue(item.plannedRevenue.amount)}. Includes Intrasourcing and Local only.${unpricedNote} Resources assigned to N/A in this week are excluded from both the numerator and denominator.`;
+      const breakdown = buildMatrixPeriodBreakdownData(
+        `${item.month.label} · W${item.week}`,
+        item.allocationMetrics,
+        item.plannedRevenue,
+      );
 
       return `
         <td
-          class="col-week matrix-total-cell matrix-total-week-cell ${item.week === RESOURCE_SUMMARY_WEEKS_PER_MONTH ? 'month-end' : ''}"
+          class="col-week matrix-total-cell matrix-total-week-cell matrix-period-breakdown-trigger ${item.week === RESOURCE_SUMMARY_WEEKS_PER_MONTH ? 'month-end' : ''}"
           data-total-year="${item.month.y}"
           data-total-month="${item.month.m}"
           data-total-week="${item.week}"
-          title="${esc(title)}"
+          data-period-breakdown="${esc(encodeMatrixPeriodBreakdownData(breakdown))}"
+          tabindex="0"
+          aria-label="${esc(`${item.month.label} week ${item.week} allocation and revenue breakdown. Hover or focus to view the table.`)}"
         >
           <span class="matrix-total-week-allocation">${formatAllocationViewValue(item.value)}</span>
           <span class="matrix-total-week-revenue">${formatRevenueViewValue(item.plannedRevenue.amount)}</span>
