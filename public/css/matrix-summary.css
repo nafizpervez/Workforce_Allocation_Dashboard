@@ -63,11 +63,6 @@
   background: #f8fafc !important;
 }
 
-.matrix-not-local-subheading {
-  background: #f5f3ff !important;
-  color: #5b21b6;
-}
-
 .matrix-revenue-subheading {
   background: #dbeafe !important;
 }
@@ -190,11 +185,6 @@
   background-color: #fbfcfe;
 }
 
-.matrix-not-local-cell {
-  background-color: #faf7ff !important;
-  color: #6d28d9;
-}
-
 .matrix-revenue-cell {
   color: #64748b;
   background-color: #eff6ff;
@@ -252,11 +242,6 @@
 .matrix-total-row .matrix-total-allocation-cell {
   background: #f1f5f9;
   color: #334155;
-}
-
-.matrix-total-row .matrix-not-local-total-cell {
-  background: #ede9fe !important;
-  color: #5b21b6;
 }
 
 .matrix-total-row .matrix-total-revenue-cell {

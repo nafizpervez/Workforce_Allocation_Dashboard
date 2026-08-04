@@ -137,76 +137,83 @@ function getMatrixMonthBreakdownTooltip() {
   return tooltip;
 }
 
-function getMatrixMonthBreakdownData(heading) {
-  const number = key => {
-    const value = Number(heading?.dataset?.[key]);
-    return Number.isFinite(value) ? value : 0;
-  };
+function getMatrixPeriodBreakdownData(trigger) {
+  const encodedPayload = String(trigger?.dataset?.periodBreakdown || '');
+  if (!encodedPayload) return { periodLabel: '', columns: [] };
 
-  return {
-    monthLabel: String(heading?.dataset?.monthLabel || ''),
-    intrasourcingAverageAllocation: number('intrasourcingAverageAllocation'),
-    localAverageAllocation: number('localAverageAllocation'),
-    intrasourcingRevenue: number('intrasourcingRevenue'),
-    localRevenue: number('localRevenue'),
-  };
+  try {
+    const parsed = JSON.parse(decodeURIComponent(encodedPayload));
+    return {
+      periodLabel: String(parsed?.periodLabel || ''),
+      columns: Array.isArray(parsed?.columns) ? parsed.columns : [],
+    };
+  } catch (error) {
+    console.warn('Unable to read matrix allocation/revenue breakdown.', error);
+    return { periodLabel: '', columns: [] };
+  }
 }
 
 function renderMatrixMonthBreakdownTooltip(data) {
+  const columns = Array.isArray(data?.columns) ? data.columns : [];
+  const rows = columns.map(column => `
+    <tr>
+      <th scope="row" title="${esc(column.label)}">${esc(column.label)}</th>
+      <td>${esc(`${formatMatrixBreakdownNumber(column.allocation, 1)}%`)}</td>
+      <td>${column.hasRevenueColumn ? esc(formatRevenueViewValue(column.revenue)) : '—'}</td>
+    </tr>
+  `).join('');
+
   return `
-    <div class="matrix-month-breakdown-tooltip__title">${esc(data.monthLabel)}</div>
+    <div class="matrix-month-breakdown-tooltip__title">${esc(data.periodLabel)}</div>
     <table class="matrix-month-breakdown-tooltip__table">
       <thead>
         <tr>
-          <th scope="col"></th>
-          <th scope="col">Intrasourcing</th>
-          <th scope="col">Local</th>
+          <th scope="col">Classification</th>
+          <th scope="col">Allocation</th>
+          <th scope="col">Revenue</th>
         </tr>
       </thead>
       <tbody>
-        <tr>
-          <th scope="row">Allocation</th>
-          <td>${esc(`${formatMatrixBreakdownNumber(data.intrasourcingAverageAllocation, 1)}%`)}</td>
-          <td>${esc(`${formatMatrixBreakdownNumber(data.localAverageAllocation, 1)}%`)}</td>
-        </tr>
-        <tr>
-          <th scope="row">Revenue</th>
-          <td>${esc(formatRevenueViewValue(data.intrasourcingRevenue))}</td>
-          <td>${esc(formatRevenueViewValue(data.localRevenue))}</td>
-        </tr>
+        ${rows || `
+          <tr>
+            <th scope="row">No classifications</th>
+            <td>0%</td>
+            <td>$0</td>
+          </tr>
+        `}
       </tbody>
     </table>
   `;
 }
 
-function positionMatrixMonthBreakdownTooltip(tooltip, heading) {
+function positionMatrixMonthBreakdownTooltip(tooltip, trigger) {
   const margin = 12;
   const gap = 8;
-  const headingRect = heading.getBoundingClientRect();
+  const triggerRect = trigger.getBoundingClientRect();
   const tooltipRect = tooltip.getBoundingClientRect();
   const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
   const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
-  let left = headingRect.left + (headingRect.width / 2) - (tooltipRect.width / 2);
-  let top = headingRect.bottom + gap;
+  let left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+  let top = triggerRect.bottom + gap;
 
   left = Math.max(margin, Math.min(left, viewportWidth - tooltipRect.width - margin));
   if (top + tooltipRect.height > viewportHeight - margin) {
-    top = Math.max(margin, headingRect.top - tooltipRect.height - gap);
+    top = Math.max(margin, triggerRect.top - tooltipRect.height - gap);
   }
 
   tooltip.style.left = `${Math.round(left)}px`;
   tooltip.style.top = `${Math.round(top)}px`;
 }
 
-function showMatrixMonthBreakdownTooltip(heading) {
+function showMatrixMonthBreakdownTooltip(trigger) {
   const tooltip = getMatrixMonthBreakdownTooltip();
-  tooltip.innerHTML = renderMatrixMonthBreakdownTooltip(
-    getMatrixMonthBreakdownData(heading),
-  );
+  const data = getMatrixPeriodBreakdownData(trigger);
+  tooltip.innerHTML = renderMatrixMonthBreakdownTooltip(data);
+  tooltip.style.width = 'min(430px, calc(100vw - 20px))';
   tooltip.classList.add('is-visible');
   tooltip.setAttribute('aria-hidden', 'false');
-  heading.setAttribute('aria-describedby', MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID);
-  positionMatrixMonthBreakdownTooltip(tooltip, heading);
+  trigger.setAttribute('aria-describedby', MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID);
+  positionMatrixMonthBreakdownTooltip(tooltip, trigger);
 }
 
 function hideMatrixMonthBreakdownTooltip() {
@@ -214,34 +221,36 @@ function hideMatrixMonthBreakdownTooltip() {
   if (!tooltip) return;
   tooltip.classList.remove('is-visible');
   tooltip.setAttribute('aria-hidden', 'true');
-  document.querySelectorAll(`.matrix-month-heading[aria-describedby="${MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID}"]`)
-    .forEach(heading => heading.removeAttribute('aria-describedby'));
+  document.querySelectorAll(`.matrix-period-breakdown-trigger[aria-describedby="${MATRIX_MONTH_BREAKDOWN_TOOLTIP_ID}"]`)
+    .forEach(trigger => trigger.removeAttribute('aria-describedby'));
 }
 
 function installMatrixMonthBreakdownTooltip() {
   if (window.__matrixMonthBreakdownTooltipInstalled) return;
   window.__matrixMonthBreakdownTooltipInstalled = true;
 
+  const selector = '.matrix-period-breakdown-trigger[data-period-breakdown]';
+
   document.addEventListener('pointerover', event => {
-    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
-    if (!heading || heading.contains(event.relatedTarget)) return;
-    showMatrixMonthBreakdownTooltip(heading);
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    showMatrixMonthBreakdownTooltip(trigger);
   });
 
   document.addEventListener('pointerout', event => {
-    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
-    if (!heading || heading.contains(event.relatedTarget)) return;
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
     hideMatrixMonthBreakdownTooltip();
   });
 
   document.addEventListener('focusin', event => {
-    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
-    if (heading) showMatrixMonthBreakdownTooltip(heading);
+    const trigger = event.target.closest?.(selector);
+    if (trigger) showMatrixMonthBreakdownTooltip(trigger);
   });
 
   document.addEventListener('focusout', event => {
-    const heading = event.target.closest?.('.matrix-month-heading[data-month-breakdown="true"]');
-    if (!heading || heading.contains(event.relatedTarget)) return;
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
     hideMatrixMonthBreakdownTooltip();
   });
 
@@ -253,6 +262,7 @@ installMatrixMonthBreakdownTooltip();
 
 function renderMatrixHeader(months, employees, unavailableSlots) {
   const allocationColumns = getResourceSummaryAllocationColumns();
+  const revenueColumns = getResourceSummaryRevenueColumns();
   let header = '<tr class="months">';
 
   header += `
@@ -269,7 +279,7 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
     >Allocation (%)</th>
     <th
       class="sticky-revenue-group matrix-summary-group matrix-revenue-group"
-      colspan="${RESOURCE_SUMMARY_COLUMNS.revenue.length}"
+      colspan="${revenueColumns.length}"
       style="${getMatrixRevenueStickyStyle(0, allocationColumns.length)}"
     >Revenue ($)</th>
   `;
@@ -281,18 +291,14 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
       month,
       unavailableSlots,
     );
+    const breakdown = buildMatrixPeriodBreakdownData(month.label, allocation, revenue);
     header += `
       <th
         colspan="4"
-        class="matrix-month-heading border-b border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-700 bg-gray-50 ${index < months.length - 1 ? 'border-r border-gray-200' : ''}"
-        data-month-breakdown="true"
-        data-month-label="${esc(month.label)}"
-        data-intrasourcing-average-allocation="${allocation.categoryAllocation.intrasourcing.averageAllocation}"
-        data-local-average-allocation="${allocation.categoryAllocation.local.averageAllocation}"
-        data-intrasourcing-revenue="${Number(revenue.byCategory?.intrasourcing) || 0}"
-        data-local-revenue="${Number(revenue.byCategory?.local) || 0}"
+        class="matrix-month-heading matrix-period-breakdown-trigger border-b border-gray-200 px-2 py-2 text-center text-xs font-semibold text-gray-700 bg-gray-50 ${index < months.length - 1 ? 'border-r border-gray-200' : ''}"
+        data-period-breakdown="${esc(encodeMatrixPeriodBreakdownData(breakdown))}"
         tabindex="0"
-        aria-label="${esc(`${month.label} Intrasourcing and Local allocation and revenue breakdown. Hover or focus to view the table.`)}"
+        aria-label="${esc(`${month.label} allocation and revenue breakdown. Hover or focus to view the table.`)}"
       >
         <span class="matrix-month-label">
           ${esc(month.label)}
@@ -315,7 +321,7 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
       : column.label;
     header += `
       <th
-        class="sticky-allocation-cell col-allocation matrix-summary-subheading matrix-allocation-subheading ${column.isNotLocalProject ? 'matrix-not-local-subheading' : ''}"
+        class="sticky-allocation-cell col-allocation matrix-summary-subheading matrix-allocation-subheading"
         style="${getMatrixAllocationStickyStyle(index)}"
         title="${esc(projectReference)}"
         data-not-local-project-id="${column.isNotLocalProject ? column.projectId : ''}"
@@ -323,21 +329,46 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
     `;
   });
 
-  RESOURCE_SUMMARY_COLUMNS.revenue.forEach((column, index) => {
+  revenueColumns.forEach((column, index) => {
+    const projectReference = column.isNotLocalProject && column.projectCode
+      ? `${column.projectCode} — ${column.label}`
+      : column.label;
     header += `
       <th
-        class="sticky-revenue-cell col-revenue matrix-summary-subheading matrix-revenue-subheading ${index === RESOURCE_SUMMARY_COLUMNS.revenue.length - 1 ? 'matrix-summary-end' : ''}"
+        class="sticky-revenue-cell col-revenue matrix-summary-subheading matrix-revenue-subheading ${index === revenueColumns.length - 1 ? 'matrix-summary-end' : ''}"
         style="${getMatrixRevenueStickyStyle(index, allocationColumns.length)}"
-        title="${esc(column.label)}"
+        title="${esc(projectReference)}"
+        data-not-local-project-id="${column.isNotLocalProject ? column.projectId : ''}"
       ><span>${esc(column.label)}</span></th>
     `;
   });
 
-  months.forEach(() => {
-    for (let week = 1; week <= 4; week += 1) {
+  months.forEach(month => {
+    for (let week = 1; week <= RESOURCE_SUMMARY_WEEKS_PER_MONTH; week += 1) {
+      const allocation = getMatrixWeekAllocationMetrics(
+        employees,
+        month,
+        week,
+        unavailableSlots,
+      );
+      const revenue = getMatrixWeekPlannedRevenue(
+        employees,
+        month,
+        week,
+        unavailableSlots,
+      );
+      const breakdown = buildMatrixPeriodBreakdownData(
+        `${month.label} · W${week}`,
+        allocation,
+        revenue,
+      );
+
       header += `
         <th
-          class="border-b border-gray-200 px-2 py-2 text-center text-xs text-gray-500 font-medium bg-gray-50 col-week ${week === 4 ? 'border-r border-gray-200' : 'border-r border-dotted border-gray-200'}"
+          class="matrix-period-breakdown-trigger border-b border-gray-200 px-2 py-2 text-center text-xs text-gray-500 font-medium bg-gray-50 col-week ${week === RESOURCE_SUMMARY_WEEKS_PER_MONTH ? 'border-r border-gray-200' : 'border-r border-dotted border-gray-200'}"
+          data-period-breakdown="${esc(encodeMatrixPeriodBreakdownData(breakdown))}"
+          tabindex="0"
+          aria-label="${esc(`${month.label} week ${week} allocation and revenue breakdown. Hover or focus to view the table.`)}"
         >W${week}</th>
       `;
     }
@@ -349,6 +380,7 @@ function renderMatrixHeader(months, employees, unavailableSlots) {
 
 function renderResourceSummaryCells(employee, summary = getResourceSummaryViewData(employee)) {
   const allocationColumns = summary.allocationColumns || getResourceSummaryAllocationColumns();
+  const revenueColumns = summary.revenueColumns || getResourceSummaryRevenueColumns();
   const allocationCells = allocationColumns.map((column, index) => {
     const description = getAllocationColumnDescription(column);
     const percentageTotal = Number(summary.allocationMeta.percentageTotals[column.key]) || 0;
@@ -357,7 +389,7 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
 
     return `
       <td
-        class="matrix-fixed-cell sticky-allocation-cell col-allocation matrix-summary-cell matrix-allocation-cell ${column.isNotLocalProject ? 'matrix-not-local-cell' : ''}"
+        class="matrix-fixed-cell sticky-allocation-cell col-allocation matrix-summary-cell matrix-allocation-cell"
         style="${getMatrixAllocationStickyStyle(index)}"
         data-employee-id="${employee.id}"
         data-summary-group="allocation"
@@ -368,22 +400,23 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
     `;
   }).join('');
 
-  const revenueCells = RESOURCE_SUMMARY_COLUMNS.revenue.map((column, index) => {
+  const revenueCells = revenueColumns.map((column, index) => {
     const meta = summary.revenueMeta[column.key];
     const revenue = summary.revenue[column.key];
     const title = meta.hasRevenueRate
       ? `${employee.name} · ${column.label}: ${meta.hours.toFixed(1)}h × ${formatHourlyRateValue(meta.rate)} = ${formatExactRevenueValue(revenue)}. Click for the project-level breakdown.`
-      : `${employee.name} · ${column.label}: assign a supported designation and save the ${column.label} hourly rate in Reserve Revenue. Click for the assignment breakdown.`;
+      : `${employee.name} · ${column.label}: assign a supported designation and save the required hourly rate in Reserve Revenue. Click for the assignment breakdown.`;
 
     return `
       <td
-        class="matrix-fixed-cell sticky-revenue-cell col-revenue matrix-summary-cell matrix-revenue-cell ${index === RESOURCE_SUMMARY_COLUMNS.revenue.length - 1 ? 'matrix-summary-end' : ''}"
+        class="matrix-fixed-cell sticky-revenue-cell col-revenue matrix-summary-cell matrix-revenue-cell ${index === revenueColumns.length - 1 ? 'matrix-summary-end' : ''}"
         style="${getMatrixRevenueStickyStyle(index, allocationColumns.length)}"
         data-action="open-revenue-breakdown"
         data-employee-id="${employee.id}"
-        data-revenue-key="${column.key}"
+        data-revenue-key="${esc(column.key)}"
         data-summary-group="revenue"
-        data-summary-metric="${column.key}"
+        data-summary-metric="${esc(column.key)}"
+        data-not-local-project-id="${column.isNotLocalProject ? column.projectId : ''}"
         role="button"
         tabindex="0"
         aria-label="Open ${esc(employee.name)} ${esc(column.label)} revenue breakdown"
@@ -535,7 +568,7 @@ function renderMatrix() {
 
   const columnCount = 2 +
     getResourceSummaryAllocationColumns().length +
-    RESOURCE_SUMMARY_COLUMNS.revenue.length +
+    getResourceSummaryRevenueColumns().length +
     (months.length * 4);
 
   const totalsRow = renderMatrixTotalsRow(employees, months);

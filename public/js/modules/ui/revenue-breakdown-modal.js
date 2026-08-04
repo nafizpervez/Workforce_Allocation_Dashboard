@@ -58,7 +58,7 @@ function renderRevenueBreakdownRows(breakdown) {
 }
 
 function openRevenueBreakdownModal(revenueKey, employeeId = null) {
-  const column = RESOURCE_SUMMARY_COLUMNS.revenue.find(item => item.key === revenueKey);
+  const column = getResourceSummaryRevenueColumn(revenueKey);
   if (!column) return;
 
   const visibleEmployees = getFilteredMatrixEmployees();

@@ -24,9 +24,9 @@ table.matrix th {
 }
 
 /* Fixed summary block: SN + Resource + the six standard allocation columns +
-   one dynamic allocation column for every project marked Not Local + four
-   independently calculated revenue columns. Total Allocation is displayed
-   inside each resource's circular indicator. */
+   one dynamic Allocation column and one dynamic Revenue column for every
+   project marked Not Local. Total Allocation is displayed inside each
+   resource's circular indicator. */
 :root {
   --sn-w: 38px;
   --name-w: 190px;
@@ -259,19 +259,20 @@ tr.matrix-row:hover td.cell {
   color: #b45309;
 }
 
-.matrix-month-heading[data-month-breakdown="true"] {
+.matrix-period-breakdown-trigger {
   cursor: help;
   outline-offset: -2px;
 }
 
-.matrix-month-heading[data-month-breakdown="true"]:focus-visible {
+.matrix-period-breakdown-trigger:focus-visible {
   outline: 2px solid #2563eb;
 }
 
 .matrix-month-breakdown-tooltip {
   position: fixed;
   z-index: 10000;
-  width: min(380px, calc(100vw - 20px));
+  width: min(430px, calc(100vw - 20px));
+  max-width: calc(100vw - 20px);
   overflow: hidden;
   padding: 9px;
   border: 1px solid rgba(148, 163, 184, 0.34);
@@ -324,7 +325,6 @@ tr.matrix-row:hover td.cell {
 .matrix-month-breakdown-tooltip__table tbody tr:last-child th,
 .matrix-month-breakdown-tooltip__table tbody tr:last-child td {
   border-bottom: 0;
-  background: rgba(51, 65, 85, 0.42);
 }
 
 .matrix-month-breakdown-tooltip__table th:last-child,
@@ -335,48 +335,73 @@ tr.matrix-row:hover td.cell {
 .matrix-month-breakdown-tooltip__table thead th {
   background: rgba(30, 41, 59, 0.92);
   color: #cbd5e1;
-  font-size: 8.5px;
+  font-size: 8px;
   font-weight: 700;
-  letter-spacing: 0.05em;
+  letter-spacing: 0.035em;
+  line-height: 1.15;
   text-align: center;
   text-transform: uppercase;
+  white-space: normal;
 }
 
 .matrix-month-breakdown-tooltip__table thead th:first-child {
-  width: 34%;
+  width: 52%;
   text-align: left;
 }
 
 .matrix-month-breakdown-tooltip__table thead th:nth-child(2),
 .matrix-month-breakdown-tooltip__table thead th:nth-child(3) {
-  width: 33%;
+  width: 24%;
 }
 
 .matrix-month-breakdown-tooltip__table tbody th[scope="row"] {
+  background: rgba(30, 41, 59, 0.58);
   color: #e2e8f0;
   font-weight: 600;
-  line-height: 1.15;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
   text-align: left;
   white-space: normal;
 }
 
 .matrix-month-breakdown-tooltip__table tbody td {
+  background: rgba(15, 23, 42, 0.46);
   color: #ffffff;
-  font-size: 10px;
+  font-size: 9.5px;
   font-weight: 700;
   font-variant-numeric: tabular-nums;
-  text-align: right;
+  text-align: center;
   white-space: nowrap;
 }
 
+.matrix-month-breakdown-tooltip__table tbody tr:nth-child(even) th,
+.matrix-month-breakdown-tooltip__table tbody tr:nth-child(even) td {
+  background-color: rgba(51, 65, 85, 0.42);
+}
+
+
 @media (max-width: 600px) {
   .matrix-month-breakdown-tooltip {
-    width: calc(100vw - 16px);
-    padding: 9px;
+    width: calc(100vw - 16px) !important;
+    padding: 8px;
   }
 
   .matrix-month-breakdown-tooltip__table th,
   .matrix-month-breakdown-tooltip__table td {
-    padding: 6px;
+    padding: 6px 5px;
+  }
+
+  .matrix-month-breakdown-tooltip__table thead th,
+  .matrix-month-breakdown-tooltip__table tbody td {
+    font-size: 7.5px;
+  }
+
+  .matrix-month-breakdown-tooltip__table thead th:first-child {
+    width: 50%;
+  }
+
+  .matrix-month-breakdown-tooltip__table thead th:nth-child(2),
+  .matrix-month-breakdown-tooltip__table thead th:nth-child(3) {
+    width: 25%;
   }
 }
