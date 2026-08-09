@@ -1,11 +1,62 @@
 /* Workforce Allocation Dashboard — core/designations.js */
 
 const RESOURCE_DESIGNATIONS = Object.freeze([
-  'Team Lead',
+  'Head of Department',
+  'Senior Manager',
+  'Technical Lead',
   'Senior Consultant',
   'Consultant',
-  'Junior Consultant',
+  'Jr. Consultant',
   'Analyst',
+]);
+
+// Revenue rates remain stored under the five historical rate keys so existing
+// saved rates and effective-dated history continue to work without a database
+// migration. Employee designations are mapped into those shared rate groups.
+const REVENUE_RATE_GROUPS = Object.freeze([
+  Object.freeze({
+    rateDesignation: 'Team Lead',
+    label: 'Technical Lead, Senior Project Manager',
+    aliases: Object.freeze([
+      'Team Lead',
+      'Technical Lead',
+      'Senior Project Manager',
+    ]),
+  }),
+  Object.freeze({
+    rateDesignation: 'Senior Consultant',
+    label: 'Senior Consultant, Senior Software Engineer, Project Manager',
+    aliases: Object.freeze([
+      'Senior Consultant',
+      'Senior Software Engineer',
+      'Project Manager',
+    ]),
+  }),
+  Object.freeze({
+    rateDesignation: 'Consultant',
+    label: 'Consultant, Software Engineer, Jr. Project Manager',
+    aliases: Object.freeze([
+      'Consultant',
+      'Software Engineer',
+      'Jr. Project Manager',
+      'Junior Project Manager',
+    ]),
+  }),
+  Object.freeze({
+    rateDesignation: 'Junior Consultant',
+    label: 'Jr. Consultant, Software Developer, Project Coordinator',
+    aliases: Object.freeze([
+      'Junior Consultant',
+      'Jr. Consultant',
+      'Software Developer',
+      'Project Coordinator',
+    ]),
+  }),
+  Object.freeze({
+    rateDesignation: 'Analyst',
+    label: 'Analyst',
+    aliases: Object.freeze(['Analyst']),
+  }),
 ]);
 
 function normalizeDesignationKey(value) {
@@ -13,6 +64,43 @@ function normalizeDesignationKey(value) {
     .trim()
     .replace(/\s+/g, ' ')
     .toLowerCase();
+}
+
+function normalizeDesignationAliasKey(value) {
+  return String(value || '')
+    .trim()
+    .toLowerCase()
+    .replace(/[._–—-]+/g, ' ')
+    .replace(/[^a-z0-9, ]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+}
+
+function canonicalResourceDesignationLabel(value) {
+  const raw = String(value || '').trim();
+  if (!raw) return '';
+
+  const key = normalizeDesignationAliasKey(raw);
+  if (key === normalizeDesignationAliasKey('Team Lead')) return 'Technical Lead';
+  if (key === normalizeDesignationAliasKey('Junior Consultant')) return 'Jr. Consultant';
+  if (key === normalizeDesignationAliasKey('Senior Manager, Delivery')) return 'Senior Manager';
+  return raw;
+}
+
+function getRevenueRateGroup(designation) {
+  const key = normalizeDesignationAliasKey(designation);
+  if (!key) return null;
+  return REVENUE_RATE_GROUPS.find(group => (
+    group.aliases.some(alias => normalizeDesignationAliasKey(alias) === key)
+  )) || null;
+}
+
+function getRevenueRateDesignationKey(designation) {
+  return getRevenueRateGroup(designation)?.rateDesignation || '';
+}
+
+function getRevenueRateGroupLabel(designation) {
+  return getRevenueRateGroup(designation)?.label || canonicalResourceDesignationLabel(designation);
 }
 
 function normalizeRevenueRateDateKey(value) {
@@ -56,7 +144,8 @@ function normalizeRevenueRateDateKey(value) {
 }
 
 function getRevenueRateForDesignation(designation) {
-  const key = normalizeDesignationKey(designation);
+  const rateDesignation = getRevenueRateDesignationKey(designation) || designation;
+  const key = normalizeDesignationKey(rateDesignation);
   if (!key) return null;
 
   return (S.revenueRates || []).find(rate =>

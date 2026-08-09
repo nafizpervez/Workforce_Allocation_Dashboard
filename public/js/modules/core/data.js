@@ -172,6 +172,7 @@ async function loadAll() {
     S.employees = emps.map(employee => ({
       ...employee,
       name: canonicalPersonName(employee.name),
+      designation: canonicalResourceDesignationLabel(employee.designation),
     }));
     S.projects = projs;
     S.assignments = asgs;

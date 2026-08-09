@@ -1,6 +1,7 @@
 const express = require('express');
 const { getAppDb } = require('../database');
 const { canonicalPersonName, personIdentityKey } = require('../services/person-identity');
+const { canonicalDesignationDisplay } = require('../services/designations');
 const {
   normalizeTimesheetDetailPayloadRows,
   normalizeTimesheetPayloadRows,
@@ -193,7 +194,7 @@ router.get('/api/timesheet-report/data', (req, res) => {
   `).all();
   const designationByWorker = Object.fromEntries(employeeRows.map(employee => [
     personIdentityKey(employee.name),
-    cleanText(employee.designation),
+    canonicalDesignationDisplay(cleanText(employee.designation)),
   ]));
 
   const first = rows[0];

@@ -775,6 +775,13 @@ function setReportSectionHidden(hidden) {
     if (icon) icon.textContent = hidden ? '+' : '−';
   }
 
+  const exportButton = document.getElementById('exportFiscalYearReportBtn');
+  if (exportButton) {
+    exportButton.classList.toggle('is-report-hidden', hidden);
+    exportButton.setAttribute('aria-hidden', String(hidden));
+    exportButton.tabIndex = hidden ? -1 : 0;
+  }
+
   if (!hidden) {
     requestAnimationFrame(() => {
       if (typeof getCapacityExecutiveSummary === 'function' && typeof renderCapacityExecutiveChart === 'function') {

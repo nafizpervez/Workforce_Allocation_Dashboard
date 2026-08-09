@@ -7,6 +7,7 @@ const {
 } = require('../services/project-analytics');
 const { fiscalMonths, getFiscalYear } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
+const { withCanonicalDesignation } = require('../services/designations');
 const {
   assignmentSlotKey,
   filterEffectiveAssignments,
@@ -25,7 +26,7 @@ function getActiveEmployeeRows() {
     FROM employees
     WHERE COALESCE(active, 1) = 1
     ORDER BY id
-  `).all();
+  `).all().map(withCanonicalDesignation);
 }
 
 function getAssignmentRows() {

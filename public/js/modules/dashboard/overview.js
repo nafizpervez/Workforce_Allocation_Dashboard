@@ -1,71 +1,90 @@
 /* Workforce Allocation Dashboard — dashboard/overview.js */
 
 /* ================================================================ STATS */
-function isSeniorManagerDeliveryResource(employee) {
-  const designation = normalizeDesignationKey(employee?.designation);
-  if (designation === normalizeDesignationKey('Senior Manager, Delivery')) {
-    return true;
-  }
+function isFixedSeniorManagerResource(employee) {
+  const employeeCode = String(employee?.employee_code || '').trim().toUpperCase();
+  if (employeeCode === 'SGESA00026') return true;
 
   const normalizedName = String(employee?.name || '')
     .toLowerCase()
     .replace(/[^a-z0-9]+/g, '');
 
-  return normalizedName.includes('bhowm') && (
-    normalizedName.includes('debashish') ||
-    normalizedName.includes('debashsish') ||
-    normalizedName.includes('debasis') ||
-    normalizedName.includes('debasish')
+  return normalizedName === 'debashishbhowmick';
+}
+
+const ACTIVE_RESOURCE_DESIGNATION_GROUPS = Object.freeze([
+  Object.freeze({
+    label: 'SM',
+    fullLabel: 'Senior Manager',
+    tooltipLabel: 'Senior Manager',
+    aliases: Object.freeze(['Senior Manager']),
+    fixedSeniorManager: true,
+    isManager: true,
+  }),
+  Object.freeze({
+    label: 'TL',
+    fullLabel: 'Technical Lead',
+    tooltipLabel: 'Technical Lead, Senior Project Manager',
+    aliases: Object.freeze(['Team Lead', 'Technical Lead', 'Senior Project Manager']),
+  }),
+  Object.freeze({
+    label: 'SC',
+    fullLabel: 'Senior Consultant',
+    tooltipLabel: 'Senior Consultant, Senior Software Engineer, Project Manager',
+    aliases: Object.freeze(['Senior Consultant', 'Senior Software Engineer', 'Project Manager']),
+  }),
+  Object.freeze({
+    label: 'C',
+    fullLabel: 'Consultant',
+    tooltipLabel: 'Consultant, Software Engineer, Jr. Project Manager',
+    aliases: Object.freeze(['Consultant', 'Software Engineer', 'Jr. Project Manager', 'Junior Project Manager']),
+  }),
+  Object.freeze({
+    label: 'JC',
+    fullLabel: 'Jr. Consultant',
+    tooltipLabel: 'Jr. Consultant, Software Developer, Project Coordinator',
+    aliases: Object.freeze(['Junior Consultant', 'Jr. Consultant', 'Software Developer', 'Project Coordinator']),
+  }),
+  Object.freeze({
+    label: 'A',
+    fullLabel: 'Analyst',
+    tooltipLabel: 'Analyst',
+    aliases: Object.freeze(['Analyst']),
+  }),
+]);
+
+function resourceMatchesActiveDesignationGroup(employee, group) {
+  if (!employee || !group) return false;
+  if (group.fixedSeniorManager) return isFixedSeniorManagerResource(employee);
+  if (isFixedSeniorManagerResource(employee)) return false;
+
+  const employeeDesignation = normalizeDesignationAliasKey(
+    canonicalResourceDesignationLabel(employee.designation),
   );
+  return group.aliases.some(alias => (
+    normalizeDesignationAliasKey(canonicalResourceDesignationLabel(alias)) === employeeDesignation
+  ));
 }
 
 function getActiveResourceDesignationSummary() {
-  const designationCounts = new Map(
-    (RESOURCE_DESIGNATIONS || []).map(designation => [designation, 0]),
-  );
-  const designationInitials = new Map([
-    ['Team Lead', 'TL'],
-    ['Senior Consultant', 'SC'],
-    ['Consultant', 'C'],
-    ['Junior Consultant', 'JC'],
-    ['Analyst', 'A'],
-  ]);
-  let seniorManagerCount = 0;
+  const employees = S.employees || [];
 
-  for (const employee of S.employees || []) {
-    if (Number(employee?.active ?? 1) === 0) continue;
+  return ACTIVE_RESOURCE_DESIGNATION_GROUPS.map(group => {
+    const matchingResources = group.fixedSeniorManager
+      ? employees.filter(isFixedSeniorManagerResource)
+      : employees.filter(employee => (
+        Number(employee?.active ?? 1) !== 0 &&
+        resourceMatchesActiveDesignationGroup(employee, group)
+      ));
 
-    if (isSeniorManagerDeliveryResource(employee)) {
-      seniorManagerCount += 1;
-      continue;
-    }
-
-    const matchedDesignation = (RESOURCE_DESIGNATIONS || []).find(designation => (
-      normalizeDesignationKey(designation) ===
-      normalizeDesignationKey(employee.designation)
-    ));
-
-    if (!matchedDesignation) continue;
-    designationCounts.set(
-      matchedDesignation,
-      (designationCounts.get(matchedDesignation) || 0) + 1,
-    );
-  }
-
-  return [
-    {
-      label: 'SM',
-      fullLabel: 'Senior Manager, Delivery',
-      count: seniorManagerCount,
-      isManager: true,
-    },
-    ...(RESOURCE_DESIGNATIONS || []).map(designation => ({
-      label: designationInitials.get(designation) || designation,
-      fullLabel: designation,
-      count: designationCounts.get(designation) || 0,
-      isManager: false,
-    })),
-  ];
+    return {
+      label: group.label,
+      fullLabel: group.fullLabel,
+      tooltipLabel: group.tooltipLabel,
+      count: group.fixedSeniorManager ? Math.min(matchingResources.length, 1) : matchingResources.length,
+      isManager: Boolean(group.isManager),
+    };
+  });
 }
 
 function renderActiveResourceDesignationList() {
@@ -77,15 +96,15 @@ function renderActiveResourceDesignationList() {
         <span>Team composition</span>
         <span class="active-resource-composition__hint">By designation</span>
       </div>
-      <div class="active-resource-composition__grid">
+      <div class="active-resource-composition__grid${rows.length > 6 ? ' active-resource-composition__grid--compact' : ''}">
         ${rows.map(row => `
           <button
             type="button"
             class="active-resource-composition__item${row.isManager ? ' active-resource-composition__item--manager' : ''}"
             data-action="open-designation-resources"
             data-designation="${esc(row.fullLabel)}"
-            title="Open ${esc(row.fullLabel)} resources"
-            aria-label="Open ${esc(row.fullLabel)} resources, ${esc(String(row.count))} people"
+            title="Open ${esc(row.tooltipLabel)} resources"
+            aria-label="Open ${esc(row.tooltipLabel)} resources, ${esc(String(row.count))} people"
           >
             <span class="active-resource-composition__label">${esc(row.label)}</span>
             <span class="active-resource-composition__count">${esc(String(row.count))}</span>
@@ -96,17 +115,26 @@ function renderActiveResourceDesignationList() {
 }
 
 function getDesignationModalResources(designation) {
-  const activeEmployees = (S.employees || []).filter(employee => (
-    Number(employee?.active ?? 1) !== 0
-  ));
   const normalizedDesignation = normalizeDesignationKey(designation);
+  const group = ACTIVE_RESOURCE_DESIGNATION_GROUPS.find(item => (
+    normalizeDesignationKey(item.fullLabel) === normalizedDesignation
+  ));
 
-  if (normalizedDesignation === normalizeDesignationKey('Senior Manager, Delivery')) {
-    return activeEmployees.filter(isSeniorManagerDeliveryResource);
+  if (group?.fixedSeniorManager) {
+    const fixedSeniorManager = (S.employees || []).find(isFixedSeniorManagerResource);
+    return fixedSeniorManager ? [fixedSeniorManager] : [];
   }
 
-  return activeEmployees.filter(employee => (
-    normalizeDesignationKey(employee.designation) === normalizedDesignation
+  if (group) {
+    return (S.employees || []).filter(employee => (
+      Number(employee?.active ?? 1) !== 0 &&
+      resourceMatchesActiveDesignationGroup(employee, group)
+    ));
+  }
+
+  return (S.employees || []).filter(employee => (
+    Number(employee?.active ?? 1) !== 0 &&
+    normalizeDesignationKey(canonicalResourceDesignationLabel(employee.designation)) === normalizedDesignation
   ));
 }
 
@@ -114,10 +142,9 @@ function openDesignationResourceModal(designation) {
   const resources = getDesignationModalResources(designation);
   const rows = resources.map((employee, index) => {
     const utilization = Number(S.employeeUtil?.get(Number(employee.id)) || 0);
-    const displayedDesignation = normalizeDesignationKey(designation) ===
-      normalizeDesignationKey('Senior Manager, Delivery')
-      ? 'Senior Manager, Delivery'
-      : (employee.designation || designation);
+    const displayedDesignation = canonicalResourceDesignationLabel(
+      isFixedSeniorManagerResource(employee) ? 'Senior Manager' : (employee.designation || designation),
+    );
 
     return `
       <button

@@ -89,6 +89,7 @@ function fiscalYearReportXmlEscape(value) {
 
 function fiscalYearReportNormalizeText(value) {
   return String(value ?? '')
+    .replace(/\bIntrasourcing\b/gi, 'Intra-Sourcing')
     .replace(/\u00a0/g, ' ')
     .replace(/[ \t\r\f\v]+/g, ' ')
     .replace(/ *\n */g, '\n')
@@ -783,35 +784,13 @@ function setFiscalYearExportBusy(button, busy) {
 }
 
 function initFiscalYearReportExport() {
-  const menuButton = document.getElementById('exportMenuBtn');
-  const menu = document.getElementById('exportMenu');
   const exportButton = document.getElementById('exportFiscalYearReportBtn');
-  if (!menuButton || !menu || !exportButton || menuButton.dataset.exportInit === '1') return;
+  if (!exportButton || exportButton.dataset.exportInit === '1') return;
 
-  menuButton.dataset.exportInit = '1';
-  const closeMenu = () => {
-    menu.classList.add('hidden');
-    menuButton.setAttribute('aria-expanded', 'false');
-  };
-
-  menuButton.addEventListener('click', event => {
-    event.preventDefault();
-    event.stopPropagation();
-    const shouldOpen = menu.classList.contains('hidden');
-    menu.classList.toggle('hidden', !shouldOpen);
-    menuButton.setAttribute('aria-expanded', String(shouldOpen));
-  });
-
-  menu.addEventListener('click', event => event.stopPropagation());
-  document.addEventListener('click', closeMenu);
-  document.addEventListener('keydown', event => {
-    if (event.key === 'Escape') closeMenu();
-  });
-
+  exportButton.dataset.exportInit = '1';
   exportButton.addEventListener('click', async event => {
     event.preventDefault();
     event.stopPropagation();
-    closeMenu();
     setFiscalYearExportBusy(exportButton, true);
     try {
       if (typeof toast === 'function') toast('Preparing the fiscal year DOCX report…', 'info');

@@ -21,6 +21,63 @@
   margin-top: 10px;
 }
 
+
+.report-section-actions {
+  display: inline-flex;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+
+.report-section-export-btn {
+  display: inline-flex;
+  min-height: 32px;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #2563eb;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 1px 3px rgba(37, 99, 235, 0.18);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.report-section-export-btn:hover:not(:disabled) {
+  border-color: #1d4ed8;
+  background: #1d4ed8;
+  box-shadow: 0 2px 7px rgba(37, 99, 235, 0.2);
+  transform: translateY(-1px);
+}
+
+.report-section-export-btn:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.25);
+  outline-offset: 2px;
+}
+
+.report-section-export-btn:disabled {
+  cursor: wait;
+  opacity: 0.7;
+}
+
+.report-section-export-btn__icon {
+  width: 15px;
+  height: 15px;
+  flex: 0 0 auto;
+}
+
+.report-section-export-btn.is-report-hidden {
+  display: none !important;
+}
+
 .report-section-toggle-btn {
   display: inline-flex;
   min-height: 32px;
@@ -361,7 +418,8 @@
 
 @media (max-width: 720px) {
   .report-section-toggle-row { justify-content: stretch; }
-  .report-section-toggle-btn { width: 100%; }
+  .report-section-actions { width: 100%; display: grid; grid-template-columns: minmax(0, 1fr); }
+  .report-section-toggle-btn, .report-section-export-btn { width: 100%; }
   .capacity-executive-card__header { padding: 15px 13px 12px; }
   .capacity-financial-strip { margin-right: 11px; margin-left: 11px; }
   .capacity-allocation-visual { grid-template-columns: minmax(0, 1fr); }

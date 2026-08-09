@@ -359,6 +359,29 @@
   background: #f8fafc;
 }
 
+
+.active-resource-composition__grid--compact {
+  gap: 3px 6px;
+}
+
+.active-resource-composition__grid--compact .active-resource-composition__item {
+  height: 24px;
+  min-height: 24px;
+  padding-top: 2px;
+  padding-bottom: 2px;
+}
+
+.active-resource-composition__grid--compact .active-resource-composition__label {
+  font-size: 10px;
+}
+
+.active-resource-composition__grid--compact .active-resource-composition__count {
+  min-width: 20px;
+  height: 17px;
+  padding: 0 5px;
+  font-size: 9px;
+}
+
 .active-resource-composition__item--manager {
   border-color: #dbeafe;
   background: #f8fbff;

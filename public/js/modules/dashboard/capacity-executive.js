@@ -99,9 +99,10 @@ function getCapacityExecutiveActiveTeam() {
 }
 
 function getCapacityResourceGroup(designation) {
-  const label = String(designation || '').trim();
+  const label = canonicalResourceDesignationLabel(designation);
   return label || 'No Designation';
 }
+
 
 function getCapacityGroupSortIndex(label) {
   const key = normalizeDesignationKey(label);
@@ -530,7 +531,7 @@ function renderExecutiveMetricsTableCard(summary) {
           </tr>`).join('')}</tbody>
       </table>
       <div class="capacity-executive-note">
-        <div class="capacity-executive-note__item"><div class="capacity-executive-note__label">Revenue generating</div><div class="capacity-executive-note__value">Intrasourcing, Local PS and Training Delivery</div></div>
+        <div class="capacity-executive-note__item"><div class="capacity-executive-note__label">Revenue generating</div><div class="capacity-executive-note__value">Intra-Sourcing, Local PS and Training Delivery</div></div>
         <div class="capacity-executive-note__item"><div class="capacity-executive-note__label">Revenue enabling</div><div class="capacity-executive-note__value">Pre-Sales allocation</div></div>
         <div class="capacity-executive-note__item"><div class="capacity-executive-note__label">Investment & overhead</div><div class="capacity-executive-note__value">Skill Development and General Admin</div></div>
       </div>
@@ -628,7 +629,7 @@ function renderMaximumRevenueCapacityCard(summary) {
     </div>`;
   return capacityExecutiveCardShell({
     key: 'maximum-revenue-capacity', title: '3. Maximum Revenue Capacity', eyebrow: 'Commercial capacity',
-    subtitle: 'Available working days multiplied by the higher configured Local or Intrasourcing daily rate.',
+    subtitle: 'Available working days multiplied by the higher configured Local or Intra-Sourcing daily rate.',
     fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveCurrency(summary.maximumRevenueCapacity), body,
   });
 }
