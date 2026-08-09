@@ -405,7 +405,7 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
     const revenue = summary.revenue[column.key];
     const title = meta.hasRevenueRate
       ? `${employee.name} · ${column.label}: ${meta.hours.toFixed(1)}h × ${formatHourlyRateValue(meta.rate)} = ${formatExactRevenueValue(revenue)}. Click for the project-level breakdown.`
-      : `${employee.name} · ${column.label}: assign a supported designation and save the required hourly rate in Reserve Revenue. Click for the assignment breakdown.`;
+      : `${employee.name} · ${column.label}: assign a supported designation and save the required hourly rate in Resource Revenue. Click for the assignment breakdown.`;
 
     return `
       <td

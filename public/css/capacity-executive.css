@@ -1,20 +1,42 @@
-/* Capacity Allocation and Executive Metrics cards. */
+/* Executive capacity and planning cards. */
 .capacity-executive-grid {
   display: grid;
-  grid-template-columns: minmax(0, 1.15fr) minmax(420px, 0.85fr);
-  gap: 20px;
+  gap: 18px;
   align-items: stretch;
+}
+
+.capacity-executive-grid--summary {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.capacity-executive-grid--planning {
+  /* Two cards per row gives the data-heavy planning tables enough width. */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
 .capacity-executive-card {
   min-width: 0;
-  min-height: 470px;
   height: 100%;
   overflow: hidden;
   border: 1px solid #dbe3ef;
   border-radius: 14px;
-  background: #ffffff;
-  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.05);
+  background: #fff;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, .08), 0 1px 2px rgba(15, 23, 42, .05);
+}
+
+.capacity-executive-grid--summary .capacity-executive-card {
+  min-height: 520px;
+}
+
+/* Planning cards size to their content. CSS Grid stretches both cards in each
+   implicit row to the taller card, while separate rows remain independent. */
+.capacity-executive-grid--planning .capacity-executive-card {
+  min-height: 0;
+}
+
+.capacity-executive-grid--planning .capacity-card-scroll {
+  max-height: none;
+  overflow: visible;
 }
 
 .capacity-executive-card--loading {
@@ -40,17 +62,20 @@
   display: flex;
   align-items: flex-start;
   justify-content: space-between;
-  gap: 18px;
-  padding: 18px 20px 14px;
+  gap: 14px;
+  min-height: 96px;
+  padding: 17px 18px 14px;
   border-bottom: 1px solid #e5e7eb;
 }
+
+.capacity-executive-card__heading { min-width: 0; }
 
 .capacity-executive-card__eyebrow {
   margin: 0 0 3px;
   color: #2563eb;
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.07em;
+  font-size: 10px;
+  font-weight: 750;
+  letter-spacing: .07em;
   text-transform: uppercase;
 }
 
@@ -58,14 +83,14 @@
   margin: 0;
   color: #0f172a;
   font-size: 17px;
-  font-weight: 700;
+  font-weight: 750;
   line-height: 1.25;
 }
 
 .capacity-executive-card__subtitle {
   margin: 4px 0 0;
   color: #64748b;
-  font-size: 12px;
+  font-size: 11px;
   line-height: 1.45;
 }
 
@@ -74,17 +99,17 @@
   border: 1px solid #bfdbfe;
   border-radius: 999px;
   background: #eff6ff;
-  padding: 5px 10px;
+  padding: 5px 9px;
   color: #1d4ed8;
-  font-size: 11px;
+  font-size: 10px;
   font-weight: 700;
   white-space: nowrap;
 }
 
 .capacity-financial-strip {
   display: grid;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
-  margin: 16px 18px 0;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin: 14px 14px 0;
   overflow: hidden;
   border: 1px solid #cbd5e1;
   border-radius: 10px;
@@ -93,18 +118,18 @@
 
 .capacity-financial-metric {
   min-width: 0;
-  padding: 14px 12px 12px;
+  min-height: 82px;
+  padding: 12px 8px 10px;
   text-align: center;
 }
 
-.capacity-financial-metric + .capacity-financial-metric {
-  border-left: 1px solid #cbd5e1;
-}
+.capacity-financial-metric:nth-child(even) { border-left: 1px solid #cbd5e1; }
+.capacity-financial-metric:nth-child(n+3) { border-top: 1px solid #cbd5e1; }
 
 .capacity-financial-metric__value {
   overflow: hidden;
   color: #173a67;
-  font-size: clamp(16px, 1.35vw, 23px);
+  font-size: clamp(15px, 1.2vw, 21px);
   font-weight: 800;
   line-height: 1.12;
   text-overflow: ellipsis;
@@ -112,90 +137,52 @@
 }
 
 .capacity-financial-metric__label {
-  margin-top: 8px;
+  margin-top: 7px;
   color: #52627a;
-  font-size: 10px;
+  font-size: 9px;
   font-weight: 500;
   line-height: 1.25;
 }
 
 .capacity-allocation-visual {
   display: grid;
-  grid-template-columns: minmax(260px, 1fr) minmax(190px, 0.72fr);
+  grid-template-columns: minmax(190px, 1fr) minmax(145px, .78fr);
   align-items: center;
-  gap: 12px;
-  min-height: 325px;
-  padding: 14px 22px 18px;
+  gap: 8px;
+  min-height: 296px;
+  padding: 10px 14px 16px;
 }
 
-.capacity-allocation-chart-column {
-  min-width: 0;
-}
-
-.capacity-allocation-chart-wrap {
-  position: relative;
-  width: 100%;
-  min-width: 0;
-  height: 270px;
-}
-
-.capacity-allocation-chart-caption {
-  margin-top: 3px;
-  color: #173a67;
-  font-size: 11px;
-  font-style: italic;
-  font-weight: 700;
-  text-align: center;
-}
-
-.capacity-allocation-chart-wrap canvas {
-  width: 100% !important;
-  height: 100% !important;
-}
+.capacity-allocation-chart-column { min-width: 0; }
+.capacity-allocation-chart-wrap { position: relative; width: 100%; min-width: 0; height: 245px; }
+.capacity-allocation-chart-wrap canvas { width: 100% !important; height: 100% !important; }
+.capacity-allocation-chart-caption { margin-top: 2px; color: #173a67; font-size: 10px; font-style: italic; font-weight: 700; text-align: center; }
 
 .capacity-allocation-legend {
   display: flex;
-  max-height: 286px;
+  max-height: 270px;
   flex-direction: column;
-  gap: 8px;
+  gap: 7px;
   overflow-y: auto;
-  padding: 4px 4px 4px 0;
+  padding: 4px 3px 4px 0;
 }
 
 .capacity-allocation-legend__item {
   display: grid;
-  grid-template-columns: 11px minmax(0, 1fr) auto;
+  grid-template-columns: 10px minmax(0, 1fr) auto;
   align-items: center;
-  gap: 8px;
+  gap: 7px;
   min-width: 0;
 }
 
-.capacity-allocation-legend__swatch {
-  width: 11px;
-  height: 11px;
-  border-radius: 2px;
-}
+.capacity-allocation-legend__swatch { width: 10px; height: 10px; border-radius: 2px; }
+.capacity-allocation-legend__label { overflow: hidden; color: #334155; font-size: 10px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
+.capacity-allocation-legend__value { color: #0f172a; font-size: 10px; font-weight: 700; white-space: nowrap; }
 
-.capacity-allocation-legend__label {
-  overflow: hidden;
-  color: #334155;
-  font-size: 11px;
-  font-weight: 600;
-  line-height: 1.25;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.capacity-allocation-legend__value {
-  color: #0f172a;
-  font-size: 11px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-
-.capacity-executive-table-wrap {
-  padding: 16px 18px 18px;
-}
+.capacity-executive-table-wrap { padding: 14px; }
+.capacity-executive-table-wrap--compact { height: calc(100% - 96px); overflow: auto; }
+.capacity-card-scroll { max-height: 465px; overflow: auto; padding: 14px; }
+.capacity-executive-table-scroll { width: 100%; overflow-x: auto; }
 
 .capacity-executive-table {
   width: 100%;
@@ -207,151 +194,107 @@
   table-layout: fixed;
 }
 
+.capacity-executive-table--wide { min-width: 700px; table-layout: auto; }
+
 .capacity-executive-table th,
 .capacity-executive-table td {
   border-bottom: 1px solid #c7d3e3;
-  padding: 11px 13px;
-  font-size: 12px;
-  line-height: 1.3;
+  padding: 9px 10px;
+  font-size: 11px;
+  line-height: 1.28;
+  vertical-align: middle;
 }
+
+.capacity-executive-table--compact th,
+.capacity-executive-table--compact td { padding: 10px 8px; }
+
+.capacity-executive-table--dense th,
+.capacity-executive-table--dense td { padding: 7px 8px; font-size: 10px; }
 
 .capacity-executive-table thead th {
   background: #173d69;
-  color: #ffffff;
-  font-size: 11px;
+  color: #fff;
+  font-size: 10px;
   font-weight: 700;
-  letter-spacing: 0.03em;
+  letter-spacing: .025em;
   text-align: center;
   text-transform: uppercase;
 }
 
 .capacity-executive-table th + th,
-.capacity-executive-table td + td {
-  border-left: 1px solid #c7d3e3;
-}
-
-.capacity-executive-table tbody tr:nth-child(even) td {
-  background: #f4f7fb;
-}
-
-.capacity-executive-table tbody tr:last-child td {
-  border-bottom: 0;
-}
-
-.capacity-executive-table__metric {
-  color: #1e293b;
-  font-weight: 500;
-}
-
+.capacity-executive-table td + td { border-left: 1px solid #c7d3e3; }
+.capacity-executive-table tbody tr:nth-child(even) td { background: #f4f7fb; }
+.capacity-executive-table tbody tr:last-child td { border-bottom: 0; }
+.capacity-executive-table__metric { color: #1e293b; font-weight: 600; }
 .capacity-executive-table__value,
-.capacity-executive-table__fte {
-  color: #0f172a;
-  font-variant-numeric: tabular-nums;
-  text-align: right;
-}
-
-.capacity-executive-table__fte {
-  white-space: nowrap;
-}
-
-.capacity-executive-table__row--headline .capacity-executive-table__metric,
-.capacity-executive-table__row--headline .capacity-executive-table__value,
-.capacity-executive-table__row--headline .capacity-executive-table__fte {
-  font-size: 13px;
-  font-weight: 750;
-}
-
-.capacity-executive-table__assumption {
-  display: block;
-  margin-top: 2px;
-  color: #64748b;
-  font-size: 10px;
-  font-style: italic;
-  font-weight: 500;
-}
+.capacity-executive-table__fte { color: #0f172a; font-variant-numeric: tabular-nums; text-align: right; }
+.capacity-executive-table__fte { white-space: nowrap; }
+.capacity-executive-table__center { color: #334155; text-align: center; }
+.capacity-executive-table__row--headline td { font-size: 12px; font-weight: 750; }
+.capacity-executive-table__total td { border-top: 1px solid #7aa7d8; background: #dbe9f7 !important; color: #1e293b; font-weight: 800; }
+.capacity-value-negative { color: #b91c1c !important; }
 
 .capacity-executive-note {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
-  gap: 8px;
+  gap: 7px;
+  margin-top: 10px;
+}
+
+.capacity-executive-note__item { border: 1px solid #e2e8f0; border-radius: 8px; background: #f8fafc; padding: 8px; }
+.capacity-executive-note__label { color: #64748b; font-size: 8px; font-weight: 700; letter-spacing: .04em; text-transform: uppercase; }
+.capacity-executive-note__value { margin-top: 3px; color: #1e293b; font-size: 9px; font-weight: 600; line-height: 1.35; }
+
+.capacity-subtable-title {
+  margin: 0 0 7px;
+  color: #2671b8;
+  font-size: 12px;
+  font-weight: 750;
+}
+
+.capacity-subtable-title:not(:first-child) { margin-top: 16px; }
+.capacity-function-table { margin-top: 14px; }
+.capacity-table-intro { margin: 0 0 10px; color: #475569; font-size: 10px; line-height: 1.45; }
+.capacity-table-footnote { margin: 10px 2px 0; color: #64748b; font-size: 9px; line-height: 1.45; }
+.capacity-opportunity-label { display: block; color: #b45309; font-weight: 700; }
+.capacity-opportunity-label + small { display: block; margin-top: 2px; color: #64748b; font-size: 8px; }
+
+.capacity-pipeline-summary-table td:nth-child(2) { font-weight: 700; }
+.capacity-pipeline-gap {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
   margin-top: 12px;
+  border: 1px solid #fecaca;
+  border-radius: 9px;
+  background: #fff1f2;
+  padding: 11px 12px;
+  color: #9f1239;
+  font-size: 11px;
+}
+.capacity-pipeline-gap strong { font-size: 14px; }
+.capacity-pipeline-gap.is-positive { border-color: #bbf7d0; background: #f0fdf4; color: #166534; }
+
+@media (max-width: 1600px) {
+  .capacity-executive-grid--summary { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .capacity-executive-grid--summary .capacity-executive-card:last-child { grid-column: 1 / -1; min-height: 400px; }
+  .capacity-executive-grid--planning { grid-template-columns: repeat(2, minmax(0, 1fr)); }
 }
 
-.capacity-executive-note__item {
-  border: 1px solid #e2e8f0;
-  border-radius: 8px;
-  background: #f8fafc;
-  padding: 9px 10px;
+@media (max-width: 1050px) {
+  .capacity-executive-grid--summary,
+  .capacity-executive-grid--planning { grid-template-columns: minmax(0, 1fr); }
+  .capacity-executive-grid--summary .capacity-executive-card:last-child { grid-column: auto; }
+  .capacity-executive-grid--summary .capacity-executive-card { min-height: 420px; }
+  .capacity-executive-grid--planning .capacity-executive-card { min-height: 0; }
 }
 
-.capacity-executive-note__label {
-  color: #64748b;
-  font-size: 9px;
-  font-weight: 700;
-  letter-spacing: 0.04em;
-  text-transform: uppercase;
-}
-
-.capacity-executive-note__value {
-  margin-top: 3px;
-  color: #1e293b;
-  font-size: 10px;
-  font-weight: 600;
-  line-height: 1.35;
-}
-
-@media (max-width: 1320px) {
-  .capacity-executive-grid {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .capacity-executive-card {
-    min-height: 440px;
-  }
-}
-
-@media (max-width: 860px) {
-  .capacity-financial-strip {
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-
-  .capacity-financial-metric:nth-child(3) {
-    border-left: 0;
-    border-top: 1px solid #cbd5e1;
-  }
-
-  .capacity-financial-metric:nth-child(4) {
-    border-top: 1px solid #cbd5e1;
-  }
-
-  .capacity-allocation-visual {
-    grid-template-columns: minmax(0, 1fr);
-  }
-
-  .capacity-allocation-legend {
-    display: grid;
-    max-height: none;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-
-@media (max-width: 560px) {
-  .capacity-executive-card__header {
-    padding: 15px;
-  }
-
-  .capacity-financial-strip {
-    margin: 14px 12px 0;
-  }
-
-  .capacity-allocation-visual,
-  .capacity-executive-table-wrap {
-    padding-right: 12px;
-    padding-left: 12px;
-  }
-
-  .capacity-allocation-legend,
-  .capacity-executive-note {
-    grid-template-columns: minmax(0, 1fr);
-  }
+@media (max-width: 720px) {
+  .capacity-executive-card__header { padding: 15px 13px 12px; }
+  .capacity-financial-strip { margin-right: 11px; margin-left: 11px; }
+  .capacity-allocation-visual { grid-template-columns: minmax(0, 1fr); }
+  .capacity-allocation-legend { display: grid; max-height: none; grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .capacity-executive-note { grid-template-columns: minmax(0, 1fr); }
+  .capacity-card-scroll, .capacity-executive-table-wrap { padding: 11px; }
 }

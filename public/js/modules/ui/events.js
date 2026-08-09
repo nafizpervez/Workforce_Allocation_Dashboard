@@ -404,7 +404,7 @@ function initEvents() {
     requestProtectedModalAccess('Pre-Sale Product', openPreSaleProductsModal);
   });
   document.getElementById('reserveRevenueBtn')?.addEventListener('click', () => {
-    requestProtectedModalAccess('Reserve Revenue', openRevenueRatesModal);
+    requestProtectedModalAccess('Resource Revenue', openRevenueRatesModal);
   });
 
   prepareDashboardCardControls();
@@ -425,7 +425,8 @@ const CARD_COLLAPSE_STORAGE_KEY = 'allocation-dashboard-card-collapse-v2';
 
 const DASHBOARD_CARD_SECTION_META = Object.freeze({
   stats: { rowLabel: 'KPI cards' },
-  'capacity-executive': { rowLabel: 'Capacity Allocation and Executive Metrics' },
+  'capacity-executive': { rowLabel: 'Executive Matrix, Capacity Allocation and Available Capacity Summary' },
+  'capacity-planning': { rowLabel: 'Capacity planning tables' },
   matrix: { rowLabel: 'Resource Assignment', singleCardTitle: 'Resource Assignment' },
   charts: { rowLabel: 'Assignment analytics' },
   worksummarychart: { rowLabel: 'Work Summary', singleCardTitle: 'Work Summary' },
