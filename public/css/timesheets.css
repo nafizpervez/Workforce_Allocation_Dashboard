@@ -161,6 +161,23 @@
   flex: 0 0 auto;
 }
 
+
+.matrix-fiscal-year-control--navbar {
+  height: 40px;
+  border-color: #d7e0eb;
+  border-radius: 0.55rem;
+  box-shadow: 0 1px 2px rgba(15, 23, 42, 0.04);
+}
+
+.matrix-fiscal-year-control--navbar > label {
+  padding-right: 0.7rem;
+  padding-left: 0.7rem;
+}
+
+.matrix-fiscal-year-control--navbar > button {
+  width: 2.1rem;
+}
+
 .matrix-fiscal-year-control > button {
   width: 2rem;
   border: 0;

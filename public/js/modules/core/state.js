@@ -33,14 +33,14 @@ function fiscalYearRangeLabel(fiscalYear) {
 
 const S = {
   psTypeData: [],
-  // Existing dashboards remain fixed to FY27 (Apr 2026–Mar 2027).
+  // Dashboard areas outside the Matrix FY scope remain fixed to FY27 (Apr 2026–Mar 2027).
   fiscalYear: 2026,
-  // Only the Resource Assignment Matrix may move across fiscal years.
+  // Matrix FY drives the explicitly scoped KPI, capacity, resource-assignment, pipeline and allocation cards.
   matrixFiscalYear: getCurrentFiscalYearStart(),
   appConfig: {
-    currentRealizedRevenue: 0,
     defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS_FALLBACK,
     pipelineMultiplier: 0,
+    probableRealizedThisFY: 0,
   },
   employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
   preSaleProductThresholds: { securedMinPercent: 90, bestCaseMinPercent: 70 },
@@ -89,7 +89,7 @@ function getDefaultAnnualWorkdays() {
 
 const MN = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 const STAGES = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
-const SERVICE_PIPELINE_FISCAL_YEAR = 2027;
+function getServicePipelineFiscalYear() { return getFiscalYearEnd(S.matrixFiscalYear); }
 const SERVICE_PIPELINE_STAGES = ['Negotiate', 'Presentation - Solve', 'Proposal', 'Prospect', 'Qualify', 'Validate'];
 const SERVICE_PIPELINE_STAGE_SET = new Set(SERVICE_PIPELINE_STAGES);
 const PRIORITIES = ['Low', 'Medium', 'High', 'Critical'];
@@ -324,7 +324,7 @@ function isServicePipelineProject(p) {
   return (
     p &&
     SERVICE_PIPELINE_STAGE_SET.has(String(p.stage || '').trim()) &&
-    getFiscalYearFromFiscalPeriod(p.fiscal_period) === SERVICE_PIPELINE_FISCAL_YEAR
+    getFiscalYearFromFiscalPeriod(p.fiscal_period) === getServicePipelineFiscalYear()
   );
 }
 
@@ -360,10 +360,38 @@ function applyPipelineFilters(list) {
   });
 }
 
+function isRunningProjectInMatrixFiscalYear(project, fiscalYear = S.matrixFiscalYear) {
+  const startYear = normalizeFiscalYearStart(fiscalYear, S.matrixFiscalYear);
+  const closeWonDate = String(project?.end_date || '').trim();
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(closeWonDate)) return false;
+  if (closeWonDate < '2025-03-01') return false;
+
+  const [yearText, monthText] = closeWonDate.split('-');
+  const year = Number(yearText);
+  const month = Number(monthText);
+  const projectFiscalStart = month >= FISCAL_YEAR_START_MONTH ? year : year - 1;
+  const compactProduct = String(project?.product_name || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+  const implementationVariants = [
+    'PSPROJECTIMPLEMENTATION',
+    'PSPROJECTIMPLEMENT',
+    'PSPROJECTIMPLEMETATION',
+    'PSPROJECTIMPLEMENTAION',
+  ];
+  const isProfessionalServices = compactProduct.includes('PSSYSTEMSUPPORT') ||
+    implementationVariants.some(variant => compactProduct.includes(variant));
+
+  return (
+    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
+    isProfessionalServices &&
+    Number(project?.progress) < 100 &&
+    projectFiscalStart === startYear
+  );
+}
+
 function applyRunningFilters(list) {
   const q = (S.runSearch || '').toLowerCase().trim();
   return list.filter(d => {
-    if (Number(d.progress) >= 100) return false;
+    if (!isRunningProjectInMatrixFiscalYear(d)) return false;
     if (!getAmountOk(d.opp_amount, S.runAmountFilt)) return false;
     const cd = d.closing_date || d.project_closing_date || d.end_date;
     if (S.runCloseFilt && !matchDateFilter(cd, S.runCloseFilt)) return false;

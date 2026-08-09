@@ -14,6 +14,73 @@
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 
+.report-section-toggle-row {
+  display: flex;
+  width: 100%;
+  justify-content: center;
+  margin-top: 10px;
+}
+
+.report-section-toggle-btn {
+  display: inline-flex;
+  min-height: 32px;
+  max-width: 100%;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  padding: 6px 12px;
+  border: 1px solid #bfdbfe;
+  border-radius: 999px;
+  background: #ffffff;
+  color: #1d4ed8;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 1.2;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.07);
+  cursor: pointer;
+  transition: border-color 0.15s ease, background 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease;
+}
+
+.report-section-toggle-btn:hover {
+  border-color: #60a5fa;
+  background: #eff6ff;
+  box-shadow: 0 2px 6px rgba(37, 99, 235, 0.12);
+  transform: translateY(-1px);
+}
+
+.report-section-toggle-btn:focus-visible {
+  outline: 3px solid rgba(59, 130, 246, 0.25);
+  outline-offset: 2px;
+}
+
+.report-section-toggle-btn__icon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: #dbeafe;
+  color: #1d4ed8;
+  font-size: 13px;
+  line-height: 1;
+}
+
+.report-section-toggle-btn.is-report-hidden {
+  border-color: #cbd5e1;
+  background: #f8fafc;
+  color: #475569;
+}
+
+.report-section-toggle-btn.is-report-hidden .report-section-toggle-btn__icon {
+  background: #e2e8f0;
+  color: #475569;
+}
+
+.card-collapse-section.is-report-section-hidden {
+  display: none !important;
+}
+
 .capacity-executive-card {
   min-width: 0;
   height: 100%;
@@ -195,6 +262,7 @@
 }
 
 .capacity-executive-table--wide { min-width: 700px; table-layout: auto; }
+.capacity-revenue-group-table { min-width: 820px; }
 
 .capacity-executive-table th,
 .capacity-executive-table td {
@@ -292,6 +360,8 @@
 }
 
 @media (max-width: 720px) {
+  .report-section-toggle-row { justify-content: stretch; }
+  .report-section-toggle-btn { width: 100%; }
   .capacity-executive-card__header { padding: 15px 13px 12px; }
   .capacity-financial-strip { margin-right: 11px; margin-left: 11px; }
   .capacity-allocation-visual { grid-template-columns: minmax(0, 1fr); }

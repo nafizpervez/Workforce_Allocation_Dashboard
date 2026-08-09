@@ -474,8 +474,8 @@ function getCalculatedCommittedTargetSummary() {
   );
 
   for (const assignment of getEffectiveFiscalAssignments(
-    S.fiscalYear,
-    S.assignments,
+    S.matrixFiscalYear,
+    S.matrixAssignments,
   )) {
     const employee = activeEmployeeById.get(Number(assignment.employee_id));
     if (!employee) continue;
@@ -609,14 +609,14 @@ function getCapacityAllocationDetails() {
     const workdayAdjustment = getAdjustedEmployeeWorkdays(
       employee.id,
       employee.workdays,
-      S.fiscalYear,
-      S.assignments,
+      S.matrixFiscalYear,
+      S.matrixAssignments,
     );
     const capacityHours = workdayAdjustment.adjustedWorkdays * CAPACITY_HOURS_PER_WORKDAY;
     const hourlyRate = getAverageRevenueRateForFiscalYear(
       employee.designation,
       RESOURCE_REVENUE_RATE_FIELDS.local,
-      S.fiscalYear,
+      S.matrixFiscalYear,
     );
     const maximumAmount = hourlyRate === null
       ? 0
@@ -658,8 +658,8 @@ function getCapacityAllocationDetails() {
   );
 
   for (const assignment of getEffectiveFiscalAssignments(
-    S.fiscalYear,
-    S.assignments,
+    S.matrixFiscalYear,
+    S.matrixAssignments,
   )) {
     const employee = employeeById.get(Number(assignment.employee_id));
     if (!employee) continue;
@@ -698,14 +698,14 @@ function getCapacityAllocationDetails() {
       : getAverageRevenueRateForFiscalYear(
         employee.designation,
         RESOURCE_REVENUE_RATE_FIELDS.intrasourcing,
-        S.fiscalYear,
+        S.matrixFiscalYear,
       );
     row.localRate = row.localHours > 0
       ? row.localRevenue / row.localHours
       : getAverageRevenueRateForFiscalYear(
         employee.designation,
         RESOURCE_REVENUE_RATE_FIELDS.local,
-        S.fiscalYear,
+        S.matrixFiscalYear,
       );
     row.totalRevenue = row.intrasourcingRevenue + row.localRevenue;
 
@@ -968,7 +968,7 @@ function renderAllocatedCapacityDetails(details) {
       { label: 'Contributing Resources', value: String(details.allocatedRows.length) },
     ])}
     <div class="mx-5 mt-4 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs text-amber-800">
-      Capacity Allocated = planned Intrasourcing revenue + planned Local revenue for active resources in FY${getFiscalYearEnd(S.fiscalYear)}. Hours use 36.66 × allocation percentage ÷ 100. N/A resource-weeks are excluded. Pre-Sale and Training are not included.
+      Capacity Allocated = planned Intrasourcing revenue + planned Local revenue for active resources in ${fiscalYearDisplayLabel(S.matrixFiscalYear)}. Hours use 36.66 × allocation percentage ÷ 100. N/A resource-weeks are excluded. Pre-Sale and Training are not included.
     </div>
     <div class="nice-scroll mt-4 overflow-x-auto">
       <table class="w-full min-w-[1180px] border-collapse text-left">
@@ -1109,7 +1109,7 @@ function renderStats(s) {
       tk: 'assigned_projects',
       bg: 'bg-orange-100',
       fg: 'text-orange-600',
-      formula: `Distinct projects with ≥ 1 weekly assignment in FY${S.fiscalYear}. Running Projects use the existing Closed Won Professional Services definition. Weighted Prospects are non-Closed Won projects with probability ≥ 75%; Prospects are non-Closed Won projects with probability below 75%.`,
+      formula: `Distinct projects with ≥ 1 weekly assignment in ${fiscalYearDisplayLabel(S.matrixFiscalYear)}. Running Projects use the existing Closed Won Professional Services definition. Weighted Prospects are non-Closed Won projects with probability ≥ 75%; Prospects are non-Closed Won projects with probability below 75%.`,
       icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
       detailType: 'assigned-project-breakdown',
     },

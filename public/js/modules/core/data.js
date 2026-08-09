@@ -73,23 +73,36 @@ function buildMatrixEmployeeUtilization() {
 
 async function loadMatrixAssignments({ announce = false } = {}) {
   const fiscalYear = S.matrixFiscalYear;
-  const assignments = await api('GET', `/api/assignments?fiscalYear=${fiscalYear}`);
+  const [assignments, stats] = await Promise.all([
+    api('GET', `/api/assignments?fiscalYear=${fiscalYear}`),
+    api('GET', `/api/dashboard/stats?fiscalYear=${fiscalYear}`),
+  ]);
 
-  // Ignore a stale response if the user selected another FY while this request was running.
+  // Ignore stale responses if another FY was selected while these requests were running.
   if (fiscalYear !== S.matrixFiscalYear) return false;
 
   S.matrixAssignments = assignments;
   buildMatrix();
   buildMatrixEmployeeUtilization();
   populateMatrixFilter();
-  renderMatrix();
+  renderMatrix({ refreshCapacity: false });
+  renderYearlyWorkByProjectChart();
+  renderProjectWisePeopleChart();
+
+  // The top KPI row is part of the Matrix FY scope. renderStats also refreshes
+  // the seven capacity-planning cards from the newly loaded matrix assignments.
+  renderStats(stats);
+  renderInsights();
+  applyAndRenderRunning();
+  applyAndRenderPipeline();
+  populateProductFamilyDropdowns();
   syncMatrixFiscalYearControl();
 
   if (announce) {
     const assignmentText = assignments.length
       ? `${assignments.length} assignment row${assignments.length === 1 ? '' : 's'} loaded`
       : 'new empty assignment cells are ready';
-    toast(`${fiscalYearDisplayLabel(fiscalYear)} matrix selected — ${assignmentText}`);
+    toast(`${fiscalYearDisplayLabel(fiscalYear)} selected — ${assignmentText}`);
   }
 
   return true;
@@ -145,7 +158,7 @@ async function loadAll() {
       api('GET', '/api/committed-targets'),
       api('GET', '/api/presale-products'),
       api('GET', '/api/presale-product-settings'),
-      api('GET', `/api/dashboard/stats?fiscalYear=${fy}`),
+      api('GET', `/api/dashboard/stats?fiscalYear=${matrixFy}`),
       api('GET', `/api/dashboard/trends?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/workload?fiscalYear=${fy}`),
       api('GET', `/api/dashboard/utilization?fiscalYear=${fy}`),

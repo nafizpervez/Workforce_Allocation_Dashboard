@@ -349,7 +349,7 @@ function fiscalYearReportDocxParagraph(library, text, options = {}) {
     spacing: {
       before: Number(options.before) || 0,
       after: options.after === undefined ? 80 : Number(options.after) || 0,
-      line: Number(options.line) || 240,
+      line: Number(options.line) || 264,
     },
     keepNext: Boolean(options.keepNext),
   });
@@ -407,7 +407,7 @@ function fiscalYearReportDocxCellParagraph(library, text, options = {}) {
     color: options.color || FISCAL_YEAR_DOCX.text,
     size: options.size || 16,
     after: 0,
-    line: options.line || 205,
+    line: options.line || 240,
   });
 }
 

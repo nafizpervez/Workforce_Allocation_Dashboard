@@ -87,7 +87,7 @@ async function openRunningProjectMetricModal(metric) {
   try {
     const result = await api(
       'GET',
-      `/api/dashboard/running-project-metrics?metric=${encodeURIComponent(metric)}`,
+      `/api/dashboard/running-project-metrics?metric=${encodeURIComponent(metric)}&fiscalYear=${encodeURIComponent(S.matrixFiscalYear)}`,
     );
     const projects = Array.isArray(result.projects) ? result.projects : [];
     const revenueText = metric === 'revenue'
@@ -148,7 +148,7 @@ async function openProjectPortfolioMetricModal(metric) {
   try {
     const result = await api(
       'GET',
-      `/api/dashboard/project-portfolio-metrics?metric=${encodeURIComponent(metric)}`,
+      `/api/dashboard/project-portfolio-metrics?metric=${encodeURIComponent(metric)}&fiscalYear=${encodeURIComponent(S.matrixFiscalYear)}`,
     );
     const projects = Array.isArray(result.projects) ? result.projects : [];
     const rowRenderer = metric === 'running'
@@ -204,17 +204,18 @@ function servicePipelineRowHtml(p) {
 
 function applyAndRenderPipeline() {
   const filtered = applyPipelineFilters(getServicePipelineBaseProjects());
-  document.getElementById('pipelineList').innerHTML = filtered.map(servicePipelineRowHtml).join('') || '<div class="px-6 py-8 text-center text-sm text-gray-400">No FY 2027 service pipeline projects</div>';
+  document.getElementById('pipelineList').innerHTML = filtered.map(servicePipelineRowHtml).join('') || `<div class="px-6 py-8 text-center text-sm text-gray-400">No FY ${getServicePipelineFiscalYear()} service pipeline projects</div>`;
 }
 
 function renderServicePipeline(projects) { applyAndRenderPipeline(); }
 
 /* ── Populate Product Family / Product Type dropdowns ───────────────────────── */
 function populateProductFamilyDropdowns() {
-  const runFamilies = [...new Set((S.lastRunningData || []).map(d => d.product_family).filter(Boolean))].sort();
+  const selectedFyRunningProjects = (S.lastRunningData || []).filter(project => isRunningProjectInMatrixFiscalYear(project));
+  const runFamilies = [...new Set(selectedFyRunningProjects.map(d => d.product_family).filter(Boolean))].sort();
   const servicePipelineProjects = getServicePipelineBaseProjects();
   const pipeFamilies = [...new Set(servicePipelineProjects.map(p => p.product_family).filter(Boolean))].sort();
-  const runProductTypes = uniqueNormalizedProductTypes(S.lastRunningData || []);
+  const runProductTypes = uniqueNormalizedProductTypes(selectedFyRunningProjects);
   const pipeProductTypes = uniqueNormalizedProductTypes(servicePipelineProjects);
   const fillSelect = (id, opts, allLabel, normalize = false) => { const el = document.getElementById(id); if (!el) return; const cur = normalize ? normalizeProductTypeName(el.value) : el.value; el.innerHTML = `<option value="">${allLabel}</option>` + opts.map(f => `<option value="${esc(f)}">${esc(f)}</option>`).join(''); el.value = opts.includes(cur) ? cur : ''; };
   fillSelect('runProdFamilyFilt', runFamilies, 'All Families');

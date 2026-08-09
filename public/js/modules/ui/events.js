@@ -411,6 +411,7 @@ function initEvents() {
 
   prepareDashboardCardControls();
   initCardCollapse();
+  initReportSectionToggle();
   initColResize(); initSectionDrag();
 }
 
@@ -433,6 +434,8 @@ const DEFAULT_COLLAPSED_CARD_KEYS = new Set([
   'capacity-value-allocation',
   'pipeline-target-summary',
 ]);
+
+const REPORT_SECTION_KEYS = Object.freeze(['capacity-executive', 'capacity-planning']);
 
 const DASHBOARD_CARD_SECTION_META = Object.freeze({
   stats: { rowLabel: 'KPI cards' },
@@ -744,6 +747,58 @@ function refreshExpandedCardVisuals() {
     }
     window.dispatchEvent(new Event('resize'));
   });
+}
+
+function getReportSectionContainers() {
+  return REPORT_SECTION_KEYS
+    .map(sectionKey => document.querySelector(`.ds[data-section="${sectionKey}"]`))
+    .filter(Boolean);
+}
+
+function setReportSectionHidden(hidden) {
+  const sections = getReportSectionContainers();
+  if (!sections.length) return;
+
+  sections.forEach(section => {
+    section.classList.toggle('is-report-section-hidden', hidden);
+    section.setAttribute('aria-hidden', String(hidden));
+  });
+
+  const button = document.getElementById('reportSectionToggleBtn');
+  if (button) {
+    const label = button.querySelector('[data-report-section-toggle-label]');
+    const icon = button.querySelector('.report-section-toggle-btn__icon');
+    button.classList.toggle('is-report-hidden', hidden);
+    button.setAttribute('aria-expanded', String(!hidden));
+    button.title = hidden ? 'Show all Report cards' : 'Hide all Report cards';
+    if (label) label.textContent = hidden ? 'Show Report Cards' : 'Hide Report Cards';
+    if (icon) icon.textContent = hidden ? '+' : '−';
+  }
+
+  if (!hidden) {
+    requestAnimationFrame(() => {
+      if (typeof getCapacityExecutiveSummary === 'function' && typeof renderCapacityExecutiveChart === 'function') {
+        renderCapacityExecutiveChart(getCapacityExecutiveSummary());
+      }
+      refreshExpandedCardVisuals();
+    });
+  }
+}
+
+function initReportSectionToggle() {
+  const button = document.getElementById('reportSectionToggleBtn');
+  if (!button || button.hasAttribute('data-report-section-toggle-init')) return;
+
+  button.setAttribute('data-report-section-toggle-init', '1');
+  button.addEventListener('click', event => {
+    event.preventDefault();
+    event.stopPropagation();
+    const sections = getReportSectionContainers();
+    if (!sections.length) return;
+    const currentlyHidden = sections.every(section => section.classList.contains('is-report-section-hidden'));
+    setReportSectionHidden(!currentlyHidden);
+  });
+  setReportSectionHidden(false);
 }
 
 function updateCardCollapseControl(card, collapsed) {

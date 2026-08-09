@@ -5,7 +5,7 @@ const {
   calcDealStatuses,
   isProfessionalServiceRunningProject,
 } = require('../services/project-analytics');
-const { fiscalMonths } = require('../services/fiscal');
+const { fiscalMonths, getFiscalYear } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
 const {
   assignmentSlotKey,
@@ -246,8 +246,18 @@ function getRunningProjectTiming(project, now = new Date()) {
   return sixMonthDeadline < today ? 'delayed' : 'on-time';
 }
 
-function getClosedWonProjectSummary(projects, now = new Date()) {
-  const runningProjects = projects.filter(isProfessionalServiceRunningProject);
+function isRunningProjectInFiscalYear(project, fiscalYear) {
+  if (fiscalYear === null || fiscalYear === undefined || fiscalYear === '') return true;
+  const startYear = Math.trunc(Number(fiscalYear));
+  if (!Number.isInteger(startYear)) return true;
+  return getFiscalYear(project?.end_date) === startYear;
+}
+
+function getClosedWonProjectSummary(projects, now = new Date(), fiscalYear = null) {
+  const runningProjects = projects.filter(project => (
+    isProfessionalServiceRunningProject(project) &&
+    isRunningProjectInFiscalYear(project, fiscalYear)
+  ));
   const delayedProjects = runningProjects.filter(project => (
     getRunningProjectTiming(project, now) === 'delayed'
   )).length;
@@ -356,7 +366,7 @@ router.get('/api/dashboard/stats', (req, res) => {
     FROM projects
   `).all().filter(project => !isUnavailableProjectName(project.name));
   const activeProjects = analyticProjects.filter(project => project.stage !== 'Closed Won').length;
-  const runningProjectSummary = getClosedWonProjectSummary(analyticProjects);
+  const runningProjectSummary = getClosedWonProjectSummary(analyticProjects, new Date(), fy);
   const openProjectProbabilitySummary = getOpenProjectProbabilitySummary(
     analyticProjects,
   );
@@ -539,6 +549,7 @@ router.get('/api/dashboard/utilization-details', (req, res) => {
 
 router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
   const metric = String(req.query.metric || 'running').trim().toLowerCase();
+  const fiscalYear = safeNum(req.query.fiscalYear, null);
   const allowedMetrics = new Set(['running', 'weighted', 'prospect']);
   if (!allowedMetrics.has(metric)) {
     return res.status(400).json({ error: 'Unknown project portfolio metric.' });
@@ -552,7 +563,8 @@ router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
     FROM projects
   `).all().filter(project => (
     !isUnavailableProjectName(project.name) &&
-    matchesProjectPortfolioMetric(project, metric)
+    matchesProjectPortfolioMetric(project, metric) &&
+    (metric !== 'running' || isRunningProjectInFiscalYear(project, fiscalYear))
   ));
   const allProjects = db.prepare(`
     SELECT id, code, name, account_name, client, end_date,
@@ -575,6 +587,7 @@ router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
 
 router.get('/api/dashboard/running-project-metrics', (req, res) => {
   const metric = String(req.query.metric || 'revenue').trim().toLowerCase();
+  const fiscalYear = safeNum(req.query.fiscalYear, null);
   const allowedMetrics = new Set(['delayed', 'on-time', 'revenue']);
 
   if (!allowedMetrics.has(metric)) {
@@ -602,7 +615,8 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
     FROM projects
   `).all().filter(project => (
     !isUnavailableProjectName(project.name) &&
-    isProfessionalServiceRunningProject(project)
+    isProfessionalServiceRunningProject(project) &&
+    isRunningProjectInFiscalYear(project, fiscalYear)
   ));
 
   const filtered = rows.filter(project => (
@@ -657,7 +671,7 @@ router.get('/api/dashboard/deadlines', (_, res) => {
        WHEN project_closing_date IS NOT NULL AND project_closing_date != '' THEN project_closing_date
        ELSE COALESCE(end_date, '9999-12-31')
      END ASC
-  `).all(runningProjectCutoff);
+  `).all(runningProjectCutoff).filter(isProfessionalServiceRunningProject);
 
   const allProjects = db.prepare('SELECT id, code, name, account_name, client, end_date, fiscal_period, stage, product_name FROM projects').all();
   const statusMap = calcDealStatuses(allProjects);

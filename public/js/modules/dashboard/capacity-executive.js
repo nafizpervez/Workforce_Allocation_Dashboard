@@ -22,8 +22,8 @@ function getCapacityPipelineMultiplier() {
   return Number.isFinite(configured) && configured >= 0 ? configured : 0;
 }
 
-function getCapacityCurrentRealizedRevenue() {
-  const configured = Number(S.appConfig?.currentRealizedRevenue);
+function getCapacityProbableRealizedThisFY() {
+  const configured = Number(S.appConfig?.probableRealizedThisFY);
   return Number.isFinite(configured) && configured >= 0 ? configured : 0;
 }
 
@@ -132,16 +132,19 @@ function getCapacityAvailabilityBasis(employee, fiscalYear, assignments) {
 function getCapacityExecutiveWorkdaySummary(fiscalYear, assignments, employees) {
   const rows = (employees || []).map(employee => {
     const adjustment = getAdjustedEmployeeWorkdays(employee.id, employee.workdays, fiscalYear, assignments);
-    const localHourlyRate = getAverageRevenueRateForFiscalYear(
-      employee.designation,
-      RESOURCE_REVENUE_RATE_FIELDS.local,
-      fiscalYear,
-    );
-    const intrasourcingHourlyRate = getAverageRevenueRateForFiscalYear(
-      employee.designation,
-      RESOURCE_REVENUE_RATE_FIELDS.intrasourcing,
-      fiscalYear,
-    );
+    // Maximum Revenue Capacity displays and calculates from the rates that are
+    // currently configured in Resource Revenue for the employee designation.
+    // Assignment/timesheet revenue elsewhere still resolves effective-dated
+    // history at the actual work date.
+    const configuredRate = getRevenueRateForDesignation(employee.designation);
+    const localHourlyRateValue = Number(configuredRate?.[RESOURCE_REVENUE_RATE_FIELDS.local]);
+    const intrasourcingHourlyRateValue = Number(configuredRate?.[RESOURCE_REVENUE_RATE_FIELDS.intrasourcing]);
+    const localHourlyRate = Number.isFinite(localHourlyRateValue) && localHourlyRateValue >= 0
+      ? localHourlyRateValue
+      : null;
+    const intrasourcingHourlyRate = Number.isFinite(intrasourcingHourlyRateValue) && intrasourcingHourlyRateValue >= 0
+      ? intrasourcingHourlyRateValue
+      : null;
     const localDailyRate = localHourlyRate === null ? 0 : localHourlyRate * CAPACITY_EXECUTIVE_HOURS_PER_DAY;
     const intrasourcingDailyRate = intrasourcingHourlyRate === null ? 0 : intrasourcingHourlyRate * CAPACITY_EXECUTIVE_HOURS_PER_DAY;
     const localCapacity = adjustment.adjustedWorkdays * localDailyRate;
@@ -405,17 +408,25 @@ function getCapacityRevenueGroupRows(workdayRows, defaultAnnualWorkdays) {
   for (const row of workdayRows) {
     const designation = String(row.designation || row.resourceGroup || 'No Designation').trim() || 'No Designation';
     const key = normalizeDesignationKey(designation) || 'no designation';
-    if (!groups.has(key)) groups.set(key, { group: designation, days: 0, capacity: 0 });
+    if (!groups.has(key)) groups.set(key, {
+      group: designation,
+      days: 0,
+      intrasourcingCapacity: 0,
+      localCapacity: 0,
+      maximumCapacity: 0,
+    });
     const target = groups.get(key);
     target.days += row.adjustedWorkdays;
-    target.capacity += row.maximumCapacity;
+    target.intrasourcingCapacity += row.intrasourcingCapacity;
+    target.localCapacity += row.localCapacity;
+    target.maximumCapacity += row.maximumCapacity;
   }
-  const total = [...groups.values()].reduce((sum, row) => sum + row.capacity, 0);
+  const totalMaximumCapacity = [...groups.values()].reduce((sum, row) => sum + row.maximumCapacity, 0);
   return [...groups.values()]
     .map(row => ({
       ...row,
       fte: defaultAnnualWorkdays > 0 ? row.days / defaultAnnualWorkdays : 0,
-      contribution: total > 0 ? (row.capacity / total) * 100 : 0,
+      contribution: totalMaximumCapacity > 0 ? (row.maximumCapacity / totalMaximumCapacity) * 100 : 0,
     }))
     .sort((a, b) => getCapacityGroupSortIndex(a.group) - getCapacityGroupSortIndex(b.group)
       || a.group.localeCompare(b.group, undefined, { sensitivity: 'base' }));
@@ -604,13 +615,16 @@ function renderMaximumRevenueCapacityCard(summary) {
         </table>
       </div>
       <div class="capacity-subtable-title">Revenue Capacity by Resource Group</div>
-      <table class="capacity-executive-table capacity-executive-table--dense">
-        <thead><tr><th>Resource Group</th><th>FTE</th><th>Revenue Capacity</th><th>Contribution</th></tr></thead>
-        <tbody>
-          ${groupRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.group)}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.capacity))}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.contribution))}</td></tr>`).join('')}
-          <tr class="capacity-executive-table__total"><td>Total Annual Revenue Capacity</td><td>${esc(formatExecutiveFte(summary.equivalentCapacity, false))}</td><td>${esc(formatExecutiveTableCurrency(summary.maximumRevenueCapacity))}</td><td>100%</td></tr>
-        </tbody>
-      </table>
+      <div class="capacity-executive-table-scroll">
+        <table class="capacity-executive-table capacity-executive-table--dense capacity-executive-table--wide capacity-revenue-group-table">
+          <colgroup><col style="width:25%"><col style="width:10%"><col style="width:24%"><col style="width:24%"><col style="width:17%"></colgroup>
+          <thead><tr><th>Resource Group</th><th>FTE</th><th>Revenue Capacity Intra-Sourcing</th><th>Revenue Capacity Local</th><th>Contribution</th></tr></thead>
+          <tbody>
+            ${groupRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.group)}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.intrasourcingCapacity))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.localCapacity))}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.contribution))}</td></tr>`).join('')}
+            <tr class="capacity-executive-table__total"><td>Total Annual Revenue Capacity</td><td>${esc(formatExecutiveFte(summary.equivalentCapacity, false))}</td><td>${esc(formatExecutiveTableCurrency(summary.intrasourcingRevenueCapacity))}</td><td>${esc(formatExecutiveTableCurrency(summary.localRevenueCapacity))}</td><td>100%</td></tr>
+          </tbody>
+        </table>
+      </div>
     </div>`;
   return capacityExecutiveCardShell({
     key: 'maximum-revenue-capacity', title: '3. Maximum Revenue Capacity', eyebrow: 'Commercial capacity',
@@ -730,7 +744,7 @@ function renderCapacityValueAllocationCard(summary) {
         <table class="capacity-executive-table capacity-executive-table--dense capacity-executive-table--wide">
           <thead><tr><th>Function</th><th>Capacity %</th><th>FTE</th><th>Opportunity Value</th><th>Target</th><th>Multiplier</th><th>Pipeline</th><th>Remaining</th></tr></thead>
           <tbody>
-            ${rows.functionRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.opportunity))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveTableCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${row.multiplier ? `${row.multiplier.toLocaleString('en-US', { maximumFractionDigits: 2 })}×` : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.pipeline))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveTableCurrency(row.remaining))}</td></tr>`).join('')}
+            ${rows.functionRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.opportunity))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveTableCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${row.multiplier ? row.multiplier.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.pipeline))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveTableCurrency(row.remaining))}</td></tr>`).join('')}
             <tr class="capacity-executive-table__total"><td>Total</td><td>${esc(formatExecutivePercentage(summary.allocationMix.totalAllocationPercentage))}</td><td>${esc(formatExecutiveFte(summary.defaultAnnualWorkdays > 0 ? summary.allocationMix.allocatedMandays / summary.defaultAnnualWorkdays : 0, false))}</td><td>${esc(formatExecutiveTableCurrency(summary.allocationMix.capacityValue))}</td><td></td><td></td><td></td><td></td></tr>
           </tbody>
         </table>
@@ -747,8 +761,8 @@ function renderPipelineTargetSummaryCard(summary) {
   const localPipelineTarget = Number(summary.committedTargets.localPipeline) || 0;
   const pipelineMultiplier = getCapacityPipelineMultiplier();
   const baseRequirement = localPipelineTarget * pipelineMultiplier;
-  const realized = getCapacityCurrentRealizedRevenue();
-  const pipelineTarget = baseRequirement + realized;
+  const probableRealizedThisFY = getCapacityProbableRealizedThisFY();
+  const localTargetNextFY = baseRequirement + probableRealizedThisFY;
   const activePipeline = Number(summary.preSalePipeline.totalAmount) || 0;
   const bucketRows = [
     ['Secured', `≥ ${formatExecutivePercentage(summary.preSalePipeline.securedMinPercent)}`, summary.preSalePipeline.buckets.secured],
@@ -757,10 +771,10 @@ function renderPipelineTargetSummaryCard(summary) {
   ];
   const rows = [
     ['Local Pipeline Target', formatExecutiveTableCurrency(localPipelineTarget)],
-    ['Pipeline Multiplier', `${pipelineMultiplier.toLocaleString('en-US', { maximumFractionDigits: 2 })}×`],
+    ['Pipeline Multiplier', pipelineMultiplier.toLocaleString('en-US', { maximumFractionDigits: 2 })],
     ['Base Pipeline Requirement', formatExecutiveTableCurrency(baseRequirement)],
-    ['Current Realized Revenue', formatExecutiveTableCurrency(realized)],
-    ['Required Pipeline Target', formatExecutiveTableCurrency(pipelineTarget)],
+    ['Probable Realized This FY', formatExecutiveTableCurrency(probableRealizedThisFY)],
+    ['Local Target Next FY', formatExecutiveTableCurrency(localTargetNextFY)],
     ['Already Working With', formatExecutiveTableCurrency(activePipeline)],
   ];
   const body = `
@@ -776,9 +790,9 @@ function renderPipelineTargetSummaryCard(summary) {
           }).join('')}
         </tbody>
       </table>
-      <div class="capacity-pipeline-gap ${activePipeline >= pipelineTarget && pipelineTarget > 0 ? 'is-positive' : ''}">
+      <div class="capacity-pipeline-gap ${activePipeline >= localTargetNextFY && localTargetNextFY > 0 ? 'is-positive' : ''}">
         <span>Pipeline gap</span>
-        <strong>${esc(formatExecutiveTableCurrency(pipelineTarget - activePipeline))}</strong>
+        <strong>${esc(formatExecutiveTableCurrency(localTargetNextFY - activePipeline))}</strong>
       </div>
     </div>`;
   return capacityExecutiveCardShell({

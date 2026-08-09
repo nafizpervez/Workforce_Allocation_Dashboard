@@ -9,13 +9,13 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=fiscal-year-normal-margin-tooltips-v1" />
+    <link rel="stylesheet" href="/css/style.css?v=report-section-toggle-v1" />
   </head>
   <body>
     <div data-fragment="/views/header.html?v=fiscal-year-export-v1"></div>
     <main class="p-8 max-w-[1920px] mx-auto">
       <div id="dashboard-canvas" class="space-y-6">
-        <div data-fragment="/views/sections/stats.html?v=card-collapse-exec-v2"></div>
+        <div data-fragment="/views/sections/stats.html?v=report-section-toggle-v1"></div>
         <div data-fragment="/views/sections/capacity-executive.html?v=capacity-planning-v1"></div>
         <div data-fragment="/views/sections/resource-matrix.html?v=resource-revenue-label-v1"></div>
         <div data-fragment="/views/sections/allocation-charts.html?v=local-planned-actual-fy-v2"></div>
@@ -36,7 +36,7 @@
     <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/docx@9.7.1/dist/index.iife.js"></script>
-    <script src="/js/modules/core/state.js?v=pipeline-config-v1"></script>
+    <script src="/js/modules/core/state.js?v=probable-realized-this-fy-v1"></script>
     <script src="/js/modules/core/person-identity.js?v=person-alias-v3"></script>
     <script src="/js/modules/core/designations.js?v=rate-history-v1"></script>
     <script src="/js/modules/core/work-schedule.js?v=workweek-36-66-v1"></script>
@@ -48,7 +48,7 @@
     <script src="/js/modules/dashboard/resource-summary-totals.js?v=not-local-revenue-period-tooltip-v1"></script>
     <script src="/js/modules/dashboard/resource-summary.js?v=assignment-table-tooltip-v1"></script>
     <script src="/js/modules/dashboard/overview.js?v=viewport-chart-tooltips-v1"></script>
-    <script src="/js/modules/dashboard/capacity-executive.js?v=presale-threshold-summary-v1"></script>
+    <script src="/js/modules/dashboard/capacity-executive.js?v=dual-revenue-capacity-v1"></script>
     <script src="/js/modules/dashboard/monthly-planned-work.js?v=rate-history-v1"></script>
     <script src="/js/modules/timesheets/model.js?v=actual-burn-charts-v1"></script>
     <script src="/js/modules/timesheets/planned-actual-model.js?v=rate-history-v1"></script>
@@ -74,7 +74,7 @@
     <script src="/js/modules/ui/committed-targets-modal.js?v=local-pipeline-target-v1"></script>
     <script src="/js/modules/ui/resource-project-modals.js?v=config-workdays-v1"></script>
     <script src="/js/modules/reports/fiscal-year-report.js?v=word-safe-docx-v1"></script>
-    <script src="/js/modules/ui/events.js?v=native-docx-v1"></script>
+    <script src="/js/modules/ui/events.js?v=report-section-toggle-v1"></script>
     <script src="/js/modules/projects/resources.js?v=team-resource-edit-action-v1"></script>
     <script src="/js/app.js?v=workweek-36-66-v1"></script>
   </body>
