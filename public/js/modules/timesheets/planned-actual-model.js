@@ -376,22 +376,22 @@ function getPlannedActualBudgetRateField(projectName, workType = '') {
   return 'local_rate';
 }
 
-function getPlannedActualHourlyRate(employee, projectName, workType = '') {
+function getPlannedActualHourlyRate(employee, projectName, workType = '', rateDate = '') {
   if (!employee) return null;
 
   const rateField = getPlannedActualBudgetRateField(projectName, workType);
   if (!rateField) return null;
 
-  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const rateRecord = getRevenueRateForDesignationAtDate(employee.designation, rateDate);
   const rate = Number(rateRecord?.[rateField]);
   return Number.isFinite(rate) && rate >= 0 ? rate : null;
 }
 
-function calculatePlannedActualBudget(hours, employee, projectName, workType = '') {
+function calculatePlannedActualBudget(hours, employee, projectName, workType = '', rateDate = '') {
   const numericHours = Number(hours) || 0;
   if (numericHours <= 0) return 0;
 
-  const hourlyRate = getPlannedActualHourlyRate(employee, projectName, workType);
+  const hourlyRate = getPlannedActualHourlyRate(employee, projectName, workType, rateDate);
   return hourlyRate === null ? 0 : numericHours * hourlyRate;
 }
 
@@ -1101,6 +1101,7 @@ function buildPlannedActualEffortData() {
       employee,
       assignmentProjectName,
       resolvedProject.workType,
+      getRevenueRateDateForAssignment(assignment),
     );
     addPlannedActualMonthAmount(
       projectEntry.plannedBudgetByMonth,
@@ -1209,6 +1210,7 @@ function buildPlannedActualEffortData() {
       matchedEmployee,
       row.projectName || resolvedProject.label,
       row.workType,
+      getRevenueRateDateForTimesheetRow(row, parsedMonth.year, parsedMonth.month),
     );
     addPlannedActualMonthAmount(
       projectEntry.actualBudgetByMonth,

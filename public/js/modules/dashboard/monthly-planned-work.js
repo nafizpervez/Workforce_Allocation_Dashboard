@@ -373,7 +373,7 @@ function classifyMonthlyActualWorkType(workType) {
   return MONTHLY_PLANNED_WORK_KEY_BY_LABEL[label] || null;
 }
 
-function getMonthlyRevenueRate(categoryKey, employee) {
+function getMonthlyRevenueRate(categoryKey, employee, rateDate = '') {
   const field = MONTHLY_REVENUE_CATEGORY_RATE_FIELDS[categoryKey];
 
   // Skill Development and General Admin are non-revenue.
@@ -395,7 +395,7 @@ function getMonthlyRevenueRate(categoryKey, employee) {
     };
   }
 
-  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const rateRecord = getRevenueRateForDesignationAtDate(employee.designation, rateDate);
   const rate = Number(rateRecord?.[field]);
 
   return {
@@ -406,8 +406,8 @@ function getMonthlyRevenueRate(categoryKey, employee) {
   };
 }
 
-function addMonthlyWorkRevenue(source, categoryKey, hours, employee, workerName = '') {
-  const rateInfo = getMonthlyRevenueRate(categoryKey, employee);
+function addMonthlyWorkRevenue(source, categoryKey, hours, employee, workerName = '', rateDate = '') {
+  const rateInfo = getMonthlyRevenueRate(categoryKey, employee, rateDate);
   if (!rateInfo.eligible) return;
 
   source.revenueEligibleHours += hours;
@@ -500,6 +500,7 @@ function getMonthlyPlannedWorkSeries(fiscalYear, assignments) {
       plannedHours,
       employee,
       employee?.name || '',
+      getRevenueRateDateForAssignment(assignment),
     );
   }
 
@@ -560,6 +561,7 @@ function getMonthlyPlannedWorkSeries(fiscalYear, assignments) {
       hours,
       employee,
       worker || '',
+      getRevenueRateDateForTimesheetRow(timesheetRow, parsedMonth.year, parsedMonth.month),
     );
   }
 

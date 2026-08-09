@@ -241,15 +241,17 @@ function createEmptyRevenueTotals(revenueColumns = getResourceSummaryRevenueColu
 }
 
 function getEmployeeFiscalAssignmentTotals(
-  employeeId,
+  employee,
   allocationColumns = getResourceSummaryAllocationColumns(),
   revenueColumns = getResourceSummaryRevenueColumns(),
 ) {
   const percentageTotals = createEmptyAllocationTotals(allocationColumns);
   const hourTotals = createEmptyRevenueTotals(revenueColumns);
+  const revenueTotals = createEmptyRevenueTotals(revenueColumns);
+  const unpricedHourTotals = createEmptyRevenueTotals(revenueColumns);
 
   getEffectiveFiscalAssignments(S.matrixFiscalYear, S.matrixAssignments).forEach(assignment => {
-    if (Number(assignment.employee_id) !== Number(employeeId)) return;
+    if (Number(assignment.employee_id) !== Number(employee?.id)) return;
 
     const percentage = Number(assignment.percentage);
     if (!Number.isFinite(percentage)) return;
@@ -259,15 +261,19 @@ function getEmployeeFiscalAssignmentTotals(
       percentageTotals[categoryKey] += percentage;
     }
 
-    // Revenue uses the same visible category key as Allocation. Therefore a
-    // Not Local project is removed from the generic Local revenue bucket and
-    // receives its own project-specific Revenue column.
+    // Revenue uses the exact rate version effective for this assignment week.
     if (Object.prototype.hasOwnProperty.call(hourTotals, categoryKey)) {
-      hourTotals[categoryKey] += WORK_HOURS_PER_WEEK * (percentage / 100);
+      const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
+      const revenueColumn = getResourceSummaryRevenueColumn(categoryKey);
+      const rateRecord = getRevenueRateForAssignment(employee.designation, assignment);
+      const rate = getRevenueRateValue(rateRecord, revenueColumn);
+      hourTotals[categoryKey] += hours;
+      if (rate === null) unpricedHourTotals[categoryKey] += hours;
+      else revenueTotals[categoryKey] += hours * rate;
     }
   });
 
-  return { percentageTotals, hourTotals };
+  return { percentageTotals, hourTotals, revenueTotals, unpricedHourTotals };
 }
 
 function getRevenueRateValue(rateRecord, revenueKeyOrColumn) {
@@ -368,7 +374,7 @@ function getMatrixAssignmentPlannedRevenue(employee, assignment, unavailableSlot
   const hours = Number.isFinite(percentage) && percentage > 0
     ? WORK_HOURS_PER_WEEK * (percentage / 100)
     : 0;
-  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const rateRecord = getRevenueRateForAssignment(employee.designation, assignment);
   const rate = getRevenueRateValue(rateRecord, categoryKey);
 
   return {
@@ -403,7 +409,7 @@ function getMatrixAssignmentSummaryRevenue(employee, assignment, unavailableSlot
   const hours = Number.isFinite(percentage) && percentage > 0
     ? WORK_HOURS_PER_WEEK * (percentage / 100)
     : 0;
-  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const rateRecord = getRevenueRateForAssignment(employee.designation, assignment);
   const rate = getRevenueRateValue(rateRecord, revenueColumn);
 
   return {
@@ -480,8 +486,13 @@ function getResourceSummaryViewData(employee) {
     S.matrixFiscalYear,
     S.matrixAssignments,
   );
-  const { percentageTotals, hourTotals } = getEmployeeFiscalAssignmentTotals(
-    employee.id,
+  const {
+    percentageTotals,
+    hourTotals,
+    revenueTotals,
+    unpricedHourTotals,
+  } = getEmployeeFiscalAssignmentTotals(
+    employee,
     allocationColumns,
     revenueColumns,
   );
@@ -493,26 +504,29 @@ function getResourceSummaryViewData(employee) {
     ]),
   );
 
-  const rateRecord = getRevenueRateForDesignation(employee.designation);
+  const latestRateRecord = getRevenueRateForDesignation(employee.designation);
   const revenue = createEmptyRevenueTotals(revenueColumns);
   const revenueMeta = {
     designation: employee.designation || '',
-    hasRevenueRateRecord: Boolean(rateRecord),
+    hasRevenueRateRecord: Boolean(latestRateRecord),
   };
 
   revenueColumns.forEach(column => {
     const hours = Number(hourTotals[column.key]) || 0;
-    const rate = getRevenueRateValue(rateRecord, column);
-    const amount = rate === null ? null : hours * rate;
+    const amount = Number(revenueTotals[column.key]) || 0;
+    const unpricedHours = Number(unpricedHourTotals[column.key]) || 0;
+    const weightedRate = hours > 0 ? amount / hours : getRevenueRateValue(latestRateRecord, column);
 
-    revenue[column.key] = amount;
+    revenue[column.key] = unpricedHours > 0 && amount === 0 ? null : amount;
     revenueMeta[column.key] = {
       hours,
-      rate,
-      revenue: amount,
+      unpricedHours,
+      rate: weightedRate,
+      revenue: revenue[column.key],
       rateField: RESOURCE_REVENUE_RATE_FIELDS[column.rateKey],
       rateKey: column.rateKey,
-      hasRevenueRate: rate !== null,
+      hasRevenueRate: unpricedHours === 0,
+      usesRateHistory: true,
     };
   });
 
@@ -694,7 +708,7 @@ function getMatrixRevenueBreakdown(employees, revenueKey) {
     if (!Number.isFinite(percentage) || percentage <= 0) return;
 
     const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
-    const rateRecord = getRevenueRateForDesignation(employee.designation);
+    const rateRecord = getRevenueRateForAssignment(employee.designation, assignment);
     const hourlyRate = getRevenueRateValue(rateRecord, revenueColumn);
     const revenue = hourlyRate === null ? null : hours * hourlyRate;
     const projectLabel = getRevenueBreakdownProjectLabel(assignment, project);

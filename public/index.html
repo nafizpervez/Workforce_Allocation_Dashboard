@@ -9,15 +9,15 @@
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500;600&display=swap" rel="stylesheet" />
     <script src="https://cdn.tailwindcss.com"></script>
-    <link rel="stylesheet" href="/css/style.css?v=all-card-collapse-v3" />
+    <link rel="stylesheet" href="/css/style.css?v=capacity-planning-auto-height-v1" />
   </head>
   <body>
     <div data-fragment="/views/header.html?v=local-matrix-fy-v2"></div>
     <main class="p-8 max-w-[1920px] mx-auto">
       <div id="dashboard-canvas" class="space-y-6">
         <div data-fragment="/views/sections/stats.html?v=card-collapse-exec-v2"></div>
-        <div data-fragment="/views/sections/capacity-executive.html?v=card-collapse-exec-v2"></div>
-        <div data-fragment="/views/sections/resource-matrix.html?v=local-matrix-fy-v2"></div>
+        <div data-fragment="/views/sections/capacity-executive.html?v=capacity-planning-v1"></div>
+        <div data-fragment="/views/sections/resource-matrix.html?v=resource-revenue-label-v1"></div>
         <div data-fragment="/views/sections/allocation-charts.html?v=local-planned-actual-fy-v2"></div>
         <div data-fragment="/views/sections/work-summary.html?v=timesheet-report-v1"></div>
         <div data-fragment="/views/sections/sales-charts.html"></div>
@@ -37,20 +37,20 @@
     <script src="https://cdn.jsdelivr.net/npm/jszip@3.10.1/dist/jszip.min.js"></script>
     <script src="/js/modules/core/state.js?v=config-workdays-v1"></script>
     <script src="/js/modules/core/person-identity.js?v=person-alias-v3"></script>
-    <script src="/js/modules/core/designations.js"></script>
+    <script src="/js/modules/core/designations.js?v=rate-history-v1"></script>
     <script src="/js/modules/core/work-schedule.js?v=workweek-36-66-v1"></script>
     <script src="/js/modules/core/availability.js?v=config-workdays-v1"></script>
     <script src="/js/modules/dashboard/insights.js?v=na-availability-v1"></script>
     <script src="/js/modules/core/api.js"></script>
     <script src="/js/modules/core/data.js?v=config-workdays-v1"></script>
-    <script src="/js/modules/dashboard/resource-summary-metrics.js?v=not-local-revenue-period-tooltip-v1"></script>
+    <script src="/js/modules/dashboard/resource-summary-metrics.js?v=rate-history-v1"></script>
     <script src="/js/modules/dashboard/resource-summary-totals.js?v=not-local-revenue-period-tooltip-v1"></script>
-    <script src="/js/modules/dashboard/resource-summary.js?v=vertical-period-tooltip-v1"></script>
-    <script src="/js/modules/dashboard/overview.js?v=card-collapse-exec-v2"></script>
-    <script src="/js/modules/dashboard/capacity-executive.js?v=card-collapse-exec-v2"></script>
-    <script src="/js/modules/dashboard/monthly-planned-work.js?v=local-planned-actual-fy-v2"></script>
+    <script src="/js/modules/dashboard/resource-summary.js?v=resource-revenue-label-v1"></script>
+    <script src="/js/modules/dashboard/overview.js?v=rate-history-v1"></script>
+    <script src="/js/modules/dashboard/capacity-executive.js?v=full-round-donut-v1"></script>
+    <script src="/js/modules/dashboard/monthly-planned-work.js?v=rate-history-v1"></script>
     <script src="/js/modules/timesheets/model.js?v=actual-burn-charts-v1"></script>
-    <script src="/js/modules/timesheets/planned-actual-model.js?v=skill-development-details-v1"></script>
+    <script src="/js/modules/timesheets/planned-actual-model.js?v=rate-history-v1"></script>
     <script src="/js/modules/timesheets/planned-actual-chart.js?v=month-filter-details-v2"></script>
     <script src="/js/modules/timesheets/charts.js?v=table-tooltip-v1"></script>
     <script src="/js/modules/timesheets/ui.js"></script>
@@ -67,12 +67,12 @@
     <script src="/js/modules/ui/modal-shell.js?v=modal-scroll-fix-v2"></script>
     <script src="/js/modules/ui/assignment-modal.js?v=assignment-multiselect-v1"></script>
     <script src="/js/modules/ui/revenue-breakdown-modal.js?v=not-local-revenue-columns-v1"></script>
-    <script src="/js/modules/ui/revenue-rates-modal.js?v=committed-target-v1"></script>
-    <script src="/js/modules/ui/presale-products-modal.js?v=presale-compact-resource-revenue-v2"></script>
+    <script src="/js/modules/ui/revenue-rates-modal.js?v=resource-revenue-label-v1"></script>
+    <script src="/js/modules/ui/presale-products-modal.js?v=resource-revenue-label-v1"></script>
     <script src="/js/modules/ui/protected-modal-access.js?v=modal-password-v1"></script>
     <script src="/js/modules/ui/committed-targets-modal.js?v=target-storage-v1"></script>
     <script src="/js/modules/ui/resource-project-modals.js?v=config-workdays-v1"></script>
-    <script src="/js/modules/ui/events.js?v=all-card-collapse-v3"></script>
+    <script src="/js/modules/ui/events.js?v=resource-revenue-label-v1"></script>
     <script src="/js/modules/projects/resources.js?v=team-resource-edit-action-v1"></script>
     <script src="/js/app.js?v=workweek-36-66-v1"></script>
   </body>

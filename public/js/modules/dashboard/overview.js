@@ -488,7 +488,7 @@ function getCalculatedCommittedTargetSummary() {
     const percentage = Number(assignment.percentage);
     if (!Number.isFinite(percentage) || percentage <= 0) continue;
 
-    const rateRecord = getRevenueRateForDesignation(employee.designation);
+    const rateRecord = getRevenueRateForAssignment(employee.designation, assignment);
     const hourlyRate = getRevenueRateValue(rateRecord, category);
     if (hourlyRate === null) continue;
 
@@ -602,8 +602,11 @@ function getCapacityAllocationDetails() {
       S.assignments,
     );
     const capacityHours = workdayAdjustment.adjustedWorkdays * CAPACITY_HOURS_PER_WORKDAY;
-    const rateRecord = getRevenueRateForDesignation(employee.designation);
-    const hourlyRate = getRevenueRateValue(rateRecord, 'local');
+    const hourlyRate = getAverageRevenueRateForFiscalYear(
+      employee.designation,
+      RESOURCE_REVENUE_RATE_FIELDS.local,
+      S.fiscalYear,
+    );
     const maximumAmount = hourlyRate === null
       ? 0
       : capacityHours * hourlyRate;
@@ -636,6 +639,8 @@ function getCapacityAllocationDetails() {
       localRate: null,
       intrasourcingRevenue: 0,
       localRevenue: 0,
+      intrasourcingUnpricedHours: 0,
+      localUnpricedHours: 0,
       assignmentCount: 0,
       note: '',
     }]),
@@ -660,30 +665,42 @@ function getCapacityAllocationDetails() {
     const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     row.assignmentCount += 1;
 
-    if (category === 'intrasourcing') row.intrasourcingHours += hours;
-    if (category === 'local') row.localHours += hours;
+    const rateRecord = getRevenueRateForAssignment(employee.designation, assignment);
+    const hourlyRate = getRevenueRateValue(rateRecord, category);
+
+    if (category === 'intrasourcing') {
+      row.intrasourcingHours += hours;
+      if (hourlyRate === null) row.intrasourcingUnpricedHours += hours;
+      else row.intrasourcingRevenue += hours * hourlyRate;
+    }
+    if (category === 'local') {
+      row.localHours += hours;
+      if (hourlyRate === null) row.localUnpricedHours += hours;
+      else row.localRevenue += hours * hourlyRate;
+    }
   }
 
   for (const employee of activeEmployees) {
     const row = allocationByEmployee.get(Number(employee.id));
-    const rateRecord = getRevenueRateForDesignation(employee.designation);
-    row.intrasourcingRate = getRevenueRateValue(rateRecord, 'intrasourcing');
-    row.localRate = getRevenueRateValue(rateRecord, 'local');
-    row.intrasourcingRevenue = row.intrasourcingRate === null
-      ? 0
-      : row.intrasourcingHours * row.intrasourcingRate;
-    row.localRevenue = row.localRate === null
-      ? 0
-      : row.localHours * row.localRate;
+    row.intrasourcingRate = row.intrasourcingHours > 0
+      ? row.intrasourcingRevenue / row.intrasourcingHours
+      : getAverageRevenueRateForFiscalYear(
+        employee.designation,
+        RESOURCE_REVENUE_RATE_FIELDS.intrasourcing,
+        S.fiscalYear,
+      );
+    row.localRate = row.localHours > 0
+      ? row.localRevenue / row.localHours
+      : getAverageRevenueRateForFiscalYear(
+        employee.designation,
+        RESOURCE_REVENUE_RATE_FIELDS.local,
+        S.fiscalYear,
+      );
     row.totalRevenue = row.intrasourcingRevenue + row.localRevenue;
 
     const missing = [];
-    if (row.intrasourcingHours > 0 && row.intrasourcingRate === null) {
-      missing.push('Intrasourcing rate missing');
-    }
-    if (row.localHours > 0 && row.localRate === null) {
-      missing.push('Local rate missing');
-    }
+    if (row.intrasourcingUnpricedHours > 0) missing.push('Intrasourcing rate missing for part of the fiscal year');
+    if (row.localUnpricedHours > 0) missing.push('Local rate missing for part of the fiscal year');
     row.note = missing.join(' · ');
   }
 
@@ -1646,7 +1663,11 @@ function getAssignmentBurnRevenueSeries() {
       : null;
     if (!['serviceDeliveryIntrasourcing', 'serviceDeliveryLocalPs'].includes(categoryKey)) continue;
 
-    const rateInfo = getMonthlyRevenueRate(categoryKey, employee);
+    const rateInfo = getMonthlyRevenueRate(
+      categoryKey,
+      employee,
+      getRevenueRateDateForAssignment(assignment),
+    );
     if (!rateInfo.eligible || !rateInfo.hasRate) continue;
     const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     plannedRevenue[index] += hours * rateInfo.rate;
@@ -1673,7 +1694,11 @@ function getAssignmentBurnRevenueSeries() {
       ? normalizePersonName(row.worker)
       : String(row.worker || '').trim().toLowerCase();
     const employee = employeesByName.get(workerKey);
-    const rateInfo = getMonthlyRevenueRate(categoryKey, employee);
+    const rateInfo = getMonthlyRevenueRate(
+      categoryKey,
+      employee,
+      getRevenueRateDateForTimesheetRow(row, parsedMonth.year, parsedMonth.month),
+    );
     if (!rateInfo.eligible || !rateInfo.hasRate) continue;
 
     const hours = Number(row.qty ?? row.hours ?? row.quantity);

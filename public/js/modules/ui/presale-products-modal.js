@@ -72,8 +72,8 @@ function getPreSaleProductPlannedResources(productName) {
     const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     if (hours <= 0) continue;
 
-    const rateRecord = typeof getRevenueRateForDesignation === 'function'
-      ? getRevenueRateForDesignation(employee.designation)
+    const rateRecord = typeof getRevenueRateForAssignment === 'function'
+      ? getRevenueRateForAssignment(employee.designation, assignment)
       : null;
     const hourlyRate = Number(rateRecord?.local_rate);
     const hasRate = Number.isFinite(hourlyRate) && hourlyRate >= 0;
@@ -347,7 +347,7 @@ function openPreSaleProductsModal() {
   openModal(`
     ${mHdr(
       'Pre-Sale Product',
-      'Maintain Product Names, reference amounts and confidence percentages, and review planned resource hours and revenue calculated from Reserve Revenue rates.',
+      'Maintain Product Names, reference amounts and confidence percentages, and review planned resource hours and revenue calculated from Resource Revenue rates.',
     )}
     <div class="modal-scroll-body nice-scroll presale-products-modal__body">
       <section class="presale-product-thresholds" aria-labelledby="presaleThresholdHeading">
