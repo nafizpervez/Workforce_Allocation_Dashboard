@@ -1,7 +1,6 @@
 /* Workforce Allocation Dashboard — dashboard/capacity-executive.js */
 
 const CAPACITY_EXECUTIVE_HOURS_PER_DAY = 8;
-const CAPACITY_PIPELINE_MULTIPLIER = 2.5;
 const CAPACITY_EXECUTIVE_STANDARD_ORDER = Object.freeze([
   'intrasourcing', 'local', 'training', 'preSale', 'skillDevelopment', 'generalAdmin',
 ]);
@@ -17,6 +16,16 @@ const CAPACITY_EXECUTIVE_COLORS = Object.freeze([
   '#377CB7', '#2A9D8F', '#F2B51D', '#8061A6', '#6EAF45', '#5A9BD5',
   '#EF8354', '#8B5CF6', '#0EA5E9', '#14B8A6', '#EC4899', '#F97316',
 ]);
+
+function getCapacityPipelineMultiplier() {
+  const configured = Number(S.appConfig?.pipelineMultiplier);
+  return Number.isFinite(configured) && configured >= 0 ? configured : 0;
+}
+
+function getCapacityCurrentRealizedRevenue() {
+  const configured = Number(S.appConfig?.currentRealizedRevenue);
+  return Number.isFinite(configured) && configured >= 0 ? configured : 0;
+}
 
 function formatExecutiveCurrency(value) {
   return `USD ${Math.round(Number(value) || 0).toLocaleString('en-US')}`;
@@ -322,6 +331,35 @@ function getCapacityProjectFinancials(fiscalYear) {
   return { byCategory, buckets, totalRealized, activePipeline };
 }
 
+function getCapacityPreSaleProductPipelineSummary() {
+  const thresholds = S.preSaleProductThresholds || {};
+  const securedMinPercent = Number(thresholds.securedMinPercent);
+  const bestCaseMinPercent = Number(thresholds.bestCaseMinPercent);
+  const securedThreshold = Number.isFinite(securedMinPercent) ? securedMinPercent : 90;
+  const bestCaseThreshold = Number.isFinite(bestCaseMinPercent) ? bestCaseMinPercent : 70;
+  const buckets = { secured: 0, bestCase: 0, prospect: 0 };
+  let totalAmount = 0;
+
+  for (const product of S.preSaleProducts || []) {
+    const amount = Number(product?.amount);
+    if (!Number.isFinite(amount) || amount < 0) continue;
+    const percent = Number(product?.percent);
+    const confidence = Number.isFinite(percent) ? percent : 0;
+    totalAmount += amount;
+
+    if (confidence >= securedThreshold) buckets.secured += amount;
+    else if (confidence >= bestCaseThreshold) buckets.bestCase += amount;
+    else buckets.prospect += amount;
+  }
+
+  return {
+    bestCaseMinPercent: bestCaseThreshold,
+    buckets,
+    securedMinPercent: securedThreshold,
+    totalAmount,
+  };
+}
+
 function getCapacityAvailableSummaryRows(workdayRows) {
   const clusters = new Map();
   for (const row of workdayRows) {
@@ -401,7 +439,7 @@ function getCapacityExecutiveSummary() {
   );
   const committedTargets = typeof getCommittedTargetSummary === 'function'
     ? getCommittedTargetSummary()
-    : { intrasourcing: 0, local: 0, total: 0 };
+    : { intrasourcing: 0, local: 0, localPipeline: 0, total: 0 };
   const defaultAnnualWorkdays = Number(getDefaultAnnualWorkdays()) || 0;
   const equivalentCapacity = defaultAnnualWorkdays > 0
     ? workdays.availableCapacityDays / defaultAnnualWorkdays
@@ -417,6 +455,7 @@ function getCapacityExecutiveSummary() {
   const executiveCategoryMetrics = getCapacityCategoryMetrics(executiveAllocationRows);
 
   const projects = getCapacityProjectFinancials(fiscalYear);
+  const preSalePipeline = getCapacityPreSaleProductPipelineSummary();
   const availableRows = getCapacityAvailableSummaryRows(workdays.rows);
   const revenueGroupRows = getCapacityRevenueGroupRows(workdays.rows, defaultAnnualWorkdays);
 
@@ -441,6 +480,7 @@ function getCapacityExecutiveSummary() {
     shares,
     categoryMetrics,
     projects,
+    preSalePipeline,
     availableRows,
     revenueGroupRows,
     ...workdays,
@@ -537,7 +577,7 @@ function renderAvailableCapacitySummaryCard(summary) {
         <thead><tr><th>Designation</th><th>FTE</th><th>Availability Basis</th><th>Available Working Days</th></tr></thead>
         <tbody>
           ${rows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.displayGroup)}</td><td class="capacity-executive-table__value">${row.fte.toLocaleString()}</td><td class="capacity-executive-table__center">${esc(row.basis)}</td><td class="capacity-executive-table__value">${esc(formatExecutiveDays(row.days, ''))}</td></tr>`).join('')}
-          <tr class="capacity-executive-table__total"><td>Total Available Capacity</td><td>${summary.assignableCount.toLocaleString()}</td><td></td><td>${esc(formatExecutiveDays(summary.availableCapacityDays))}</td></tr>
+          <tr class="capacity-executive-table__total"><td>Total Available Capacity</td><td class="capacity-executive-table__value">${summary.assignableCount.toLocaleString()}</td><td></td><td class="capacity-executive-table__value">${esc(formatExecutiveDays(summary.availableCapacityDays))}</td></tr>
         </tbody>
       </table>
     </div>`;
@@ -658,7 +698,7 @@ function getCapacityValueRows(summary) {
     const isPreSale = key === 'preSale';
     const target = isPreSale ? Number(summary.committedTarget) || 0 : 0;
     const pipeline = isPreSale ? Number(summary.projects.activePipeline) || 0 : Number(projectData[key]?.pipeline) || 0;
-    const multiplier = isPreSale ? CAPACITY_PIPELINE_MULTIPLIER : null;
+    const multiplier = isPreSale ? getCapacityPipelineMultiplier() : null;
     const required = target > 0 && multiplier ? target * multiplier : opportunity;
     return {
       key,
@@ -690,7 +730,7 @@ function renderCapacityValueAllocationCard(summary) {
         <table class="capacity-executive-table capacity-executive-table--dense capacity-executive-table--wide">
           <thead><tr><th>Function</th><th>Capacity %</th><th>FTE</th><th>Opportunity Value</th><th>Target</th><th>Multiplier</th><th>Pipeline</th><th>Remaining</th></tr></thead>
           <tbody>
-            ${rows.functionRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.opportunity))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveTableCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${row.multiplier ? `${row.multiplier.toFixed(1)}×` : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.pipeline))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveTableCurrency(row.remaining))}</td></tr>`).join('')}
+            ${rows.functionRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.opportunity))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveTableCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${row.multiplier ? `${row.multiplier.toLocaleString('en-US', { maximumFractionDigits: 2 })}×` : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.pipeline))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveTableCurrency(row.remaining))}</td></tr>`).join('')}
             <tr class="capacity-executive-table__total"><td>Total</td><td>${esc(formatExecutivePercentage(summary.allocationMix.totalAllocationPercentage))}</td><td>${esc(formatExecutiveFte(summary.defaultAnnualWorkdays > 0 ? summary.allocationMix.allocatedMandays / summary.defaultAnnualWorkdays : 0, false))}</td><td>${esc(formatExecutiveTableCurrency(summary.allocationMix.capacityValue))}</td><td></td><td></td><td></td><td></td></tr>
           </tbody>
         </table>
@@ -704,34 +744,35 @@ function renderCapacityValueAllocationCard(summary) {
 }
 
 function renderPipelineTargetSummaryCard(summary) {
-  const target = Number(summary.committedTarget) || 0;
-  const baseRequirement = target * CAPACITY_PIPELINE_MULTIPLIER;
-  const realized = Number(summary.projects.totalRealized) || 0;
+  const localPipelineTarget = Number(summary.committedTargets.localPipeline) || 0;
+  const pipelineMultiplier = getCapacityPipelineMultiplier();
+  const baseRequirement = localPipelineTarget * pipelineMultiplier;
+  const realized = getCapacityCurrentRealizedRevenue();
   const pipelineTarget = baseRequirement + realized;
-  const activePipeline = Number(summary.projects.activePipeline) || 0;
-  const totalBucket = Object.values(summary.projects.buckets).reduce((sum, value) => sum + (Number(value) || 0), 0);
+  const activePipeline = Number(summary.preSalePipeline.totalAmount) || 0;
   const bucketRows = [
-    ['Secured', summary.projects.buckets.secured],
-    ['Best Case', summary.projects.buckets.bestCase],
-    ['Prospect', summary.projects.buckets.prospect],
+    ['Secured', `≥ ${formatExecutivePercentage(summary.preSalePipeline.securedMinPercent)}`, summary.preSalePipeline.buckets.secured],
+    ['Best Case', `≥ ${formatExecutivePercentage(summary.preSalePipeline.bestCaseMinPercent)}`, summary.preSalePipeline.buckets.bestCase],
+    ['Prospect', `< ${formatExecutivePercentage(summary.preSalePipeline.bestCaseMinPercent)}`, summary.preSalePipeline.buckets.prospect],
   ];
   const rows = [
-    ['Selected FY Revenue Target', formatExecutiveTableCurrency(target), 'Saved Intrasourcing + Local PS targets'],
-    ['Pipeline Multiplier', `${CAPACITY_PIPELINE_MULTIPLIER.toFixed(1)}×`, 'Business planning multiplier'],
-    ['Base Pipeline Requirement', formatExecutiveTableCurrency(baseRequirement), 'Revenue target × multiplier'],
-    ['Current Realized Revenue', formatExecutiveTableCurrency(realized), 'Closed Won project value in selected FY'],
-    ['Required Pipeline Target', formatExecutiveTableCurrency(pipelineTarget), 'Base requirement + realized revenue'],
-    ['Already Working With', formatExecutiveTableCurrency(activePipeline), 'Current open pipeline in selected FY'],
+    ['Local Pipeline Target', formatExecutiveTableCurrency(localPipelineTarget)],
+    ['Pipeline Multiplier', `${pipelineMultiplier.toLocaleString('en-US', { maximumFractionDigits: 2 })}×`],
+    ['Base Pipeline Requirement', formatExecutiveTableCurrency(baseRequirement)],
+    ['Current Realized Revenue', formatExecutiveTableCurrency(realized)],
+    ['Required Pipeline Target', formatExecutiveTableCurrency(pipelineTarget)],
+    ['Already Working With', formatExecutiveTableCurrency(activePipeline)],
   ];
   const body = `
     <div class="capacity-card-scroll nice-scroll">
       <table class="capacity-executive-table capacity-executive-table--dense capacity-pipeline-summary-table">
-        <thead><tr><th>Planning Metric</th><th>Value</th><th>Basis</th></tr></thead>
+        <colgroup><col style="width:58%"><col style="width:42%"></colgroup>
+        <thead><tr><th>Planning Metric</th><th>Value</th></tr></thead>
         <tbody>
-          ${rows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row[0])}</td><td class="capacity-executive-table__value">${esc(row[1])}</td><td class="capacity-executive-table__center">${esc(row[2])}</td></tr>`).join('')}
+          ${rows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row[0])}</td><td class="capacity-executive-table__value">${esc(row[1])}</td></tr>`).join('')}
           ${bucketRows.map(row => {
-            const percentage = totalBucket > 0 ? row[1] / totalBucket * 100 : 0;
-            return `<tr><td class="capacity-executive-table__metric">${esc(row[0])}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(percentage))}</td><td class="capacity-executive-table__center">${esc(formatExecutiveTableCurrency(row[1]))}</td></tr>`;
+            const value = `${row[1]} · ${formatExecutiveTableCurrency(row[2])}`;
+            return `<tr><td class="capacity-executive-table__metric">${esc(row[0])}</td><td class="capacity-executive-table__value">${esc(value)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
@@ -741,8 +782,8 @@ function renderPipelineTargetSummaryCard(summary) {
       </div>
     </div>`;
   return capacityExecutiveCardShell({
-    key: 'pipeline-target-summary', title: 'Pipeline Target Summary', eyebrow: 'Forward planning',
-    subtitle: 'Target coverage and current pipeline distribution calculated from project values and probability/stage data.',
+    key: 'pipeline-target-summary', title: '6. Pipeline Target Summary', eyebrow: 'Forward planning',
+    subtitle: `Pipeline target coverage using saved Local Pipeline Target, config.js planning values and Pre-Sale Product confidence thresholds (Secured ≥ ${summary.preSalePipeline.securedMinPercent}%, Best Case ≥ ${summary.preSalePipeline.bestCaseMinPercent}%).`,
     fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveCurrency(activePipeline), body,
   });
 }

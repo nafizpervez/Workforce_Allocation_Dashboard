@@ -513,16 +513,21 @@ function getCommittedTargetSummary() {
   const calculated = getCalculatedCommittedTargetSummary();
   const savedIntrasourcing = getCommittedTargetRecord('intrasourcing');
   const savedLocal = getCommittedTargetRecord('local');
+  const savedLocalPipeline = getCommittedTargetRecord('local_pipeline');
   const intrasourcing = savedIntrasourcing?.updated_at
     ? Number(savedIntrasourcing.amount) || 0
     : calculated.intrasourcing;
   const local = savedLocal?.updated_at
     ? Number(savedLocal.amount) || 0
     : calculated.local;
+  const localPipeline = Number(savedLocalPipeline?.amount) || 0;
 
   return {
     intrasourcing: +intrasourcing.toFixed(2),
     local: +local.toFixed(2),
+    localPipeline: +localPipeline.toFixed(2),
+    // Local Pipeline Target is a planning-only input and must never be added
+    // to the Committed Target KPI total.
     total: +(intrasourcing + local).toFixed(2),
   };
 }
@@ -548,6 +553,12 @@ function renderCommittedTargetBreakdown(summary) {
       label: 'Local PS Revenue Target',
       value: formatCommittedTargetRevenue(summary.local),
       tone: 'local',
+    },
+    {
+      key: 'local_pipeline',
+      label: 'Local Pipeline Target',
+      value: formatCommittedTargetRevenue(summary.localPipeline),
+      tone: 'pipeline',
     },
   ];
 
@@ -1106,7 +1117,7 @@ function renderStats(s) {
       label: 'Committed Target',
       bg: 'bg-amber-100',
       fg: 'text-amber-600',
-      formula: 'Committed Target equals the saved Intrasourcing Revenue Target plus the saved Local PS Revenue Target. Click either target row to edit and persist its amount.',
+      formula: 'Committed Target equals only the saved Intrasourcing Revenue Target plus the saved Local PS Revenue Target. Local Pipeline Target is a separate planning input and is not added to the Committed Target total. Click any target row to edit and persist its amount.',
       icon: '<polygon points="13 2 3 14 12 14 11 22 21 10 12 10 13 2"/>',
       detailType: 'committed-target-breakdown',
     },
@@ -1195,7 +1206,147 @@ function renderStats(s) {
 }
 
 /* ================================================================ CHARTS */
-function renderTrends(data) { if (S.charts.trends) S.charts.trends.destroy(); const ctx = document.getElementById('trendsChart').getContext('2d'); S.charts.trends = new Chart(ctx, { type: 'line', data: { labels: data.map(d => d.label), datasets: [{ label: 'Assignments', data: data.map(d => d.assignments), borderColor: '#2563EB', backgroundColor: 'rgba(37,99,235,0.06)', tension: 0.4, borderWidth: 2, pointRadius: 3, fill: true, yAxisID: 'y' }, { label: 'Utilization %', data: data.map(d => d.utilization), borderColor: '#059669', backgroundColor: 'rgba(5,150,105,0.04)', tension: 0.4, borderWidth: 2, pointRadius: 3, yAxisID: 'y1' }] }, options: { responsive: true, maintainAspectRatio: false, interaction: { mode: 'index', intersect: false }, plugins: { legend: { display: true, position: 'bottom', labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 } }, tooltip: { bodyFont: { size: 11 }, titleFont: { size: 11 }, padding: 8 } }, scales: { x: { ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } }, y: { position: 'left', ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } }, y1: { position: 'right', ticks: { font: { size: 11 } }, grid: { display: false } } } } }); }
+function getOverviewChartTooltipElement(chart, kind = 'chart') {
+  const id = `overview-${kind}-tooltip-${chart.canvas.id}`;
+  let element = document.getElementById(id);
+  if (!element) {
+    element = document.createElement('div');
+    element.id = id;
+    element.className = 'dashboard-chart-table-tooltip';
+    element.setAttribute('role', 'tooltip');
+    element.setAttribute('aria-hidden', 'true');
+    document.body.appendChild(element);
+  }
+  return element;
+}
+
+function hideOverviewChartTooltip(element) {
+  if (!element) return;
+  element.classList.remove('is-visible');
+  element.setAttribute('aria-hidden', 'true');
+}
+
+function positionOverviewChartTooltip(element, chart, tooltip) {
+  if (!element || !chart?.canvas || !tooltip) return;
+
+  // Measure from a neutral fixed-position origin, then clamp to the viewport.
+  element.style.left = '0px';
+  element.style.top = '0px';
+  element.classList.add('is-visible');
+  element.setAttribute('aria-hidden', 'false');
+
+  const canvasRect = chart.canvas.getBoundingClientRect();
+  const tooltipRect = element.getBoundingClientRect();
+  const margin = 10;
+  const gap = 14;
+  let left = canvasRect.left + tooltip.caretX + gap;
+  let top = canvasRect.top + tooltip.caretY - (tooltipRect.height / 2);
+
+  if (left + tooltipRect.width > window.innerWidth - margin) {
+    left = canvasRect.left + tooltip.caretX - tooltipRect.width - gap;
+  }
+  if (top + tooltipRect.height > window.innerHeight - margin) {
+    top = canvasRect.top + tooltip.caretY - tooltipRect.height - gap;
+  }
+
+  left = Math.max(margin, Math.min(left, window.innerWidth - tooltipRect.width - margin));
+  top = Math.max(margin, Math.min(top, window.innerHeight - tooltipRect.height - margin));
+
+  element.style.left = `${Math.round(left)}px`;
+  element.style.top = `${Math.round(top)}px`;
+}
+
+function renderAssignmentTrendsTooltip(context) {
+  const { chart, tooltip } = context;
+  const element = getOverviewChartTooltipElement(chart, 'assignment-trends');
+
+  if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) {
+    hideOverviewChartTooltip(element);
+    return;
+  }
+
+  const title = String(tooltip.title?.[0] || tooltip.dataPoints[0]?.label || '');
+  const rows = tooltip.dataPoints.map(point => {
+    const label = String(point.dataset?.label || '');
+    const numeric = Number(point.parsed?.y) || 0;
+    const value = label.toLowerCase().includes('utilization')
+      ? `${numeric.toLocaleString('en-US', { maximumFractionDigits: 1 })}%`
+      : numeric.toLocaleString('en-US', { maximumFractionDigits: 1 });
+    return { label, value };
+  });
+
+  element.innerHTML = `
+    <div class="dashboard-chart-table-tooltip__title">${esc(title)}</div>
+    <table class="dashboard-chart-tooltip-table">
+      <tbody>
+        ${rows.map(row => `
+          <tr>
+            <th>${esc(row.label)}</th>
+            <td>${esc(row.value)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+  positionOverviewChartTooltip(element, chart, tooltip);
+}
+
+function renderTrends(data) {
+  if (S.charts.trends) S.charts.trends.destroy();
+  const canvas = document.getElementById('trendsChart');
+  if (!canvas) return;
+
+  S.charts.trends = new Chart(canvas.getContext('2d'), {
+    type: 'line',
+    data: {
+      labels: data.map(d => d.label),
+      datasets: [
+        {
+          label: 'Assignments',
+          data: data.map(d => d.assignments),
+          borderColor: '#2563EB',
+          backgroundColor: 'rgba(37,99,235,0.06)',
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 3,
+          fill: true,
+          yAxisID: 'y',
+        },
+        {
+          label: 'Utilization %',
+          data: data.map(d => d.utilization),
+          borderColor: '#059669',
+          backgroundColor: 'rgba(5,150,105,0.04)',
+          tension: 0.4,
+          borderWidth: 2,
+          pointRadius: 3,
+          yAxisID: 'y1',
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 },
+        },
+        tooltip: {
+          enabled: false,
+          external: renderAssignmentTrendsTooltip,
+        },
+      },
+      scales: {
+        x: { ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } },
+        y: { position: 'left', ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } },
+        y1: { position: 'right', ticks: { font: { size: 11 } }, grid: { display: false } },
+      },
+    },
+  });
+}
 
 function getAssignmentBurnSeries() {
   const months = fiscalMonths(S.fiscalYear);
@@ -1359,17 +1510,10 @@ function burnChartLegendOptions() {
 
 
 function getBurnTableTooltipElement(chart) {
-  const parent = chart.canvas.parentNode;
-  parent.style.position = parent.style.position || 'relative';
-
-  let tooltip = parent.querySelector('.burn-chart-table-tooltip');
-  if (!tooltip) {
-    tooltip = document.createElement('div');
-    tooltip.className = 'burn-chart-table-tooltip';
-    tooltip.setAttribute('role', 'status');
-    parent.appendChild(tooltip);
-  }
-  return tooltip;
+  const element = getOverviewChartTooltipElement(chart, 'burn');
+  element.classList.add('burn-chart-table-tooltip');
+  element.setAttribute('role', 'tooltip');
+  return element;
 }
 
 function signedBurnValue(value, formatter) {
@@ -1381,14 +1525,14 @@ function renderBurnTableTooltip(context, title, rows) {
   const { chart, tooltip } = context;
   const element = getBurnTableTooltipElement(chart);
 
-  if (!tooltip || tooltip.opacity === 0) {
-    element.style.opacity = '0';
+  if (!tooltip || tooltip.opacity === 0 || !tooltip.dataPoints?.length) {
+    hideOverviewChartTooltip(element);
     return;
   }
 
   element.innerHTML = `
-    <div class="burn-chart-table-title">${esc(title)}</div>
-    <table class="burn-chart-tooltip-table">
+    <div class="dashboard-chart-table-tooltip__title">${esc(title)}</div>
+    <table class="dashboard-chart-tooltip-table burn-chart-tooltip-table">
       <tbody>
         ${rows.map(row => `
           <tr class="${row.emphasis ? 'is-emphasis' : ''}">
@@ -1400,15 +1544,7 @@ function renderBurnTableTooltip(context, title, rows) {
     </table>
   `;
 
-  const { offsetLeft, offsetTop } = chart.canvas;
-  const left = offsetLeft + tooltip.caretX;
-  const top = offsetTop + tooltip.caretY;
-  element.style.opacity = '1';
-  element.style.left = `${left}px`;
-  element.style.top = `${top}px`;
-  element.style.transform = left > chart.width * 0.65
-    ? 'translate(-100%, -108%)'
-    : 'translate(10px, -108%)';
+  positionOverviewChartTooltip(element, chart, tooltip);
 }
 
 function burnTableTooltipOptions(series, mode) {

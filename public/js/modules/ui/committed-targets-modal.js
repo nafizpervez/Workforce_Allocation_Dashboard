@@ -3,13 +3,28 @@
 const COMMITTED_TARGET_LABELS = Object.freeze({
   intrasourcing: 'Intrasourcing Revenue Target',
   local: 'Local PS Revenue Target',
+  local_pipeline: 'Local Pipeline Target',
 });
 
 function getCommittedTargetModalAmount(targetKey) {
   const summary = typeof getCommittedTargetSummary === 'function'
     ? getCommittedTargetSummary()
-    : { intrasourcing: 0, local: 0 };
+    : { intrasourcing: 0, local: 0, localPipeline: 0 };
+  if (targetKey === 'local_pipeline') return Number(summary.localPipeline) || 0;
   return Number(summary[targetKey]) || 0;
+}
+
+function getCommittedTargetModalCopy(targetKey) {
+  if (targetKey === 'local_pipeline') {
+    return {
+      subtitle: 'Set the Local Pipeline Target used by Pipeline Target Summary. The value is saved in SQLite and persists after restart.',
+      note: 'Local Pipeline Target is a planning-only value. It is not added to the Committed Target KPI amount.',
+    };
+  }
+  return {
+    subtitle: 'Set the committed revenue target amount. The value is saved in SQLite and persists after restart.',
+    note: 'The Committed Target KPI displays only the sum of the saved Intrasourcing and Local PS revenue targets. Local Pipeline Target is excluded.',
+  };
 }
 
 function openCommittedTargetModal(targetKey) {
@@ -17,8 +32,9 @@ function openCommittedTargetModal(targetKey) {
   if (!label) return;
 
   const amount = getCommittedTargetModalAmount(targetKey);
+  const copy = getCommittedTargetModalCopy(targetKey);
   openModal(`
-    ${mHdr(label, 'Set the committed revenue target amount. The value is saved in SQLite and persists after restart.')}
+    ${mHdr(label, copy.subtitle)}
     <div class="p-6">
       <label class="block">
         <span class="field-label">Target Amount (USD)</span>
@@ -36,7 +52,7 @@ function openCommittedTargetModal(targetKey) {
         </div>
       </label>
       <div class="mt-4 rounded-lg border border-amber-100 bg-amber-50 px-4 py-3 text-xs leading-5 text-amber-800">
-        The Committed Target card always displays the sum of the saved Intrasourcing and Local PS targets.
+        ${esc(copy.note)}
       </div>
     </div>
     <div class="modal-footer flex items-center justify-end gap-3 rounded-b-2xl border-t border-gray-200 bg-gray-50 p-6">
@@ -86,6 +102,8 @@ async function saveCommittedTarget(targetKey) {
     closeModal();
     if (typeof renderStats === 'function' && S.dashboardStats) {
       renderStats(S.dashboardStats);
+    } else if (typeof renderCapacityExecutiveCards === 'function') {
+      renderCapacityExecutiveCards();
     }
     toast(`${COMMITTED_TARGET_LABELS[targetKey]} saved`);
   } catch (error) {

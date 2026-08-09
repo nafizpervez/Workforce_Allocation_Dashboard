@@ -494,6 +494,9 @@ async function savePreSaleProducts() {
     if (typeof renderPlannedActualEffortChart === 'function') {
       renderPlannedActualEffortChart();
     }
+    if (typeof renderCapacityExecutiveCards === 'function') {
+      renderCapacityExecutiveCards();
+    }
     toast('Pre-Sale Products and thresholds saved');
   } catch (error) {
     if (saveButton) {

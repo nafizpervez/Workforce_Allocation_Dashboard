@@ -232,6 +232,7 @@
 .capacity-executive-table__center { color: #334155; text-align: center; }
 .capacity-executive-table__row--headline td { font-size: 12px; font-weight: 750; }
 .capacity-executive-table__total td { border-top: 1px solid #7aa7d8; background: #dbe9f7 !important; color: #1e293b; font-weight: 800; }
+.capacity-executive-table__total td:not(:first-child) { font-variant-numeric: tabular-nums; text-align: right; }
 .capacity-value-negative { color: #b91c1c !important; }
 
 .capacity-executive-note {
