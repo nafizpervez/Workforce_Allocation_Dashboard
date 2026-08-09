@@ -379,6 +379,108 @@ function installMatrixAssignmentDetailTooltip() {
 
 installMatrixAssignmentDetailTooltip();
 
+const MATRIX_RESOURCE_ALLOCATION_TOOLTIP_ID = 'matrixResourceAllocationTooltip';
+
+function getMatrixResourceAllocationTooltip() {
+  let tooltip = document.getElementById(MATRIX_RESOURCE_ALLOCATION_TOOLTIP_ID);
+  if (tooltip) return tooltip;
+
+  tooltip = document.createElement('div');
+  tooltip.id = MATRIX_RESOURCE_ALLOCATION_TOOLTIP_ID;
+  tooltip.className = 'matrix-assignment-detail-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function encodeMatrixResourceAllocationData(data) {
+  return encodeURIComponent(JSON.stringify(data || {}));
+}
+
+function getMatrixResourceAllocationData(trigger) {
+  const encodedPayload = String(trigger?.dataset?.allocationBreakdown || '');
+  if (!encodedPayload) return { title: 'Total Allocation', rows: [], total: 0 };
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(encodedPayload));
+    return {
+      title: String(parsed?.title || 'Total Allocation'),
+      rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
+      total: Number(parsed?.total) || 0,
+    };
+  } catch (error) {
+    console.warn('Unable to read resource total-allocation breakdown.', error);
+    return { title: 'Total Allocation', rows: [], total: 0 };
+  }
+}
+
+function renderMatrixResourceAllocationTooltip(data) {
+  const rows = (Array.isArray(data?.rows) ? data.rows : []).map(row => `
+    <tr>
+      <th scope="row">${esc(row?.label || '')}</th>
+      <td>${esc(`${(Number(row?.allocation) || 0).toFixed(1)}%`)}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="matrix-assignment-detail-tooltip__title">${esc(data?.title || 'Total Allocation')}</div>
+    <table class="matrix-assignment-detail-tooltip__table">
+      <tbody>
+        ${rows}
+        <tr>
+          <th scope="row">Total Allocation</th>
+          <td><strong>${esc(`${(Number(data?.total) || 0).toFixed(1)}%`)}</strong></td>
+        </tr>
+      </tbody>
+    </table>
+  `;
+}
+
+function showMatrixResourceAllocationTooltip(trigger) {
+  const tooltip = getMatrixResourceAllocationTooltip();
+  const data = getMatrixResourceAllocationData(trigger);
+  tooltip.innerHTML = renderMatrixResourceAllocationTooltip(data);
+  tooltip.style.width = 'min(360px, calc(100vw - 20px))';
+  tooltip.classList.add('is-visible');
+  tooltip.setAttribute('aria-hidden', 'false');
+  trigger.setAttribute('aria-describedby', MATRIX_RESOURCE_ALLOCATION_TOOLTIP_ID);
+  positionMatrixAssignmentDetailTooltip(tooltip, trigger);
+}
+
+function hideMatrixResourceAllocationTooltip() {
+  const tooltip = document.getElementById(MATRIX_RESOURCE_ALLOCATION_TOOLTIP_ID);
+  if (!tooltip) return;
+  tooltip.classList.remove('is-visible');
+  tooltip.setAttribute('aria-hidden', 'true');
+  document.querySelectorAll(`.matrix-resource-allocation-trigger[aria-describedby="${MATRIX_RESOURCE_ALLOCATION_TOOLTIP_ID}"]`)
+    .forEach(trigger => trigger.removeAttribute('aria-describedby'));
+}
+
+function installMatrixResourceAllocationTooltip() {
+  if (window.__matrixResourceAllocationTooltipInstalled) return;
+  window.__matrixResourceAllocationTooltipInstalled = true;
+
+  const selector = '.matrix-resource-allocation-trigger[data-allocation-breakdown]';
+
+  document.addEventListener('pointerover', event => {
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    showMatrixResourceAllocationTooltip(trigger);
+  });
+
+  document.addEventListener('pointerout', event => {
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    hideMatrixResourceAllocationTooltip();
+  });
+
+  window.addEventListener('resize', hideMatrixResourceAllocationTooltip);
+  window.addEventListener('scroll', hideMatrixResourceAllocationTooltip, true);
+}
+
+installMatrixResourceAllocationTooltip();
+
 function renderMatrixHeader(months, employees, unavailableSlots) {
   const allocationColumns = getResourceSummaryAllocationColumns();
   const revenueColumns = getResourceSummaryRevenueColumns();
@@ -654,12 +756,14 @@ function renderMatrix({ refreshCapacity = true } = {}) {
     const rowClass = index % 2 === 0 ? 'row-even' : 'row-odd';
     const summary = getResourceSummaryViewData(employee);
     const allocationColumns = summary.allocationColumns || getResourceSummaryAllocationColumns();
-    const totalAllocationTitle = [
-      `${employee.name} total allocation is the sum of the ${allocationColumns.length} visible allocation categories.`,
-      `${allocationColumns.map(column => (
-        `${column.label} ${(Number(summary.allocation[column.key]) || 0).toFixed(1)}%`
-      )).join(' + ')} = ${summary.allocationMeta.total.toFixed(1)}%.`,
-    ].join(' ');
+    const totalAllocationBreakdown = encodeMatrixResourceAllocationData({
+      title: `${employee.name} · Total Allocation`,
+      rows: allocationColumns.map(column => ({
+        label: column.label,
+        allocation: Number(summary.allocation[column.key]) || 0,
+      })),
+      total: Number(summary.allocationMeta.total) || 0,
+    });
     const notLocalProjects = summary.allocationMeta.notLocalProjects || [];
     const notLocalProjectTitle = notLocalProjects
       .map(project => `${project.code ? `${project.code} — ` : ''}${project.name}: ${project.allocation.toFixed(1)}%`)
@@ -679,9 +783,9 @@ function renderMatrix({ refreshCapacity = true } = {}) {
             data-emp="${employee.id}"
           >
             <span
-              class="matrix-allocation-avatar ${getMatrixAllocationToneClass(summary.allocationMeta.total)}"
-              title="${esc(totalAllocationTitle)}"
-              aria-label="${esc(employee.name)} total allocation ${formatAllocationViewValue(summary.allocationMeta.total)}"
+              class="matrix-allocation-avatar matrix-resource-allocation-trigger ${getMatrixAllocationToneClass(summary.allocationMeta.total)}"
+              data-allocation-breakdown="${esc(totalAllocationBreakdown)}"
+              aria-label="${esc(`${employee.name} total allocation ${formatAllocationViewValue(summary.allocationMeta.total)}. Hover to view allocation breakdown table.`)}"
             >${formatMatrixAllocationValue(summary.allocationMeta.total)}</span>
             <span class="matrix-resource-copy">
               <span class="matrix-resource-name">${esc(employee.name)}</span>
