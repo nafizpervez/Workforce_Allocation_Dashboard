@@ -260,6 +260,125 @@ function installMatrixMonthBreakdownTooltip() {
 
 installMatrixMonthBreakdownTooltip();
 
+const MATRIX_ASSIGNMENT_DETAIL_TOOLTIP_ID = 'matrixAssignmentDetailTooltip';
+
+function getMatrixAssignmentDetailTooltip() {
+  let tooltip = document.getElementById(MATRIX_ASSIGNMENT_DETAIL_TOOLTIP_ID);
+  if (tooltip) return tooltip;
+
+  tooltip = document.createElement('div');
+  tooltip.id = MATRIX_ASSIGNMENT_DETAIL_TOOLTIP_ID;
+  tooltip.className = 'matrix-assignment-detail-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  tooltip.setAttribute('aria-hidden', 'true');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function getMatrixAssignmentDetailData(trigger) {
+  const encodedPayload = String(trigger?.dataset?.assignmentDetail || '');
+  if (!encodedPayload) return { title: '', rows: [] };
+
+  try {
+    const parsed = JSON.parse(decodeURIComponent(encodedPayload));
+    return {
+      title: String(parsed?.title || ''),
+      rows: Array.isArray(parsed?.rows) ? parsed.rows : [],
+    };
+  } catch (error) {
+    console.warn('Unable to read matrix assignment detail.', error);
+    return { title: '', rows: [] };
+  }
+}
+
+function renderMatrixAssignmentDetailTooltip(data) {
+  const rows = (Array.isArray(data?.rows) ? data.rows : []).map(row => `
+    <tr>
+      <th scope="row">${esc(row?.label || '')}</th>
+      <td>${esc(row?.value || '—')}</td>
+    </tr>
+  `).join('');
+
+  return `
+    <div class="matrix-assignment-detail-tooltip__title">${esc(data?.title || 'Assignment')}</div>
+    <table class="matrix-assignment-detail-tooltip__table">
+      <tbody>${rows}</tbody>
+    </table>
+  `;
+}
+
+function positionMatrixAssignmentDetailTooltip(tooltip, trigger) {
+  const margin = 12;
+  const gap = 8;
+  const triggerRect = trigger.getBoundingClientRect();
+  const tooltipRect = tooltip.getBoundingClientRect();
+  const viewportWidth = window.innerWidth || document.documentElement.clientWidth;
+  const viewportHeight = window.innerHeight || document.documentElement.clientHeight;
+  let left = triggerRect.left + (triggerRect.width / 2) - (tooltipRect.width / 2);
+  let top = triggerRect.bottom + gap;
+
+  left = Math.max(margin, Math.min(left, viewportWidth - tooltipRect.width - margin));
+  if (top + tooltipRect.height > viewportHeight - margin) {
+    top = Math.max(margin, triggerRect.top - tooltipRect.height - gap);
+  }
+
+  tooltip.style.left = `${Math.round(left)}px`;
+  tooltip.style.top = `${Math.round(top)}px`;
+}
+
+function showMatrixAssignmentDetailTooltip(trigger) {
+  const tooltip = getMatrixAssignmentDetailTooltip();
+  const data = getMatrixAssignmentDetailData(trigger);
+  tooltip.innerHTML = renderMatrixAssignmentDetailTooltip(data);
+  tooltip.classList.add('is-visible');
+  tooltip.setAttribute('aria-hidden', 'false');
+  trigger.setAttribute('aria-describedby', MATRIX_ASSIGNMENT_DETAIL_TOOLTIP_ID);
+  positionMatrixAssignmentDetailTooltip(tooltip, trigger);
+}
+
+function hideMatrixAssignmentDetailTooltip() {
+  const tooltip = document.getElementById(MATRIX_ASSIGNMENT_DETAIL_TOOLTIP_ID);
+  if (!tooltip) return;
+  tooltip.classList.remove('is-visible');
+  tooltip.setAttribute('aria-hidden', 'true');
+  document.querySelectorAll(`.matrix-assignment-detail-trigger[aria-describedby="${MATRIX_ASSIGNMENT_DETAIL_TOOLTIP_ID}"]`)
+    .forEach(trigger => trigger.removeAttribute('aria-describedby'));
+}
+
+function installMatrixAssignmentDetailTooltip() {
+  if (window.__matrixAssignmentDetailTooltipInstalled) return;
+  window.__matrixAssignmentDetailTooltipInstalled = true;
+  const selector = '.matrix-assignment-detail-trigger[data-assignment-detail]';
+
+  document.addEventListener('pointerover', event => {
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    showMatrixAssignmentDetailTooltip(trigger);
+  });
+
+  document.addEventListener('pointerout', event => {
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    hideMatrixAssignmentDetailTooltip();
+  });
+
+  document.addEventListener('focusin', event => {
+    const trigger = event.target.closest?.(selector);
+    if (trigger) showMatrixAssignmentDetailTooltip(trigger);
+  });
+
+  document.addEventListener('focusout', event => {
+    const trigger = event.target.closest?.(selector);
+    if (!trigger || trigger.contains(event.relatedTarget)) return;
+    hideMatrixAssignmentDetailTooltip();
+  });
+
+  window.addEventListener('resize', hideMatrixAssignmentDetailTooltip);
+  window.addEventListener('scroll', hideMatrixAssignmentDetailTooltip, true);
+}
+
+installMatrixAssignmentDetailTooltip();
+
 function renderMatrixHeader(months, employees, unavailableSlots) {
   const allocationColumns = getResourceSummaryAllocationColumns();
   const revenueColumns = getResourceSummaryRevenueColumns();
@@ -472,15 +591,26 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
         const revenueRule = usesPreSaleProductAmount
           ? 'Pre-Sale cards use the selected Product Amount from the Pre-Sale Product master.'
           : 'Only Intrasourcing and Local are counted in weekly planned-revenue totals.';
-        const title = `${assignment.project_code || project.code || ''} — ${assignment.project_name || project.name || ''}\nCustomer Name: ${customer}\nProduct Name: ${product}\nRevenue: ${revenueDetail}\n${revenueRule}`;
+        const assignmentTitle = `${assignment.project_code || project.code || ''} — ${assignment.project_name || project.name || ''}`.trim();
+        const assignmentDetail = {
+          title: assignmentTitle || 'Assignment',
+          rows: [
+            { label: 'Customer Name', value: customer },
+            { label: 'Product Name', value: product },
+            { label: 'Allocation', value: `${Number(assignment.percentage) || 0}%` },
+            { label: 'Revenue', value: revenueDetail },
+            { label: 'Counting Rule', value: revenueRule },
+          ],
+        };
         const displayName = shortCustomerName(customer) || assignment.project_code;
         const isSelected = S.matrixSelectedAssignmentIds instanceof Set &&
           S.matrixSelectedAssignmentIds.has(Number(assignment.id));
 
         cells += `
           <div
-            class="chip${isSelected ? ' is-selected' : ''}"
+            class="chip matrix-assignment-detail-trigger${isSelected ? ' is-selected' : ''}"
             data-action="edit-assign"
+            data-assignment-detail="${esc(encodeURIComponent(JSON.stringify(assignmentDetail)))}"
             data-id="${assignment.id}"
             data-year="${month.y}"
             data-month="${month.m}"
@@ -490,8 +620,8 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
             tabindex="0"
             role="button"
             aria-selected="${isSelected ? 'true' : 'false'}"
+            aria-label="${esc(`${assignmentTitle || 'Assignment'}. Hover or focus to view assignment details.`)}"
             style="background:${assignment.project_color}20;border-left:3px solid ${assignment.project_color};min-width:0;width:100%;box-sizing:border-box;"
-            title="${esc(title)}"
           >
             <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:4px;min-width:0;">
               <span class="chip-code" style="color:${assignment.project_color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-size:11px;">${esc(displayName)}</span>

@@ -37,7 +37,11 @@ const S = {
   fiscalYear: 2026,
   // Only the Resource Assignment Matrix may move across fiscal years.
   matrixFiscalYear: getCurrentFiscalYearStart(),
-  appConfig: { defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS_FALLBACK },
+  appConfig: {
+    currentRealizedRevenue: 0,
+    defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS_FALLBACK,
+    pipelineMultiplier: 0,
+  },
   employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
   preSaleProductThresholds: { securedMinPercent: 90, bestCaseMinPercent: 70 },
   matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},

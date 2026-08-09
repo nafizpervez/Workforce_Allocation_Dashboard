@@ -95,6 +95,8 @@ function initEvents() {
     if (b.dataset.add === 'assignment-excel') document.getElementById('assignmentExcelUpload')?.click();
   }));
 
+  if (typeof initFiscalYearReportExport === 'function') initFiscalYearReportExport();
+
   document.getElementById('searchBox').addEventListener('input', e => { S.searchQuery = e.target.value; renderMatrix(); });
   document.addEventListener('keydown', e => { if (e.key === 'Escape') closeModal(); });
 
@@ -422,6 +424,15 @@ function initSectionDrag() { const canvas = document.getElementById('dashboard-c
 let cDragSrc = null;
 
 const CARD_COLLAPSE_STORAGE_KEY = 'allocation-dashboard-card-collapse-v2';
+const DEFAULT_COLLAPSED_CARD_KEYS = new Set([
+  'capacity-allocation',
+  'executive-metrics',
+  'available-capacity-summary',
+  'maximum-revenue-capacity',
+  'revenue-targets',
+  'capacity-value-allocation',
+  'pipeline-target-summary',
+]);
 
 const DASHBOARD_CARD_SECTION_META = Object.freeze({
   stats: { rowLabel: 'KPI cards' },
@@ -720,6 +731,10 @@ function getCardCollapseStateKey(card) {
   return `${groupKey}:${card.dataset.cardKey || card.dataset.cardTitle || 'card'}`;
 }
 
+function isCardCollapsedByDefault(card) {
+  return DEFAULT_COLLAPSED_CARD_KEYS.has(String(card?.dataset?.cardKey || '').trim());
+}
+
 function refreshExpandedCardVisuals() {
   requestAnimationFrame(() => {
     if (typeof S !== 'undefined' && S?.charts) {
@@ -754,8 +769,9 @@ function setCardCollapsed(card, collapsed, options = {}) {
   if (persist) {
     const state = readCardCollapseState();
     const key = getCardCollapseStateKey(card);
-    if (collapsed) state[key] = true;
-    else delete state[key];
+    // Persist both states so a user-expanded card can override a default
+    // minimized card on subsequent page loads.
+    state[key] = Boolean(collapsed);
     writeCardCollapseState(state);
   }
 
@@ -802,7 +818,12 @@ function initCardCollapse() {
         });
       }
 
-      setCardCollapsed(card, Boolean(state[getCardCollapseStateKey(card)]), {
+      const stateKey = getCardCollapseStateKey(card);
+      const hasSavedState = Object.prototype.hasOwnProperty.call(state, stateKey);
+      const shouldCollapse = hasSavedState
+        ? Boolean(state[stateKey])
+        : isCardCollapsedByDefault(card);
+      setCardCollapsed(card, shouldCollapse, {
         persist: false,
         updateRow: false,
       });

@@ -211,16 +211,21 @@
 .stat-tooltip {
   display: none;
   position: absolute;
-  bottom: calc(100% + 10px);
+  top: calc(100% + 10px);
+  bottom: auto;
   left: 50%;
+  width: max-content;
+  max-width: min(300px, calc(100vw - 24px));
   transform: translateX(-50%);
   background: #111827;
   color: #f9fafb;
-  padding: 8px 14px;
+  padding: 9px 12px;
   border-radius: 8px;
   font-size: 11.5px;
   font-weight: 500;
-  white-space: nowrap;
+  line-height: 1.45;
+  white-space: normal;
+  text-align: left;
   z-index: 300;
   pointer-events: none;
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.28);
@@ -229,14 +234,18 @@
 .stat-tooltip::after {
   content: "";
   position: absolute;
-  top: 100%;
+  bottom: 100%;
   left: 50%;
   transform: translateX(-50%);
   border: 6px solid transparent;
-  border-top-color: #111827;
+  border-bottom-color: #111827;
 }
 .stat-card-inner:hover .stat-tooltip {
   display: block;
+}
+
+#statsRow > .dc-stat:hover {
+  z-index: 400;
 }
 
 /* ============================================================== */
@@ -511,6 +520,11 @@
   background: #ffffff;
   box-shadow: 0 1px 3px rgba(15, 23, 42, 0.08), 0 1px 2px rgba(15, 23, 42, 0.04);
   overflow: hidden;
+}
+
+/* Expanded KPI cards allow their formula tooltip to escape the card boundary. */
+.dc-stat.dashboard-collapsible-card:not(.is-card-collapsed) {
+  overflow: visible;
 }
 
 .dc-stat.dashboard-collapsible-card > .card-expandable-content .stat-card-inner {

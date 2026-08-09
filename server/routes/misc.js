@@ -1,6 +1,11 @@
 const crypto = require('crypto');
 const express = require('express');
-const { DEFAULT_ANNUAL_WORKDAYS, MODAL_ACCESS_PASSWORD } = require('../../config');
+const {
+  CURRENT_REALIZED_REVENUE,
+  DEFAULT_ANNUAL_WORKDAYS,
+  MODAL_ACCESS_PASSWORD,
+  PIPELINE_MULTIPLIER,
+} = require('../../config');
 const { getAppDb } = require('../database');
 const router = express.Router();
 const db = getAppDb();
@@ -12,7 +17,11 @@ function secureTextEqual(left, right) {
 }
 
 router.get('/api/app-config', (_, res) => {
-  res.json({ defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS });
+  res.json({
+    currentRealizedRevenue: CURRENT_REALIZED_REVENUE,
+    defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS,
+    pipelineMultiplier: PIPELINE_MULTIPLIER,
+  });
 });
 
 router.get('/api/fiscal-years', (_, res) => {
