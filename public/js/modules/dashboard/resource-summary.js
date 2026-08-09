@@ -642,7 +642,7 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
   return cells;
 }
 
-function renderMatrix() {
+function renderMatrix({ refreshCapacity = true } = {}) {
   const table = document.getElementById('matrixTable');
   const months = fiscalMonths(S.matrixFiscalYear);
   const employees = getFilteredMatrixEmployees();
@@ -711,7 +711,7 @@ function renderMatrix() {
       </tr>
     `;
 
-  if (typeof renderCapacityExecutiveCards === 'function') {
+  if (refreshCapacity && typeof renderCapacityExecutiveCards === 'function') {
     renderCapacityExecutiveCards();
   }
 }

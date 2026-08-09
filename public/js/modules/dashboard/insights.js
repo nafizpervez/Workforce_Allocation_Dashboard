@@ -7,8 +7,8 @@ function calcLocalUtil(period) {
   const curM = now.getMonth() + 1;
   const curD = now.getDate();
   const curW = curD <= 7 ? 1 : curD <= 14 ? 2 : curD <= 21 ? 3 : 4;
-  const fy = S.fiscalYear;
-  const effectiveAssignments = getEffectiveAssignments();
+  const fy = S.matrixFiscalYear;
+  const effectiveAssignments = getEffectiveAssignments(S.matrixAssignments);
   let relevantAssignments;
 
   if (period === 'week') {
@@ -23,7 +23,7 @@ function calcLocalUtil(period) {
       Number(assignment.month) === curM,
     );
   } else {
-    relevantAssignments = getEffectiveFiscalAssignments(fy);
+    relevantAssignments = getEffectiveFiscalAssignments(fy, S.matrixAssignments);
   }
 
   const employeeWeightedSlots = {};
@@ -43,15 +43,17 @@ function calcLocalUtil(period) {
           curY,
           curM,
           curW,
+          getUnavailableAssignmentSlotSet(S.matrixAssignments),
         ) ? 0 : 1;
       } else if (period === 'month') {
         availableWeeks = getEmployeeAvailableMonthWeekCount(
           employee.id,
           curY,
           curM,
+          S.matrixAssignments,
         );
       } else {
-        availableWeeks = getEmployeeAvailableFiscalWeekCount(employee.id, fy);
+        availableWeeks = getEmployeeAvailableFiscalWeekCount(employee.id, fy, S.matrixAssignments);
       }
 
       if (!availableWeeks) return null;
@@ -95,9 +97,9 @@ function renderInsights() {
 function openEmployeeDetailModal(empId) {
   const emp = S.employees.find(e => e.id === empId);
   if (!emp) return;
-  const fy = S.fiscalYear;
-  // All assignments for this employee in the fiscal year
-  const empAsgs = getEffectiveFiscalAssignments(fy)
+  const fy = S.matrixFiscalYear;
+  // All assignments for this employee in the selected Matrix fiscal year
+  const empAsgs = getEffectiveFiscalAssignments(fy, S.matrixAssignments)
     .filter(a => Number(a.employee_id) === Number(empId))
     .sort((a, b) => a.year !== b.year ? a.year - b.year : a.month !== b.month ? a.month - b.month : a.week - b.week);
 
@@ -119,7 +121,7 @@ function openEmployeeDetailModal(empId) {
 
   // Overall utilization for FY
   // Utilization = weighted slots / 48 FY weeks * 100
-  const TOTAL_FY_WEEKS = getEmployeeAvailableFiscalWeekCount(empId, fy);
+  const TOTAL_FY_WEEKS = getEmployeeAvailableFiscalWeekCount(empId, fy, S.matrixAssignments);
   const weightedTotal = empAsgs.reduce((s, a) => s + a.percentage / 100, 0);
   const avgUtil = TOTAL_FY_WEEKS
     ? +Math.min((weightedTotal / TOTAL_FY_WEEKS * 100), 100).toFixed(1)

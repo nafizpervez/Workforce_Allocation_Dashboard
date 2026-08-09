@@ -1,7 +1,7 @@
 /* Workforce Allocation Dashboard — ui/revenue-rates-modal.js */
 
 const REVENUE_RATE_MODAL_COLUMNS = Object.freeze([
-  Object.freeze({ field: 'intrasourcing_rate', label: 'Intrasourcing' }),
+  Object.freeze({ field: 'intrasourcing_rate', label: 'Intra-Sourcing' }),
   Object.freeze({
     field: 'local_rate',
     label: 'Local / Pre-Sale / Training',
@@ -10,13 +10,13 @@ const REVENUE_RATE_MODAL_COLUMNS = Object.freeze([
 
 let pendingRevenueRateSave = null;
 
-function getRevenueRateModalValue(designation, field, draftMap = null) {
-  const rate = draftMap?.get(designation) || getRevenueRateForDesignation(designation);
+function getRevenueRateModalValue(rateDesignation, field, draftMap = null) {
+  const rate = draftMap?.get(rateDesignation) || getRevenueRateForDesignation(rateDesignation);
   const value = Number(rate?.[field]);
   return Number.isFinite(value) && value >= 0 ? value : 0;
 }
 
-function renderRevenueRateInput(designation, designationIndex, column, draftMap = null) {
+function renderRevenueRateInput(rateDesignation, designationIndex, column, draftMap = null) {
   return `
     <td class="px-3 py-3">
       <div class="relative">
@@ -27,10 +27,10 @@ function renderRevenueRateInput(designation, designationIndex, column, draftMap 
           min="0"
           step="0.01"
           class="field-input pl-7 text-right"
-          data-revenue-designation="${esc(designation)}"
+          data-revenue-designation="${esc(rateDesignation)}"
           data-revenue-field="${column.field}"
-          value="${getRevenueRateModalValue(designation, column.field, draftMap)}"
-          aria-label="${esc(designation)} ${esc(column.label)} hourly rate"
+          value="${getRevenueRateModalValue(rateDesignation, column.field, draftMap)}"
+          aria-label="${esc(getRevenueRateGroupLabel(rateDesignation))} ${esc(column.label)} hourly rate"
         >
       </div>
     </td>
@@ -42,13 +42,13 @@ function openRevenueRatesModal(draftRates = null) {
     ? new Map(draftRates.map(rate => [rate.designation, rate]))
     : null;
   pendingRevenueRateSave = null;
-  const rows = RESOURCE_DESIGNATIONS.map((designation, index) => `
+  const rows = REVENUE_RATE_GROUPS.map((group, index) => `
     <tr class="border-b border-gray-100 last:border-0">
       <td class="sticky left-0 z-[1] bg-white px-4 py-3 text-sm font-semibold text-gray-800">
-        ${esc(designation)}
+        ${esc(group.label)}
       </td>
       ${REVENUE_RATE_MODAL_COLUMNS.map(column =>
-        renderRevenueRateInput(designation, index, column, draftMap),
+        renderRevenueRateInput(group.rateDesignation, index, column, draftMap),
       ).join('')}
     </tr>
   `).join('');
@@ -56,7 +56,7 @@ function openRevenueRatesModal(draftRates = null) {
   openModal(`
     ${mHdr(
       'Resource Revenue',
-      'Set the Intrasourcing rate and the shared Local / Pre-Sale / Training rate for each designation.',
+      'Set the Intra-Sourcing rate and the shared Local / Pre-Sale / Training rate for each designation group.',
     )}
 
     <div class="p-6">
@@ -93,7 +93,8 @@ function openRevenueRatesModal(draftRates = null) {
 }
 
 function collectRevenueRateDraft() {
-  return RESOURCE_DESIGNATIONS.map(designation => {
+  return REVENUE_RATE_GROUPS.map(group => {
+    const designation = group.rateDesignation;
     const inputs = [...document.querySelectorAll(
       `[data-revenue-designation="${CSS.escape(designation)}"]`,
     )];
@@ -115,6 +116,7 @@ function getRevenueRateChanges(rates) {
       if (previous !== next) {
         changes.push({
           designation: rate.designation,
+          designationLabel: getRevenueRateGroupLabel(rate.designation),
           field: column.field,
           label: column.label,
           previous: Number.isFinite(previous) ? previous : 0,
@@ -156,7 +158,7 @@ function openRevenueRateChangeScopeModal(rates, changes) {
           <tbody>
             ${changes.map(change => `
               <tr class="border-b border-gray-100 last:border-0">
-                <td class="px-4 py-3 font-semibold text-gray-800">${esc(change.designation)}</td>
+                <td class="px-4 py-3 font-semibold text-gray-800">${esc(change.designationLabel || getRevenueRateGroupLabel(change.designation))}</td>
                 <td class="px-4 py-3 text-gray-600">${esc(change.label)}</td>
                 <td class="px-4 py-3 text-right text-gray-500">$${change.previous.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>
                 <td class="px-4 py-3 text-right font-semibold text-blue-700">$${change.next.toLocaleString('en-US', { maximumFractionDigits: 2 })}</td>

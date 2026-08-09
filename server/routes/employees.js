@@ -2,6 +2,7 @@ const express = require('express');
 const { DEFAULT_ANNUAL_WORKDAYS } = require('../../config');
 const { getAppDb } = require('../database');
 const { canonicalPersonName } = require('../services/person-identity');
+const { canonicalDesignationDisplay, withCanonicalDesignation } = require('../services/designations');
 
 const router = express.Router();
 const db = getAppDb();
@@ -37,7 +38,7 @@ function workdaysCustomFlag(workdays) {
 }
 
 router.get('/api/employees', (_, res) => {
-  const employees = db.prepare(`${EMPLOYEE_SELECT} ORDER BY id`).all();
+  const employees = db.prepare(`${EMPLOYEE_SELECT} ORDER BY id`).all().map(withCanonicalDesignation);
   res.json(employees);
 });
 
@@ -76,13 +77,13 @@ router.post('/api/employees', (req, res) => {
     employee_code || '',
     canonicalName,
     dept,
-    designation || '',
+    canonicalDesignationDisplay(designation) || '',
     normalizedWorkdays,
     workdaysCustomFlag(normalizedWorkdays),
     email || null,
   );
 
-  const employee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(info.lastInsertRowid);
+  const employee = withCanonicalDesignation(db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(info.lastInsertRowid));
   res.status(201).json(employee);
 });
 
@@ -125,7 +126,7 @@ router.put('/api/employees/:id', (req, res) => {
     employee_code ?? null,
     name === undefined || name === null ? null : canonicalPersonName(name),
     dept ?? null,
-    designation ?? null,
+    designation === undefined || designation === null ? null : canonicalDesignationDisplay(designation),
     hasWorkdays ? 1 : 0,
     normalizedWorkdays,
     hasWorkdays ? 1 : 0,
@@ -134,7 +135,7 @@ router.put('/api/employees/:id', (req, res) => {
     id,
   );
 
-  const employee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id);
+  const employee = withCanonicalDesignation(db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id));
   res.json(employee);
 });
 
@@ -157,7 +158,7 @@ router.patch('/api/employees/:id/workdays', (req, res) => {
     WHERE id = ?
   `).run(workdays, workdaysCustomFlag(workdays), id);
 
-  const employee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id);
+  const employee = withCanonicalDesignation(db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id));
   res.json(employee);
 });
 
@@ -176,7 +177,7 @@ router.patch('/api/employees/:id/active', (req, res) => {
   const active = employee.active ? 0 : 1;
   db.prepare('UPDATE employees SET active = ? WHERE id = ?').run(active, id);
 
-  const updatedEmployee = db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id);
+  const updatedEmployee = withCanonicalDesignation(db.prepare(`${EMPLOYEE_SELECT} WHERE id = ?`).get(id));
   res.json(updatedEmployee);
 });
 

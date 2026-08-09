@@ -1,10 +1,10 @@
 const crypto = require('crypto');
 const express = require('express');
 const {
-  CURRENT_REALIZED_REVENUE,
   DEFAULT_ANNUAL_WORKDAYS,
   MODAL_ACCESS_PASSWORD,
   PIPELINE_MULTIPLIER,
+  PROBABLE_REALIZED_THIS_FY,
 } = require('../../config');
 const { getAppDb } = require('../database');
 const router = express.Router();
@@ -18,9 +18,9 @@ function secureTextEqual(left, right) {
 
 router.get('/api/app-config', (_, res) => {
   res.json({
-    currentRealizedRevenue: CURRENT_REALIZED_REVENUE,
     defaultAnnualWorkdays: DEFAULT_ANNUAL_WORKDAYS,
     pipelineMultiplier: PIPELINE_MULTIPLIER,
+    probableRealizedThisFY: PROBABLE_REALIZED_THIS_FY,
   });
 });
 

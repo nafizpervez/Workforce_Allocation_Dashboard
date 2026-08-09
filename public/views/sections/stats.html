@@ -22,4 +22,41 @@
             <div class="skel h-[140px]"></div>
             <div class="skel h-[140px]"></div>
           </div>
+          <div class="report-section-toggle-row">
+            <div class="report-section-actions">
+              <button
+                id="reportSectionToggleBtn"
+                class="report-section-toggle-btn"
+                type="button"
+                aria-expanded="true"
+                aria-controls="capacityExecutiveCards capacityPlanningCards"
+              >
+                <span class="report-section-toggle-btn__icon" aria-hidden="true">−</span>
+                <span data-report-section-toggle-label>Hide Report Cards</span>
+              </button>
+              <button
+                id="exportFiscalYearReportBtn"
+                class="report-section-export-btn"
+                type="button"
+                title="Export the visible Report cards for the selected Matrix FY as a Word document"
+              >
+                <svg
+                  class="report-section-export-btn__icon"
+                  viewBox="0 0 24 24"
+                  fill="none"
+                  stroke="currentColor"
+                  stroke-width="2"
+                  stroke-linecap="round"
+                  stroke-linejoin="round"
+                  aria-hidden="true"
+                >
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                  <path d="M14 2v6h6" />
+                  <path d="M12 18v-6" />
+                  <path d="m9 15 3 3 3-3" />
+                </svg>
+                <span data-fiscal-year-export-label>Export Fiscal Year Report</span>
+              </button>
+            </div>
+          </div>
         </div>

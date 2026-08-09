@@ -183,7 +183,7 @@ async function toggleEmployeeActive(empId) {
 
     openResourceModal();
 
-    const fy = S.fiscalYear;
+    const fy = S.matrixFiscalYear;
     api('GET', `/api/dashboard/stats?fiscalYear=${fy}`)
       .then(stats => renderStats(stats))
       .catch(() => {});
@@ -403,7 +403,7 @@ async function saveEmployeeWorkdays(empId, inputId, reopenTarget = 'team') {
     renderIndividualSummaryChart();
     renderInsights();
 
-    const stats = await api('GET', `/api/dashboard/stats?fiscalYear=${S.fiscalYear}`);
+    const stats = await api('GET', `/api/dashboard/stats?fiscalYear=${S.matrixFiscalYear}`);
     renderStats(stats);
 
     if (reopenTarget === 'maximum') openCapacityAllocationDetailsModal('maximum');

@@ -15,7 +15,7 @@ const DEFAULT_ANNUAL_WORKDAYS = 220;
 // Capacity-planning inputs used by the Pipeline Target Summary.
 // These are planning constants, not calculated from projects or committed revenue targets.
 const PIPELINE_MULTIPLIER = 2.5;
-const CURRENT_REALIZED_REVENUE = 50000;
+const PROBABLE_REALIZED_THIS_FY = 74146;
 
 const AUTH_COOKIE_NAME = 'wa_auth';
 const AUTH_MAX_AGE_SECONDS = 60 * 60 * 12;
@@ -30,21 +30,21 @@ if (!Number.isFinite(PIPELINE_MULTIPLIER) || PIPELINE_MULTIPLIER < 0) {
   throw new Error('PIPELINE_MULTIPLIER in config.js must be zero or a positive number.');
 }
 
-if (!Number.isFinite(CURRENT_REALIZED_REVENUE) || CURRENT_REALIZED_REVENUE < 0) {
-  throw new Error('CURRENT_REALIZED_REVENUE in config.js must be zero or a positive number.');
+if (!Number.isFinite(PROBABLE_REALIZED_THIS_FY) || PROBABLE_REALIZED_THIS_FY < 0) {
+  throw new Error('PROBABLE_REALIZED_THIS_FY in config.js must be zero or a positive number.');
 }
 
 module.exports = {
   AUTH_COOKIE_NAME,
   AUTH_MAX_AGE_SECONDS,
   AUTH_SECRET,
-  CURRENT_REALIZED_REVENUE,
   DASHBOARD_PASSWORD,
   DEFAULT_ANNUAL_WORKDAYS,
   HOST,
   MODAL_ACCESS_PASSWORD,
   PIPELINE_MULTIPLIER,
   PORT,
+  PROBABLE_REALIZED_THIS_FY,
   PUBLIC_DIR,
   ROOT_DIR,
 };
