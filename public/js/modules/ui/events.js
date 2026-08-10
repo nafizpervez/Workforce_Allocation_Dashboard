@@ -308,6 +308,7 @@ function initEvents() {
     if (sa) {
       if (sa.dataset.statAction === 'view-employees') openResourceModal();
       if (sa.dataset.statAction === 'view-projects') openProjectsModal();
+      if (sa.dataset.statAction === 'view-total-ps-projects') openRunningProjectMetricModal('total');
     }
   });
 

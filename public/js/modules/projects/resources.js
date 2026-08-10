@@ -281,83 +281,130 @@ window.downloadAllProjectsExcel = downloadAllProjectsExcel;
 /* ================================================================ PROJECTS DRILL-DOWN (All Projects modal) */
 function openProjectsModal() {
   const projects = [...S.projects];
-
-  const stageCounts = {};
-  for (const p of S.projects) stageCounts[p.stage] = (stageCounts[p.stage] || 0) + 1;
-
   const STAGE_ORDER = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
 
-  const summaryPills = Object.entries(stageCounts)
-    .sort((a, b) => STAGE_ORDER.indexOf(a[0]) - STAGE_ORDER.indexOf(b[0]))
-    .map(([stage, count]) => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${STAGE_PILL[stage] || 'bg-gray-100 text-gray-700'} cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="${esc(stage)}">${esc(stage)}: ${count}</span>`)
-    .join('');
+  function normalizeProductFamily(value) {
+    return String(value || '').trim().replace(/\s+/g, ' ').toLowerCase();
+  }
 
-  function isProfessionalServiceProject(project) {
-    return typeof classifyProduct === 'function'
-      ? classifyProduct(project?.product_name, project?.product_family) === 'PS'
-      : (() => {
-          const compact = String(project?.product_name || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
-          return compact.includes('PSSYSTEMSUPPORT') || [
-            'PSPROJECTIMPLEMENTATION',
-            'PSPROJECTIMPLEMENT',
-            'PSPROJECTIMPLEMETATION',
-            'PSPROJECTIMPLEMENTAION',
-          ].some(variant => compact.includes(variant));
-        })();
+  function getProjectFiscalYearEndForModal(project) {
+    const closedWonDate = String(project?.end_date || '').trim();
+    const match = closedWonDate.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+    if (match) {
+      const year = Number(match[1]);
+      const month = Number(match[2]);
+      if (Number.isInteger(year) && month >= 1 && month <= 12) {
+        return month >= FISCAL_YEAR_START_MONTH ? year + 1 : year;
+      }
+    }
+
+    if (typeof getFiscalYearFromFiscalPeriod === 'function') {
+      const fromPeriod = getFiscalYearFromFiscalPeriod(project?.fiscal_period);
+      if (Number.isInteger(fromPeriod)) return fromPeriod;
+    }
+
+    return null;
+  }
+
+  const currentFiscalYearEnd = getFiscalYearEnd(S.matrixFiscalYear);
+  const fiscalYearEnds = [...new Set([
+    currentFiscalYearEnd,
+    ...projects.map(getProjectFiscalYearEndForModal).filter(Number.isInteger),
+  ])].sort((a, b) => b - a);
+
+  const productFamilies = [...new Map(
+    projects
+      .map(project => String(project?.product_family || '').trim())
+      .filter(Boolean)
+      .map(value => [normalizeProductFamily(value), value]),
+  ).values()].sort((a, b) => a.localeCompare(b));
+
+  function projectsForFiscalYear(fiscalYearEnd) {
+    const fyEnd = Number(fiscalYearEnd);
+    return projects.filter(project => getProjectFiscalYearEndForModal(project) === fyEnd);
+  }
+
+  function buildStagePills(fiscalYearEnd) {
+    const stageCounts = {};
+    projectsForFiscalYear(fiscalYearEnd).forEach(project => {
+      const stage = String(project?.stage || '').trim() || 'Unknown';
+      stageCounts[stage] = (stageCounts[stage] || 0) + 1;
+    });
+
+    const orderedStages = Object.entries(stageCounts).sort((a, b) => {
+      const ai = STAGE_ORDER.indexOf(a[0]);
+      const bi = STAGE_ORDER.indexOf(b[0]);
+      if (ai === -1 && bi === -1) return a[0].localeCompare(b[0]);
+      if (ai === -1) return 1;
+      if (bi === -1) return -1;
+      return ai - bi;
+    });
+
+    return `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="">All</span>${orderedStages
+      .map(([stage, count]) => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${STAGE_PILL[stage] || 'bg-gray-100 text-gray-700'} cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="${esc(stage)}">${esc(stage)}: ${count}</span>`)
+      .join('')}`;
   }
 
   function sortProjects(list, sortMode) {
-    if (sortMode === 'closed-won-desc') {
+    if (sortMode === 'closed-won-asc') {
       return [...list].sort((a, b) => {
         const aDate = String(a.end_date || '');
         const bDate = String(b.end_date || '');
-        if (aDate && bDate && aDate !== bDate) return bDate.localeCompare(aDate);
+        if (aDate && bDate && aDate !== bDate) return aDate.localeCompare(bDate);
         if (aDate && !bDate) return -1;
         if (!aDate && bDate) return 1;
-        return Number(b.id || 0) - Number(a.id || 0);
+        return Number(a.id || 0) - Number(b.id || 0);
       });
     }
 
     return [...list].sort((a, b) => {
-      const stageDiff = STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage);
-      return stageDiff || Number(a.id || 0) - Number(b.id || 0);
+      const aDate = String(a.end_date || '');
+      const bDate = String(b.end_date || '');
+      if (aDate && bDate && aDate !== bDate) return bDate.localeCompare(aDate);
+      if (aDate && !bDate) return -1;
+      if (!aDate && bDate) return 1;
+      return Number(b.id || 0) - Number(a.id || 0);
     });
   }
 
-  function buildRows(filterStage, searchQ, projectType, sortMode) {
+  function buildRows(filterStage, searchQ, productFamily, sortMode, fiscalYearEnd) {
     const q = (searchQ || '').toLowerCase().trim();
-    const filtered = projects.filter(p => {
-      if (filterStage && p.stage !== filterStage) return false;
-      if (projectType === 'ps' && !isProfessionalServiceProject(p)) return false;
+    const normalizedFamily = normalizeProductFamily(productFamily);
+    const fyEnd = Number(fiscalYearEnd);
+    const filtered = projects.filter(project => {
+      if (getProjectFiscalYearEndForModal(project) !== fyEnd) return false;
+      if (filterStage && project.stage !== filterStage) return false;
+      if (normalizedFamily && normalizeProductFamily(project.product_family) !== normalizedFamily) return false;
       if (!q) return true;
-      return (p.code || '').toLowerCase().includes(q)
-        || (p.name || '').toLowerCase().includes(q)
-        || (p.product_name || '').toLowerCase().includes(q)
-        || (p.fiscal_period || '').toLowerCase().includes(q);
+      return (project.code || '').toLowerCase().includes(q)
+        || (project.name || '').toLowerCase().includes(q)
+        || (project.product_name || '').toLowerCase().includes(q)
+        || (project.product_family || '').toLowerCase().includes(q)
+        || (project.fiscal_period || '').toLowerCase().includes(q);
     });
 
     const sorted = sortProjects(filtered, sortMode);
-    const rowsHtml = sorted.map((p, i) => {
-      const progress = Math.max(0, Math.min(100, Number(p.progress) || 0));
+    const rowsHtml = sorted.map((project, index) => {
+      const progress = Math.max(0, Math.min(100, Number(project.progress) || 0));
       return `
-      <div class="flex items-start gap-3 py-3 px-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer last:border-0" data-action="edit-project" data-project="${p.id}">
-        <span class="text-xs font-semibold text-gray-400 w-5 flex-shrink-0 pt-0.5">${i + 1}</span>
-        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5" style="background:${p.color || '#8B5CF6'}"></div>
+      <div class="flex items-start gap-3 py-3 px-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer last:border-0" data-action="edit-project" data-project="${project.id}">
+        <span class="text-xs font-semibold text-gray-400 w-5 flex-shrink-0 pt-0.5">${index + 1}</span>
+        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5" style="background:${project.color || '#8B5CF6'}"></div>
         <div class="flex-1 min-w-0">
           <div class="flex items-center gap-2 mb-0.5 flex-wrap">
-            <span class="text-xs font-bold text-blue-600 mono">${esc(p.code)}</span>
-            <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700'}">${esc(p.stage)}</span>
-            ${p.fiscal_period ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">${esc(p.fiscal_period)}</span>` : ''}
-            ${p.product_family ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(p.product_family)}</span>` : ''}
+            <span class="text-xs font-bold text-blue-600 mono">${esc(project.code)}</span>
+            <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${STAGE_PILL[project.stage] || 'bg-gray-100 text-gray-700'}">${esc(project.stage)}</span>
+            ${project.fiscal_period ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">${esc(project.fiscal_period)}</span>` : ''}
+            ${project.product_family ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(project.product_family)}</span>` : ''}
           </div>
-          <div class="text-sm font-semibold text-gray-900 truncate">${esc(p.name)}</div>
-          <div class="text-xs text-gray-500 truncate">${esc(p.account_name || p.client || '—')}${p.opportunity_owner ? ` · ${esc(p.opportunity_owner)}` : ''}</div>
-          ${p.product_name ? `<div class="text-xs text-gray-400 truncate mt-0.5">${esc(p.product_name)}</div>` : ''}
+          <div class="text-sm font-semibold text-gray-900 truncate">${esc(project.name)}</div>
+          <div class="text-xs text-gray-500 truncate">${esc(project.account_name || project.client || '—')}${project.opportunity_owner ? ` · ${esc(project.opportunity_owner)}` : ''}</div>
+          ${project.product_name ? `<div class="text-xs text-gray-400 truncate mt-0.5">${esc(project.product_name)}</div>` : ''}
         </div>
         <div class="text-right flex-shrink-0 min-w-[190px] space-y-0.5">
-          <div class="text-xs font-bold text-gray-800 mono">${(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USD</div>
-          <div class="text-[11px] text-gray-500">Closed Won Date: <span class="font-semibold text-gray-700">${esc(p.end_date || '—')}</span></div>
-          <div class="text-[11px] text-gray-500">Project Close Date: <span class="font-semibold text-gray-700">${esc(p.project_closing_date || '—')}</span></div>
+          <div class="text-xs font-bold text-gray-800 mono">${(Number(project.product_amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} USD</div>
+          <div class="text-[11px] text-gray-500">Closed Won Date: <span class="font-semibold text-gray-700">${esc(project.end_date || '—')}</span></div>
+          <div class="text-[11px] text-gray-500">Project Close Date: <span class="font-semibold text-gray-700">${esc(project.project_closing_date || '—')}</span></div>
           <div class="text-[11px] text-gray-500">Progress: <span class="font-semibold text-gray-700">${progress.toFixed(progress % 1 ? 1 : 0)}%</span></div>
         </div>
       </div>`;
@@ -366,41 +413,171 @@ function openProjectsModal() {
     return { rowsHtml, count: sorted.length };
   }
 
+  const assignmentCache = new Map();
+  async function getAssignmentsForFiscalYearEnd(fiscalYearEnd) {
+    const fiscalStartYear = Number(fiscalYearEnd) - 1;
+    if (fiscalStartYear === Number(S.matrixFiscalYear)) return S.matrixAssignments || [];
+    if (fiscalStartYear === Number(S.fiscalYear)) return S.assignments || [];
+    if (!assignmentCache.has(fiscalStartYear)) {
+      assignmentCache.set(
+        fiscalStartYear,
+        api('GET', `/api/assignments?fiscalYear=${fiscalStartYear}`).catch(error => {
+          assignmentCache.delete(fiscalStartYear);
+          throw error;
+        }),
+      );
+    }
+    return assignmentCache.get(fiscalStartYear);
+  }
+
+  function isDelayedProjectForFiscalYear(project, fiscalStartYear) {
+    if (typeof isRunningProjectInMatrixFiscalYear !== 'function' || !isRunningProjectInMatrixFiscalYear(project, fiscalStartYear)) {
+      return false;
+    }
+    const projectClosingDate = String(project?.project_closing_date || '').trim();
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(projectClosingDate)) return false;
+    const now = new Date();
+    const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
+    return projectClosingDate < today;
+  }
+
+  function formatProductAmount(value) {
+    return `USD ${(Number(value) || 0).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+  }
+
+  function sumProductAmount(rows) {
+    return rows.reduce((sum, project) => sum + (Number(project?.product_amount) || 0), 0);
+  }
+
+  function summaryRow(label, rows, amountRows = rows) {
+    const amount = Array.isArray(amountRows) ? formatProductAmount(sumProductAmount(amountRows)) : '—';
+    const tones = {
+      'Total Projects': { row: 'bg-blue-50/90', label: 'text-blue-700', value: 'text-blue-900', amount: 'text-blue-800' },
+      'Resource Assigned': { row: 'bg-emerald-50/90', label: 'text-emerald-700', value: 'text-emerald-900', amount: 'text-emerald-800' },
+      'Resource Not Assigned': { row: 'bg-amber-50/90', label: 'text-amber-700', value: 'text-amber-900', amount: 'text-amber-800' },
+      'Closed Won': { row: 'bg-cyan-50/90', label: 'text-cyan-700', value: 'text-cyan-900', amount: 'text-cyan-800' },
+      'Running Project': { row: 'bg-violet-50/90', label: 'text-violet-700', value: 'text-violet-900', amount: 'text-violet-800' },
+      'Delayed Project': { row: 'bg-rose-50/90', label: 'text-rose-700', value: 'text-rose-900', amount: 'text-rose-800' },
+      'Closed Project': { row: 'bg-indigo-50/90', label: 'text-indigo-700', value: 'text-indigo-900', amount: 'text-indigo-800' },
+    };
+    const tone = tones[label] || { row: 'bg-slate-50', label: 'text-slate-700', value: 'text-slate-900', amount: 'text-slate-700' };
+    return `
+      <tr class="${tone.row}">
+        <td class="py-2.5 px-3 ${tone.label} font-semibold">${esc(label)}</td>
+        <td class="py-2.5 px-4 text-right ${tone.value} font-bold">${rows.length.toLocaleString()}</td>
+        <td class="py-2.5 px-3 text-right ${tone.amount} font-semibold mono">${amount}</td>
+      </tr>`;
+  }
+
+  async function buildFiscalYearSummary(fiscalYearEnd) {
+    const fyEnd = Number(fiscalYearEnd);
+    const fyStart = fyEnd - 1;
+    const fiscalProjects = projectsForFiscalYear(fyEnd);
+    const assignments = await getAssignmentsForFiscalYearEnd(fyEnd);
+    const assignedProjectIds = new Set(
+      (assignments || []).map(assignment => Number(assignment?.project_id)).filter(Number.isFinite),
+    );
+
+    const assignedProjects = fiscalProjects.filter(project => assignedProjectIds.has(Number(project.id)));
+    const notAssignedProjects = fiscalProjects.filter(project => !assignedProjectIds.has(Number(project.id)));
+    const closedWonProjects = fiscalProjects.filter(project => String(project?.stage || '').trim().toLowerCase() === 'closed won');
+    const runningProjects = fiscalProjects.filter(project => (
+      typeof isRunningProjectInMatrixFiscalYear === 'function' && isRunningProjectInMatrixFiscalYear(project, fyStart)
+    ));
+    const delayedProjects = fiscalProjects.filter(project => isDelayedProjectForFiscalYear(project, fyStart));
+    const closedProjects = fiscalProjects.filter(project => Number(project?.progress) >= 100);
+
+    return `
+      <div class="mx-auto max-w-3xl overflow-hidden rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-white to-violet-50 shadow-sm">
+        <div class="flex items-center justify-between gap-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-3">
+          <div class="text-xs font-bold uppercase tracking-[0.12em] text-white">FY ${fyEnd} Project Summary</div>
+          <div class="rounded-full bg-white/20 px-3 py-1 text-[10px] font-semibold text-white">Fiscal-year portfolio</div>
+        </div>
+        <div class="p-3">
+        <table class="w-full text-xs border-0" style="border-collapse:separate;border-spacing:0 6px">
+        <thead>
+          <tr class="text-[10px] uppercase tracking-wide text-slate-500">
+            <th class="pb-1 px-3 text-left font-bold">Metric</th>
+            <th class="pb-1 px-4 text-right font-bold">Projects</th>
+            <th class="pb-1 px-3 text-right font-bold">Product Amount</th>
+          </tr>
+        </thead>
+        <tbody>
+          ${summaryRow('Total Projects', fiscalProjects)}
+          ${summaryRow('Resource Assigned', assignedProjects)}
+          ${summaryRow('Resource Not Assigned', notAssignedProjects)}
+          ${summaryRow('Closed Won', closedWonProjects)}
+          ${summaryRow('Running Project', runningProjects, null)}
+          ${summaryRow('Delayed Project', delayedProjects, null)}
+          ${summaryRow('Closed Project', closedProjects, null)}
+          </tbody>
+        </table>
+        </div>
+      </div>`;
+  }
+
+  const initialFiscalYearEnd = currentFiscalYearEnd;
+  const initialRows = buildRows('', '', '', 'closed-won-desc', initialFiscalYearEnd);
+
   openModal(`${mHdr('All Projects', `${S.projects.length} total`)}
     <div class="px-4 py-3 border-b border-gray-100 bg-gray-50 flex flex-wrap gap-1.5" id="projStagePills">
-      <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="">All</span>
-      ${summaryPills}
+      ${buildStagePills(initialFiscalYearEnd)}
     </div>
-    <div class="px-4 py-3 border-b border-gray-100 bg-white grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_210px_220px] gap-2">
+    <div class="px-4 py-3 border-b border-gray-100 bg-white flex flex-wrap items-center gap-2">
       <input id="projModalSearch" type="text" placeholder="Search by SA code, project name, or product name…"
-        class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400">
-      <select id="projModalTypeFilter" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
-        <option value="">All Project Types</option>
-        <option value="ps">PS / Professional Service</option>
+        class="w-full md:w-[320px] md:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400">
+      <select id="projModalProductFamilyFilter" aria-label="Product Family" title="Product Family" class="w-full sm:w-[190px] sm:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+        <option value="">Product Family: All</option>
+        ${productFamilies.map(family => `<option value="${esc(family)}">${esc(family)}</option>`).join('')}
       </select>
-      <select id="projModalSort" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
-        <option value="closed-won-desc" selected>Closed Won Date (Desc)</option>
-        <option value="stage">Stage</option>
+      <select id="projModalFiscalYear" aria-label="Select Fiscal Year" title="Select Fiscal Year" class="w-full sm:w-[150px] sm:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+        ${fiscalYearEnds.map(fyEnd => `<option value="${fyEnd}"${fyEnd === initialFiscalYearEnd ? ' selected' : ''}>FY ${fyEnd}</option>`).join('')}
+      </select>
+      <select id="projModalSort" class="w-full sm:w-[210px] sm:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+        <option value="closed-won-desc" selected>Closed Won Date (DESC)</option>
+        <option value="closed-won-asc">Closed Won Date (ASC)</option>
       </select>
     </div>
-    <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:55vh">
-      ${buildRows('', '', '', 'closed-won-desc').rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
+    <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:48vh">
+      ${initialRows.rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
+    </div>
+    <div class="px-5 py-3 border-t border-gray-100 bg-white" id="projModalFiscalSummary">
+      <div class="text-xs text-gray-400">Loading FY ${initialFiscalYearEnd} summary…</div>
     </div>
     <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
-      <span class="text-xs text-gray-400" id="projModalCount">${S.projects.length} project${S.projects.length === 1 ? '' : 's'}</span>
+      <span class="text-xs text-gray-400" id="projModalCount">${initialRows.count} project${initialRows.count === 1 ? '' : 's'}</span>
       <div class="flex items-center gap-2">
         <button onclick="window.downloadAllProjectsExcel()" class="btn-blue">Download Excel</button>
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>
-    </div>`, 'max-w-5xl');
+    </div>`, 'max-w-4xl');
 
   let activeStage = '';
+  let summaryRequestToken = 0;
+
+  async function refreshFiscalSummary() {
+    const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
+    const summary = document.getElementById('projModalFiscalSummary');
+    if (!summary) return;
+
+    const token = ++summaryRequestToken;
+    summary.innerHTML = `<div class="text-xs text-gray-400">Loading FY ${fiscalYearEnd} summary…</div>`;
+    try {
+      const html = await buildFiscalYearSummary(fiscalYearEnd);
+      if (token === summaryRequestToken && document.getElementById('projModalFiscalSummary')) summary.innerHTML = html;
+    } catch (error) {
+      if (token === summaryRequestToken && document.getElementById('projModalFiscalSummary')) {
+        summary.innerHTML = `<div class="text-xs text-red-500">Unable to load fiscal-year assignment summary: ${esc(error?.message || 'Unknown error')}</div>`;
+      }
+    }
+  }
 
   function refresh() {
-    const q = document.getElementById('projModalSearch')?.value || '';
-    const projectType = document.getElementById('projModalTypeFilter')?.value || '';
+    const searchQuery = document.getElementById('projModalSearch')?.value || '';
+    const productFamily = document.getElementById('projModalProductFamilyFilter')?.value || '';
     const sortMode = document.getElementById('projModalSort')?.value || 'closed-won-desc';
-    const { rowsHtml, count } = buildRows(activeStage, q, projectType, sortMode);
+    const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
+    const { rowsHtml, count } = buildRows(activeStage, searchQuery, productFamily, sortMode, fiscalYearEnd);
     const list = document.getElementById('projModalList');
     const countEl = document.getElementById('projModalCount');
     if (list) list.innerHTML = rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>';
@@ -408,21 +585,31 @@ function openProjectsModal() {
   }
 
   document.getElementById('projModalSearch')?.addEventListener('input', refresh);
-  document.getElementById('projModalTypeFilter')?.addEventListener('change', refresh);
+  document.getElementById('projModalProductFamilyFilter')?.addEventListener('change', refresh);
   document.getElementById('projModalSort')?.addEventListener('change', refresh);
+  document.getElementById('projModalFiscalYear')?.addEventListener('change', () => {
+    const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
+    activeStage = '';
+    const stagePills = document.getElementById('projStagePills');
+    if (stagePills) stagePills.innerHTML = buildStagePills(fiscalYearEnd);
+    refresh();
+    refreshFiscalSummary();
+  });
 
-  document.getElementById('projStagePills')?.addEventListener('click', e => {
-    const pill = e.target.closest('[data-stage-pill]');
+  document.getElementById('projStagePills')?.addEventListener('click', event => {
+    const pill = event.target.closest('[data-stage-pill]');
     if (!pill) return;
     activeStage = pill.dataset.stagePill;
-    document.querySelectorAll('#projStagePills [data-stage-pill]').forEach(p => {
-      const isActive = p.dataset.stagePill === activeStage;
-      p.classList.toggle('ring-2', isActive);
-      p.classList.toggle('ring-offset-1', isActive);
-      p.classList.toggle('ring-gray-400', isActive);
+    document.querySelectorAll('#projStagePills [data-stage-pill]').forEach(item => {
+      const isActive = item.dataset.stagePill === activeStage;
+      item.classList.toggle('ring-2', isActive);
+      item.classList.toggle('ring-offset-1', isActive);
+      item.classList.toggle('ring-gray-400', isActive);
     });
     refresh();
   });
+
+  refreshFiscalSummary();
 }
 
 async function saveEmployeeWorkdays(empId, inputId, reopenTarget = 'team') {

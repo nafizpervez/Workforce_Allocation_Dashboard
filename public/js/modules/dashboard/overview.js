@@ -187,16 +187,16 @@ function formatRunningProjectRevenue(value) {
 function renderRunningProjectSummary(s) {
   const rows = [
     {
+      key: 'running',
+      label: 'Running Projects',
+      value: (Number(s.running_projects) || 0).toLocaleString(),
+      tone: 'on-time',
+    },
+    {
       key: 'delayed',
       label: 'Delayed Projects',
       value: (Number(s.delayed_running_projects) || 0).toLocaleString(),
       tone: 'delayed',
-    },
-    {
-      key: 'on-time',
-      label: 'On-Time Projects',
-      value: (Number(s.on_time_running_projects) || 0).toLocaleString(),
-      tone: 'on-time',
     },
     {
       key: 'revenue',
@@ -410,32 +410,32 @@ function renderUtilizationCard(c, td, s) {
     </div>`;
 }
 
-function renderAssignedProjectBreakdown(s) {
+function renderPipelineBreakdown(s) {
   const rows = [
     {
-      key: 'running',
-      label: 'Running Project',
-      value: (Number(s.running_projects) || 0).toLocaleString(),
-      tone: 'running',
-    },
-    {
       key: 'weighted',
-      label: 'Weighted Prospect',
-      value: (Number(s.weighted_prospect_projects) || 0).toLocaleString(),
+      label: 'Weighted',
+      value: (Number(s.pipeline_weighted_projects) || 0).toLocaleString(),
       tone: 'weighted',
     },
     {
       key: 'prospect',
       label: 'Prospect',
-      value: (Number(s.prospect_projects) || 0).toLocaleString(),
+      value: (Number(s.pipeline_prospect_projects) || 0).toLocaleString(),
       tone: 'prospect',
+    },
+    {
+      key: 'converted',
+      label: 'Converted',
+      value: (Number(s.pipeline_converted_projects) || 0).toLocaleString(),
+      tone: 'converted',
     },
   ];
 
   return `
-    <section class="assigned-project-breakdown" aria-label="Project portfolio counts">
+    <section class="assigned-project-breakdown" aria-label="Pipeline portfolio counts">
       <div class="assigned-project-breakdown__heading">
-        <span class="assigned-project-breakdown__hint">Project portfolio</span>
+        <span class="assigned-project-breakdown__hint">Pipeline</span>
       </div>
       <div class="assigned-project-breakdown__list">
         ${rows.map(row => `
@@ -454,7 +454,7 @@ function renderAssignedProjectBreakdown(s) {
     </section>`;
 }
 
-function renderAssignedProjectsCard(c, td, s) {
+function renderPipelineCard(c, s) {
   return `
     <div class="assigned-project-card">
       <div class="assigned-project-card__summary">
@@ -462,12 +462,12 @@ function renderAssignedProjectsCard(c, td, s) {
           <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">${c.icon}</svg>
         </div>
         <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
-        <div class="text-sm text-gray-500 mb-2">${esc(c.label)}</div>
-        ${renderStatTrend(td)}
+        <div class="text-sm text-gray-500 mb-2">${esc(c.summaryLabel || c.label)}</div>
       </div>
-      ${renderAssignedProjectBreakdown(s)}
+      ${renderPipelineBreakdown(s)}
     </div>`;
 }
+
 
 function getCalculatedCommittedTargetSummary() {
   const totals = {
@@ -1088,13 +1088,13 @@ function renderStats(s) {
       detailType: 'designation-breakdown',
     },
     {
-      v: Number(s.running_projects || 0).toLocaleString(),
-      label: 'Running Projects',
+      v: Number(s.total_ps_projects || 0).toLocaleString(),
+      label: 'Total Projects',
       tk: 'projects',
       action: 'view-projects',
       bg: 'bg-purple-100',
       fg: 'text-purple-600',
-      formula: `Running Projects remain Closed Won Professional Services projects dated March 1, 2025 or later and below 100% progress. Delayed means the Closed Won Date passed six months ago. Revenue Realization is the Product Amount (USD) of Professional Services projects with Project Closing Date inside ${fiscalYearDisplayLabel(S.matrixFiscalYear)} and Progress exactly 100%.`,
+      formula: `Total Projects matches Deal Acquisition Chart → PS Only for ${fiscalYearDisplayLabel(S.matrixFiscalYear)}: Closed Won projects whose Product Name is a PS System Support or PS Project Implementation variation. Progress does not affect this total. Running Projects are the below-100% subset using the existing March 1, 2025 cutoff; Delayed Projects are Running Projects whose Project Closing Date exists, is earlier than today, and whose Progress is still below 100%. Revenue Realization is Product Amount for PS projects with Project Closing Date inside the selected FY and Progress exactly 100%.`,
       icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
       detailType: 'running-project-breakdown',
     },
@@ -1109,14 +1109,14 @@ function renderStats(s) {
       detailType: 'utilization-breakdown',
     },
     {
-      v: s.assigned_projects.toLocaleString(),
-      label: 'Assigned Projects',
-      tk: 'assigned_projects',
+      v: formatCommittedTargetRevenue(Number(s.pipeline_total_amount) || 0),
+      label: 'Pipeline',
+      summaryLabel: 'Total Pipeline Amount',
       bg: 'bg-orange-100',
       fg: 'text-orange-600',
-      formula: `Distinct projects with ≥ 1 weekly assignment in ${fiscalYearDisplayLabel(S.matrixFiscalYear)}. Running Projects use the existing Closed Won Professional Services definition. Weighted Prospects are non-Closed Won projects with probability ≥ 75%; Prospects are non-Closed Won projects with probability below 75%.`,
-      icon: '<rect x="3" y="4" width="18" height="18" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
-      detailType: 'assigned-project-breakdown',
+      formula: `Pipeline for ${fiscalYearDisplayLabel(S.matrixFiscalYear)} uses projects in the selected fiscal year. Total Pipeline Amount is the sum of Product Amount for open projects only (Closed Won and Closed Lost excluded). Weighted = open projects with probability ≥ 75%; Prospect = open projects with probability < 75%; Converted = Closed Won projects in the selected fiscal year.`,
+      icon: '<path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/>',
+      detailType: 'pipeline-breakdown',
     },
     {
       label: 'Committed Target',
@@ -1144,7 +1144,7 @@ function renderStats(s) {
     const isActiveResourceCard = c.detailType === 'designation-breakdown';
     const isRunningProjectCard = c.detailType === 'running-project-breakdown';
     const isUtilizationCard = c.detailType === 'utilization-breakdown';
-    const isAssignedProjectCard = c.detailType === 'assigned-project-breakdown';
+    const isPipelineCard = c.detailType === 'pipeline-breakdown';
     const isCommittedTargetCard = c.detailType === 'committed-target-breakdown';
     const isCapacityAllocationCard = c.detailType === 'capacity-allocation-breakdown';
     const collapsedValue = isCommittedTargetCard
@@ -1158,7 +1158,7 @@ function renderStats(s) {
       isActiveResourceCard ? 'dc-stat--active-resources' : '',
       isRunningProjectCard ? 'dc-stat--running-projects' : '',
       isUtilizationCard ? 'dc-stat--utilization' : '',
-      isAssignedProjectCard ? 'dc-stat--assigned-projects' : '',
+      isPipelineCard ? 'dc-stat--pipeline' : '',
       isCommittedTargetCard ? 'dc-stat--committed-target' : '',
       isCapacityAllocationCard ? 'dc-stat--capacity-allocation' : '',
     ].filter(Boolean).join(' ');
@@ -1172,8 +1172,8 @@ function renderStats(s) {
         ? renderRunningProjectCard(c, s)
         : isUtilizationCard
           ? renderUtilizationCard(c, td, s)
-          : isAssignedProjectCard
-            ? renderAssignedProjectsCard(c, td, s)
+          : isPipelineCard
+            ? renderPipelineCard(c, s)
             : isCommittedTargetCard
               ? renderCommittedTargetCard(c, committedTargetSummary)
               : isCapacityAllocationCard
