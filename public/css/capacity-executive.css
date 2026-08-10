@@ -356,8 +356,16 @@
 .capacity-executive-table tbody tr:nth-child(even) td { background: #f4f7fb; }
 .capacity-executive-table tbody tr:last-child td { border-bottom: 0; }
 .capacity-executive-table__metric { color: #1e293b; font-weight: 600; }
+.capacity-executive-table__metric-detail {
+  color: #475569;
+  font-size: .78em;
+  font-weight: 500;
+  line-height: 1.18;
+}
 .capacity-executive-table__value,
 .capacity-executive-table__fte { color: #0f172a; font-variant-numeric: tabular-nums; text-align: right; }
+.capacity-executive-table--executive-matrix .capacity-executive-table__value,
+.capacity-executive-table--executive-matrix .capacity-executive-table__fte { font-weight: 750; }
 .capacity-executive-table__fte { white-space: nowrap; }
 .capacity-executive-table__center { color: #334155; text-align: center; }
 .capacity-executive-table__row--headline td { font-size: 12px; font-weight: 750; }
