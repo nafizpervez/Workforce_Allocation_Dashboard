@@ -555,19 +555,22 @@ function getExecutiveMatrixRows(summary) {
 
   return [
     {
-      metric: 'Revenue Generating Allocation (Intra-Sourcing, Local PS and Training Delivery)',
+      metric: 'Revenue Generating Allocation',
+      metricDetail: '(Intra-Sourcing, Local PS and Training Delivery)',
       value: formatExecutivePercentage(metrics.revenueGeneratingShare),
       fte: formatExecutiveFte(metrics.revenueGeneratingFte),
       headline: true,
     },
     {
-      metric: 'Revenue Enabling Allocation (Pre-Sales)',
+      metric: 'Revenue Enabling Allocation',
+      metricDetail: '(Pre-Sales)',
       value: formatExecutivePercentage(metrics.revenueEnablingShare),
       fte: formatExecutiveFte(metrics.revenueEnablingFte),
       headline: true,
     },
     {
-      metric: 'Investment & Overhead Allocation (Skill Development and General Admin)',
+      metric: 'Investment & Overhead Allocation',
+      metricDetail: '(Skill Development and General Admin)',
       value: formatExecutivePercentage(metrics.investmentOverheadShare),
       fte: formatExecutiveFte(metrics.investmentOverheadFte),
       headline: true,
@@ -609,12 +612,12 @@ function renderExecutiveMetricsTableCard(summary) {
   const rows = getExecutiveMatrixRows(summary);
   const body = `
     <div class="capacity-executive-table-wrap">
-      <table class="capacity-executive-table">
+      <table class="capacity-executive-table capacity-executive-table--executive-matrix">
         <colgroup><col style="width:56%"><col style="width:25%"><col style="width:19%"></colgroup>
         <thead><tr><th>Metric</th><th>Value</th><th>FTE</th></tr></thead>
         <tbody>${rows.map(row => `
           <tr class="${row.headline ? 'capacity-executive-table__row--headline' : ''}">
-            <td class="capacity-executive-table__metric">${esc(row.metric)}</td>
+            <td class="capacity-executive-table__metric"><span class="capacity-executive-table__metric-main">${esc(row.metric)}</span>${row.metricDetail ? ` <span class="capacity-executive-table__metric-detail">${esc(row.metricDetail)}</span>` : ''}</td>
             <td class="capacity-executive-table__value">${esc(row.value)}</td>
             <td class="capacity-executive-table__fte">${esc(row.fte)}</td>
           </tr>`).join('')}</tbody>

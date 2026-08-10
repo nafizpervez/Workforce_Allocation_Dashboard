@@ -465,6 +465,18 @@ function fiscalYearReportDocxCell(library, children, options = {}) {
 }
 
 function fiscalYearReportDocxCellParagraph(library, text, options = {}) {
+  if (Array.isArray(options.segments) && options.segments.length) {
+    return new library.Paragraph({
+      children: options.segments.map(segment => fiscalYearReportDocxRun(library, segment.text, {
+        bold: Boolean(segment.bold),
+        italic: Boolean(segment.italic),
+        color: segment.color || options.color || FISCAL_YEAR_DOCX.text,
+        size: segment.size || options.size || 18,
+      })),
+      alignment: fiscalYearReportDocxAlignment(library, options.align || 'left'),
+      spacing: { before: 0, after: 0, line: options.line || 248 },
+    });
+  }
   return fiscalYearReportDocxParagraph(library, text, {
     align: options.align || 'left',
     bold: Boolean(options.bold),
@@ -570,6 +582,7 @@ function fiscalYearReportDocxTable(library, headers, rows, widths, options = {})
             color: cell.color || FISCAL_YEAR_DOCX.text,
             size: cell.size || options.fontSize || 18,
             line: cell.line || 248,
+            segments: cell.segments,
           }),
           {
             width,
@@ -773,9 +786,17 @@ function fiscalYearReportDocxExecutiveRows(reportData) {
 
   return rows.map(row => ({
     cells: [
-      { text: row.metric, bold: Boolean(row.headline) },
-      { text: row.value, bold: Boolean(row.headline), align: 'right' },
-      { text: row.fte, bold: Boolean(row.headline), align: 'right' },
+      row.metricDetail
+        ? {
+            text: row.metric,
+            segments: [
+              { text: row.metric, bold: Boolean(row.headline), size: 18 },
+              { text: ` ${row.metricDetail}`, bold: false, size: 14, color: FISCAL_YEAR_DOCX.muted },
+            ],
+          }
+        : { text: row.metric, bold: Boolean(row.headline) },
+      { text: row.value, bold: true, align: 'right' },
+      { text: row.fte, bold: true, align: 'right' },
     ],
   }));
 }
