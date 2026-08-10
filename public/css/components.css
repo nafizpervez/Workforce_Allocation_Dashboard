@@ -1737,3 +1737,18 @@ button.committed-target-breakdown__item:focus-visible {
 .burn-chart-tooltip-table tr.is-emphasis {
   background: rgba(37, 99, 235, 0.16);
 }
+
+/* Pipeline KPI: Closed Won / converted outcome */
+.assigned-project-breakdown__item--converted {
+  border-color: #bbf7d0;
+  background: #f0fdf4;
+}
+
+.assigned-project-breakdown__item--converted .assigned-project-breakdown__label,
+.assigned-project-breakdown__item--converted .assigned-project-breakdown__value {
+  color: #15803d;
+}
+
+.assigned-project-breakdown__item--converted .assigned-project-breakdown__value {
+  border-color: #86efac;
+}

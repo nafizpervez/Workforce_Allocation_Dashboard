@@ -3,10 +3,11 @@ const { getAppDb } = require('../database');
 const {
   RUNNING_CLOSED_WON_START_DATE,
   calcDealStatuses,
+  isDealAcquisitionChartEligible,
   isProfessionalServiceRunningProject,
   isPSOnlyProject,
 } = require('../services/project-analytics');
-const { fiscalMonths, getFiscalYear } = require('../services/fiscal');
+const { fiscalMonths, getFiscalYear, getProjectFiscalYear } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
 const { withCanonicalDesignation } = require('../services/designations');
 const {
@@ -51,12 +52,6 @@ function parseProjectDate(dateText) {
 
   const date = new Date(`${value}T00:00:00Z`);
   return Number.isNaN(date.getTime()) ? null : date;
-}
-
-function addUtcMonths(date, monthCount) {
-  const result = new Date(date.getTime());
-  result.setUTCMonth(result.getUTCMonth() + Number(monthCount || 0));
-  return result;
 }
 
 function normalizeAllocationProjectName(value) {
@@ -247,16 +242,23 @@ function matchesProjectPortfolioMetric(project, metric) {
 }
 
 function getRunningProjectTiming(project, now = new Date()) {
-  const closeWonDate = parseProjectDate(project?.end_date);
-  if (!closeWonDate) return 'unclassified';
+  // A delayed project is still an active/running PS delivery whose explicit
+  // Project Closing Date has already passed. Closed Won + PS qualification +
+  // progress < 100% are enforced by the running-project predicate; keep the
+  // progress check here as a defensive guard because this helper is also used
+  // by drill-down/status rendering paths.
+  const progress = Number(project?.progress);
+  if (Number.isFinite(progress) && progress >= 100) return 'on-time';
+
+  const projectClosingDate = parseProjectDate(project?.project_closing_date);
+  if (!projectClosingDate) return 'on-time';
 
   const today = new Date(Date.UTC(
     now.getUTCFullYear(),
     now.getUTCMonth(),
     now.getUTCDate(),
   ));
-  const sixMonthDeadline = addUtcMonths(closeWonDate, 6);
-  return sixMonthDeadline < today ? 'delayed' : 'on-time';
+  return projectClosingDate < today ? 'delayed' : 'on-time';
 }
 
 function isRunningProjectInFiscalYear(project, fiscalYear) {
@@ -273,6 +275,22 @@ function isDateInFiscalYear(dateText, fiscalYear) {
   return getFiscalYear(dateText) === startYear;
 }
 
+function getPSDealAcquisitionProjects(projects, fiscalYear) {
+  if (fiscalYear === null || fiscalYear === undefined || fiscalYear === '') return [];
+  const startYear = Math.trunc(Number(fiscalYear));
+  if (!Number.isInteger(startYear)) return [];
+  const fiscalYearEnd = startYear + 1;
+
+  // Keep this aligned with Deal Acquisition Chart -> PS Only:
+  // each qualifying database project ID is counted once; Product Name is the
+  // PS source of truth; progress does not affect Deal Acquisition eligibility.
+  return (projects || []).filter(project => (
+    isPSOnlyProject(project) &&
+    isDealAcquisitionChartEligible(project) &&
+    getProjectFiscalYear(project) === fiscalYearEnd
+  ));
+}
+
 function getProfessionalServicesRevenueSummary(projects, fiscalYear) {
   const psProjects = (projects || []).filter(project => isPSOnlyProject(project));
   const realizationProjects = psProjects.filter(project => (
@@ -283,6 +301,11 @@ function getProfessionalServicesRevenueSummary(projects, fiscalYear) {
     String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
     isDateInFiscalYear(project?.end_date, fiscalYear)
   ));
+  const accrualProjects = psProjects.filter(project => (
+    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
+    Number(project?.progress) !== 100 &&
+    isDateInFiscalYear(project?.end_date, fiscalYear)
+  ));
   const sumProductAmount = rows => +rows.reduce(
     (total, project) => total + (Number(project?.product_amount) || 0),
     0,
@@ -291,8 +314,10 @@ function getProfessionalServicesRevenueSummary(projects, fiscalYear) {
   return {
     realizationProjects,
     securedProjects,
+    accrualProjects,
     realizationRevenue: sumProductAmount(realizationProjects),
     securedRevenue: sumProductAmount(securedProjects),
+    accrualRevenue: sumProductAmount(accrualProjects),
   };
 }
 
@@ -326,6 +351,62 @@ function getOpenProjectProbabilitySummary(projects) {
     prospects: projects.filter(project => (
       matchesProjectPortfolioMetric(project, 'prospect')
     )).length,
+  };
+}
+
+function matchesPipelineKpiMetric(project, metric, fiscalYear) {
+  const fiscalStartYear = Math.trunc(Number(fiscalYear));
+  if (!Number.isInteger(fiscalStartYear)) return false;
+  if (getProjectFiscalYear(project) !== fiscalStartYear + 1) return false;
+
+  const stage = String(project?.stage || '').trim().toLowerCase();
+  if (metric === 'converted') return stage === 'closed won';
+  if (stage === 'closed won' || stage === 'closed lost') return false;
+  if (metric === 'weighted') return Number(project?.probability) >= 75;
+  if (metric === 'prospect') return Number(project?.probability) < 75;
+  return false;
+}
+
+function getPipelineKpiSummary(projects, fiscalYear) {
+  const fiscalStartYear = Math.trunc(Number(fiscalYear));
+  if (!Number.isInteger(fiscalStartYear)) {
+    return {
+      totalAmount: 0,
+      weightedProjects: 0,
+      prospectProjects: 0,
+      convertedProjects: 0,
+    };
+  }
+
+  const fiscalYearEnd = fiscalStartYear + 1;
+  const fiscalProjects = (projects || []).filter(project => (
+    getProjectFiscalYear(project) === fiscalYearEnd
+  ));
+  const openPipelineProjects = fiscalProjects.filter(project => {
+    const stage = String(project?.stage || '').trim().toLowerCase();
+    return stage !== 'closed won' && stage !== 'closed lost';
+  });
+  const weightedProjects = openPipelineProjects.filter(project => (
+    Number(project?.probability) >= 75
+  ));
+  const prospectProjects = openPipelineProjects.filter(project => (
+    Number(project?.probability) < 75
+  ));
+  const convertedProjects = fiscalProjects.filter(project => (
+    String(project?.stage || '').trim().toLowerCase() === 'closed won'
+  ));
+
+  return {
+    // Pipeline amount is the currently open pipeline only. Converted/Closed Won
+    // projects are shown as a separate funnel outcome and are not added back to
+    // the open pipeline amount.
+    totalAmount: +openPipelineProjects.reduce(
+      (total, project) => total + (Number(project?.product_amount) || 0),
+      0,
+    ).toFixed(2),
+    weightedProjects: weightedProjects.length,
+    prospectProjects: prospectProjects.length,
+    convertedProjects: convertedProjects.length,
   };
 }
 
@@ -402,6 +483,7 @@ router.get('/api/dashboard/stats', (req, res) => {
       probability,
       end_date,
       project_closing_date,
+      fiscal_period,
       product_name,
       product_family,
       product_amount,
@@ -411,10 +493,12 @@ router.get('/api/dashboard/stats', (req, res) => {
   `).all().filter(project => !isUnavailableProjectName(project.name));
   const activeProjects = analyticProjects.filter(project => project.stage !== 'Closed Won').length;
   const runningProjectSummary = getClosedWonProjectSummary(analyticProjects, new Date(), fy);
+  const totalPSProjects = getPSDealAcquisitionProjects(analyticProjects, fy);
   const professionalServicesRevenueSummary = getProfessionalServicesRevenueSummary(analyticProjects, fy);
   const openProjectProbabilitySummary = getOpenProjectProbabilitySummary(
     analyticProjects,
   );
+  const pipelineKpiSummary = getPipelineKpiSummary(analyticProjects, fy);
   const assignedProjects = new Set(
     fiscalMetrics.effectiveAssignments.map(assignment => Number(assignment.project_id)),
   ).size;
@@ -458,14 +542,17 @@ router.get('/api/dashboard/stats', (req, res) => {
   res.json({
     active_employees: activeEmployees,
     active_projects: activeProjects,
+    total_ps_projects: totalPSProjects.length,
     running_projects: runningProjectSummary.count,
     delayed_running_projects: runningProjectSummary.delayedProjects,
     on_time_running_projects: runningProjectSummary.onTimeProjects,
     running_project_revenue: runningProjectSummary.revenue,
     revenue_realization: professionalServicesRevenueSummary.realizationRevenue,
     revenue_secured: professionalServicesRevenueSummary.securedRevenue,
+    revenue_accrual: professionalServicesRevenueSummary.accrualRevenue,
     revenue_realization_projects: professionalServicesRevenueSummary.realizationProjects.length,
     revenue_secured_projects: professionalServicesRevenueSummary.securedProjects.length,
+    revenue_accrual_projects: professionalServicesRevenueSummary.accrualProjects.length,
     avg_utilization: +avgUtil.toFixed(1),
     avg_intrasourcing_utilization: fiscalAllocationSummary.intrasourcing,
     billable_utilization: fiscalAllocationSummary.billable,
@@ -473,6 +560,10 @@ router.get('/api/dashboard/stats', (req, res) => {
     assigned_projects: assignedProjects,
     weighted_prospect_projects: openProjectProbabilitySummary.weightedProspects,
     prospect_projects: openProjectProbabilitySummary.prospects,
+    pipeline_total_amount: pipelineKpiSummary.totalAmount,
+    pipeline_weighted_projects: pipelineKpiSummary.weightedProjects,
+    pipeline_prospect_projects: pipelineKpiSummary.prospectProjects,
+    pipeline_converted_projects: pipelineKpiSummary.convertedProjects,
     productivity,
     ps_count: psCount,
     on_time_pct: onTime,
@@ -599,7 +690,7 @@ router.get('/api/dashboard/utilization-details', (req, res) => {
 router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
   const metric = String(req.query.metric || 'running').trim().toLowerCase();
   const fiscalYear = safeNum(req.query.fiscalYear, null);
-  const allowedMetrics = new Set(['running', 'weighted', 'prospect']);
+  const allowedMetrics = new Set(['running', 'weighted', 'prospect', 'converted']);
   if (!allowedMetrics.has(metric)) {
     return res.status(400).json({ error: 'Unknown project portfolio metric.' });
   }
@@ -610,11 +701,14 @@ router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
       fiscal_period, product_name, product_family, progress, probability,
       priority, opp_amount, product_amount, stage, color, opportunity_owner
     FROM projects
-  `).all().filter(project => (
-    !isUnavailableProjectName(project.name) &&
-    matchesProjectPortfolioMetric(project, metric) &&
-    (metric !== 'running' || isRunningProjectInFiscalYear(project, fiscalYear))
-  ));
+  `).all().filter(project => {
+    if (isUnavailableProjectName(project.name)) return false;
+    if (metric === 'running') {
+      return matchesProjectPortfolioMetric(project, metric) &&
+        isRunningProjectInFiscalYear(project, fiscalYear);
+    }
+    return matchesPipelineKpiMetric(project, metric, fiscalYear);
+  });
   const allProjects = db.prepare(`
     SELECT id, code, name, account_name, client, end_date,
            fiscal_period, stage, product_name
@@ -626,7 +720,7 @@ router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
     closing_date: project.project_closing_date || null,
     deal_status: statusMap[project.id] || 'NEW LOGO',
   })).sort((a, b) => (
-    metric === 'running'
+    metric === 'running' || metric === 'converted'
       ? String(b.end_date || '').localeCompare(String(a.end_date || ''))
       : Number(b.probability || 0) - Number(a.probability || 0) || Number(a.id) - Number(b.id)
   ));
@@ -637,7 +731,7 @@ router.get('/api/dashboard/project-portfolio-metrics', (req, res) => {
 router.get('/api/dashboard/running-project-metrics', (req, res) => {
   const metric = String(req.query.metric || 'revenue').trim().toLowerCase();
   const fiscalYear = safeNum(req.query.fiscalYear, null);
-  const allowedMetrics = new Set(['delayed', 'on-time', 'revenue']);
+  const allowedMetrics = new Set(['total', 'running', 'delayed', 'on-time', 'revenue']);
 
   if (!allowedMetrics.has(metric)) {
     return res.status(400).json({ error: 'Unknown running-project metric.' });
@@ -677,6 +771,32 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
     deal_status: statusMap[project.id] || 'NEW LOGO',
   });
 
+  if (metric === 'total') {
+    const projects = getPSDealAcquisitionProjects(metricRows, fiscalYear)
+      .map(enrich)
+      .sort((a, b) => (
+        String(b.end_date || '').localeCompare(String(a.end_date || '')) ||
+        Number(b.id) - Number(a.id)
+      ));
+
+    return res.json({ metric, fiscal_year: fiscalYear, count: projects.length, projects });
+  }
+
+  if (metric === 'running') {
+    const projects = metricRows
+      .filter(project => (
+        isProfessionalServiceRunningProject(project) &&
+        isRunningProjectInFiscalYear(project, fiscalYear)
+      ))
+      .map(enrich)
+      .sort((a, b) => (
+        String(b.end_date || '').localeCompare(String(a.end_date || '')) ||
+        Number(b.id) - Number(a.id)
+      ));
+
+    return res.json({ metric, fiscal_year: fiscalYear, count: projects.length, projects });
+  }
+
   if (metric === 'revenue') {
     const summary = getProfessionalServicesRevenueSummary(metricRows, fiscalYear);
     const realizationProjects = summary.realizationProjects
@@ -686,6 +806,12 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
         Number(b.id) - Number(a.id)
       ));
     const securedProjects = summary.securedProjects
+      .map(enrich)
+      .sort((a, b) => (
+        String(b.end_date || '').localeCompare(String(a.end_date || '')) ||
+        Number(b.id) - Number(a.id)
+      ));
+    const accrualProjects = summary.accrualProjects
       .map(enrich)
       .sort((a, b) => (
         String(b.end_date || '').localeCompare(String(a.end_date || '')) ||
@@ -701,6 +827,9 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
       revenue_secured_count: securedProjects.length,
       revenue_secured_total: summary.securedRevenue,
       revenue_secured_projects: securedProjects,
+      revenue_accrual_count: accrualProjects.length,
+      revenue_accrual_total: summary.accrualRevenue,
+      revenue_accrual_projects: accrualProjects,
     });
   }
 
@@ -757,8 +886,15 @@ router.get('/api/dashboard/deadlines', (_, res) => {
   const enriched = rows.map(r => {
     const closingDate = r.project_closing_date || null;
     const days = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
-    const status = days === null ? '' : days < 0 ? 'PS Work Begins' : days < 14 ? 'Due Soon' : 'On Track';
-    return { ...r, closing_date: closingDate, days, status, deal_status: statusMap[r.id] || 'NEW LOGO' };
+    const timing = getRunningProjectTiming(r, today);
+    const status = timing === 'delayed'
+      ? 'Delayed'
+      : days === null
+        ? ''
+        : days < 14
+          ? 'Due Soon'
+          : 'On Track';
+    return { ...r, closing_date: closingDate, days, status, timing, deal_status: statusMap[r.id] || 'NEW LOGO' };
   });
   res.json(enriched);
 });

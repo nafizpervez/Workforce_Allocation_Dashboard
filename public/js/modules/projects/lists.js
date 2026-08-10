@@ -2,18 +2,34 @@
 
 /* ================================================================ RUNNING PROJECTS */
 function runningProjectRowHtml(d) {
-  const barColor = '#10B981';
   const amount = fmtUsd(d.product_amount || 0);
   const closingDate = d.project_closing_date || d.closing_date || '';
+  const progress = Math.max(0, Math.min(100, Number(d.progress) || 0));
   const today = new Date();
-  const daysVal = closingDate ? Math.round((new Date(closingDate) - today) / 864e5) : null;
+  today.setHours(0, 0, 0, 0);
+  const closingDay = /^\d{4}-\d{2}-\d{2}$/.test(String(closingDate || ''))
+    ? new Date(`${closingDate}T00:00:00`)
+    : null;
+  const daysVal = closingDay && !Number.isNaN(closingDay.getTime())
+    ? Math.round((closingDay - today) / 864e5)
+    : null;
   const isPast = daysVal !== null && daysVal < 0;
+  const isDelayed = isPast && progress < 100;
   const isSoon = daysVal !== null && daysVal >= 0 && daysVal < 14;
-  const status = daysVal === null ? '—' : isPast ? 'PS Work Begins' : isSoon ? 'Due Soon' : 'On Track';
-  const statC = isPast ? 'text-green-600' : isSoon ? 'text-orange-500' : 'text-green-600';
+  const barColor = isDelayed ? '#EF4444' : '#10B981';
+  const status = daysVal === null
+    ? '—'
+    : isDelayed
+      ? 'Delayed'
+      : (isPast && progress >= 100)
+        ? 'Completed'
+        : isSoon
+          ? 'Due Soon'
+          : 'On Track';
+  const statC = isDelayed ? 'text-red-600' : isSoon ? 'text-orange-500' : 'text-green-600';
   const absD = Math.abs(daysVal || 0);
   const daysLabel = daysVal === null ? '' : daysVal === 0 ? 'Today' : isPast ? `${absD} days ago` : `in ${daysVal} days`;
-  const daysColor = isPast ? 'text-green-600' : isSoon ? 'text-orange-500' : 'text-gray-500';
+  const daysColor = isDelayed ? 'text-red-600' : isSoon ? 'text-orange-500' : 'text-gray-500';
 
   return `<div class="px-5 py-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer relative" data-action="edit-project" data-project="${d.id}">
     <div class="absolute left-0 top-0 bottom-0 w-1 rounded-r" style="background:${barColor}"></div>
@@ -87,6 +103,14 @@ function professionalServicesRevenueRowHtml(project, basis) {
 }
 
 const RUNNING_PROJECT_METRIC_MODAL_CONFIG = Object.freeze({
+  total: Object.freeze({
+    title: 'PS Only Projects — Deal Acquisition',
+    empty: 'No PS Only Deal Acquisition projects in this fiscal year',
+  }),
+  running: Object.freeze({
+    title: 'Running Professional Services Projects',
+    empty: 'No running Professional Services projects',
+  }),
   delayed: Object.freeze({
     title: 'Delayed Professional Services Projects',
     empty: 'No delayed Professional Services projects',
@@ -126,14 +150,17 @@ async function openRunningProjectMetricModal(metric) {
       const securedProjects = Array.isArray(result.revenue_secured_projects)
         ? result.revenue_secured_projects
         : [];
+      const accrualProjects = Array.isArray(result.revenue_accrual_projects)
+        ? result.revenue_accrual_projects
+        : [];
       const fyLabel = fiscalYearDisplayLabel(S.matrixFiscalYear);
 
       openModal(`
         ${mHdr(
           config.title,
-          `${fyLabel} · Professional Services projects classified by realization and secured revenue`,
+          `${fyLabel} · Professional Services projects classified by realization, secured and accrual revenue`,
         )}
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 p-4 bg-gray-50">
+        <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 p-4 bg-gray-50">
           <section class="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-0">
             <div class="px-4 py-3 border-b border-gray-200 bg-blue-50/70">
               <div class="flex items-center justify-between gap-3">
@@ -173,19 +200,46 @@ async function openRunningProjectMetricModal(metric) {
                 : '<div class="px-5 py-10 text-center text-sm text-gray-400">No Revenue Secured projects in this fiscal year</div>'}
             </div>
           </section>
+
+
+          <section class="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-0">
+            <div class="px-4 py-3 border-b border-gray-200 bg-amber-50/70">
+              <div class="flex items-center justify-between gap-3">
+                <div>
+                  <div class="text-sm font-bold text-gray-900">Revenue Accrual</div>
+                  <div class="text-[11px] text-gray-500 mt-0.5">Closed Won Date in ${fyLabel} · Progress &lt; 100%</div>
+                </div>
+                <div class="text-right flex-shrink-0">
+                  <div class="text-sm font-bold text-amber-700">${fmtUsd(result.revenue_accrual_total || 0)}</div>
+                  <div class="text-[11px] text-gray-500">${accrualProjects.length} project${accrualProjects.length === 1 ? '' : 's'}</div>
+                </div>
+              </div>
+            </div>
+            <div class="nice-scroll overflow-y-auto" style="max-height:58vh">
+              ${accrualProjects.length
+                ? accrualProjects.map(project => professionalServicesRevenueRowHtml(project, 'accrual')).join('')
+                : '<div class="px-5 py-10 text-center text-sm text-gray-400">No Revenue Accrual projects in this fiscal year</div>'}
+            </div>
+          </section>
         </div>
         <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
           <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
         </div>
-      `, 'max-w-6xl');
+      `, 'max-w-7xl');
       return;
     }
 
     const projects = Array.isArray(result.projects) ? result.projects : [];
+    const fiscalLabel = fiscalYearDisplayLabel(S.matrixFiscalYear);
+    const subtitle = metric === 'total'
+      ? `${fiscalLabel} · Matches Deal Acquisition Chart → PS Only · Closed Won`
+      : metric === 'delayed'
+        ? `${fiscalLabel} · Closed Won PS Only · Project Closing Date is in the past · Progress below 100%`
+        : `${fiscalLabel} · Closed Won Mar 1, 2025 or later · Progress below 100%`;
     openModal(`
       ${mHdr(
         config.title,
-        `${projects.length} project${projects.length === 1 ? '' : 's'} · Closed Won Mar 1, 2025 or later`,
+        `${projects.length} project${projects.length === 1 ? '' : 's'} · ${subtitle}`,
       )}
       <div class="nice-scroll overflow-y-auto" style="max-height:68vh">
         ${projects.length
@@ -210,14 +264,19 @@ const PROJECT_PORTFOLIO_MODAL_CONFIG = Object.freeze({
     subtitle: 'Closed Won from March 1, 2025 onward · progress below 100%',
   }),
   weighted: Object.freeze({
-    title: 'Weighted Prospects',
-    empty: 'No non-Closed Won projects with probability at or above 75%',
-    subtitle: 'Stage is not Closed Won · probability ≥ 75%',
+    title: 'Weighted Pipeline Projects',
+    empty: 'No open pipeline projects with probability at or above 75% in this fiscal year',
+    subtitle: 'Open pipeline · probability ≥ 75%',
   }),
   prospect: Object.freeze({
-    title: 'Prospects',
-    empty: 'No Professional Services prospects with probability below 75%',
-    subtitle: 'Product Family: Professional Services · Stage is not Closed Won · probability < 75%',
+    title: 'Prospect Pipeline Projects',
+    empty: 'No open pipeline projects with probability below 75% in this fiscal year',
+    subtitle: 'Open pipeline · probability < 75%',
+  }),
+  converted: Object.freeze({
+    title: 'Converted Pipeline Projects',
+    empty: 'No Closed Won projects in this fiscal year',
+    subtitle: 'Converted = Closed Won in the selected fiscal year',
   }),
 });
 
@@ -246,7 +305,7 @@ async function openProjectPortfolioMetricModal(metric) {
     openModal(`
       ${mHdr(
         config.title,
-        `${projects.length.toLocaleString()} project${projects.length === 1 ? '' : 's'} · ${config.subtitle}`,
+        `${projects.length.toLocaleString()} project${projects.length === 1 ? '' : 's'} · ${fiscalYearDisplayLabel(S.matrixFiscalYear)} · ${config.subtitle}`,
       )}
       <div class="nice-scroll modal-scroll-body">
         ${projects.length
