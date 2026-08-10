@@ -257,6 +257,105 @@ async function openRunningProjectMetricModal(metric) {
 }
 
 
+function pipelinePreSaleProductRowHtml(product, classification, index) {
+  const tone = classification === 'converted'
+    ? { pill: 'bg-green-100 text-green-700', accent: '#16a34a' }
+    : classification === 'weighted'
+      ? { pill: 'bg-amber-100 text-amber-700', accent: '#d97706' }
+      : { pill: 'bg-orange-100 text-orange-700', accent: '#ea580c' };
+  const label = classification === 'converted'
+    ? 'Converted'
+    : classification === 'weighted'
+      ? 'Weighted'
+      : 'Prospect';
+  const percent = Number(product?.percent) || 0;
+
+  return `
+    <div class="relative border-b border-gray-100 px-4 py-4 last:border-b-0">
+      <div class="absolute left-0 top-0 bottom-0 w-1" style="background:${tone.accent}"></div>
+      <div class="ml-1">
+        <div class="mb-1 flex items-center justify-between gap-3">
+          <div class="flex min-w-0 items-center gap-2">
+            <span class="text-[11px] font-semibold text-gray-400">#${index + 1}</span>
+            <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone.pill}">${esc(label)}</span>
+          </div>
+          <span class="mono flex-shrink-0 text-sm font-bold text-gray-800">${esc(fmtUsd(product?.amount || 0))}</span>
+        </div>
+        <div class="text-sm font-semibold leading-snug text-gray-900">${esc(product?.name || 'Unnamed Pre-Sale Product')}</div>
+        <div class="mt-1 text-xs text-gray-500">Pre-Sale Product</div>
+        <div class="mt-2 flex items-center justify-between gap-3 text-xs">
+          <span class="text-gray-500">Percent</span>
+          <strong class="text-gray-800">${esc(percent.toLocaleString('en-US', { maximumFractionDigits: 2 }))}%</strong>
+        </div>
+      </div>
+    </div>`;
+}
+
+function pipelinePreSaleSummaryColumnHtml({ title, subtitle, rows, amount, classification, tone }) {
+  return `
+    <section class="overflow-hidden rounded-xl border ${tone.border} bg-white">
+      <div class="flex items-start justify-between gap-4 border-b ${tone.border} ${tone.header} px-4 py-3">
+        <div class="min-w-0">
+          <div class="text-sm font-bold text-gray-900">${esc(title)}</div>
+          <div class="mt-0.5 text-[11px] text-gray-500">${esc(subtitle)}</div>
+        </div>
+        <div class="flex-shrink-0 text-right">
+          <div class="text-sm font-bold ${tone.amount}">${esc(fmtUsd(amount || 0))}</div>
+          <div class="text-[11px] text-gray-500">${rows.length} product${rows.length === 1 ? '' : 's'}</div>
+        </div>
+      </div>
+      <div class="nice-scroll overflow-y-auto" style="max-height:58vh">
+        ${rows.length
+          ? rows.map((product, index) => pipelinePreSaleProductRowHtml(product, classification, index)).join('')
+          : `<div class="px-5 py-10 text-center text-sm text-gray-400">No ${esc(title)} Pre-Sale Products</div>`}
+      </div>
+    </section>`;
+}
+
+function openPipelinePreSaleSummaryModal() {
+  const summary = getPreSalePipelineKpiSummary();
+  const secured = Number(summary.securedMinPercent) || 90;
+  const bestCase = Number(summary.bestCaseMinPercent) || 70;
+
+  openModal(`
+    ${mHdr(
+      'Pipeline Projects',
+      `Total Pre-Sale Product Amount: ${fmtUsd(summary.totalAmount)} · Classification is driven by the saved Pre-Sale Product Percent`,
+    )}
+    <div class="modal-scroll-body nice-scroll p-4">
+      <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+        ${pipelinePreSaleSummaryColumnHtml({
+          title: 'Converted',
+          subtitle: 'Percent = 100%',
+          rows: summary.converted,
+          amount: summary.convertedAmount,
+          classification: 'converted',
+          tone: { border: 'border-green-200', header: 'bg-green-50', amount: 'text-green-700' },
+        })}
+        ${pipelinePreSaleSummaryColumnHtml({
+          title: 'Weighted',
+          subtitle: `Secured rule: Percent ≥ ${secured}% and < 100%`,
+          rows: summary.weighted,
+          amount: summary.weightedAmount,
+          classification: 'weighted',
+          tone: { border: 'border-amber-200', header: 'bg-amber-50', amount: 'text-amber-700' },
+        })}
+        ${pipelinePreSaleSummaryColumnHtml({
+          title: 'Prospect',
+          subtitle: `Prospect rule: Percent < ${bestCase}%`,
+          rows: summary.prospect,
+          amount: summary.prospectAmount,
+          classification: 'prospect',
+          tone: { border: 'border-orange-200', header: 'bg-orange-50', amount: 'text-orange-700' },
+        })}
+      </div>
+    </div>
+    <div class="modal-footer flex justify-end rounded-b-2xl border-t border-gray-200 bg-gray-50 p-4">
+      <button type="button" onclick="closeModal()" class="btn-gray">Close</button>
+    </div>
+  `, 'max-w-7xl');
+}
+
 const PROJECT_PORTFOLIO_MODAL_CONFIG = Object.freeze({
   running: Object.freeze({
     title: 'Running Professional Services Projects',

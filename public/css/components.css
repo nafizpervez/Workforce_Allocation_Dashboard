@@ -1147,7 +1147,7 @@
  */
 @media (max-width: 1760px) {
   #statsRow {
-    grid-template-columns: repeat(3, minmax(0, 1fr));
+    grid-template-columns: repeat(2, minmax(0, 1fr));
     gap: 16px;
   }
 }
@@ -1295,7 +1295,7 @@ button.committed-target-breakdown__item:focus-visible {
 }
 .presale-product-thresholds {
   display: grid;
-  grid-template-columns: minmax(190px, 1fr) repeat(3, minmax(116px, auto));
+  grid-template-columns: minmax(190px, 1fr) repeat(4, minmax(108px, auto));
   gap: 8px;
   align-items: end;
   padding: 8px 16px;
@@ -1348,6 +1348,16 @@ button.committed-target-breakdown__item:focus-visible {
 .presale-product-threshold-field em {
   color: #94a3b8;
   font-style: normal;
+}
+.presale-product-threshold-field.is-converted {
+  grid-template-columns: auto auto;
+  justify-content: space-between;
+  border-color: #bfdbfe;
+  background: #eff6ff;
+}
+.presale-product-threshold-field.is-converted strong {
+  color: #1d4ed8;
+  font-size: 11px;
 }
 .presale-product-threshold-field.is-secured {
   border-color: #a7f3d0;
@@ -1545,6 +1555,7 @@ button.committed-target-breakdown__item:focus-visible {
     align-items: stretch;
     white-space: normal;
   }
+  .presale-product-threshold-field.is-converted,
   .presale-product-threshold-field.is-prospect {
     grid-template-columns: 1fr;
   }

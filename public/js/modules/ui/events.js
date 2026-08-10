@@ -269,6 +269,14 @@ function initEvents() {
       return;
     }
 
+    const pipelinePreSaleSummary = e.target.closest('[data-action="open-pipeline-presale-summary"]');
+    if (pipelinePreSaleSummary) {
+      e.preventDefault();
+      e.stopPropagation();
+      openPipelinePreSaleSummaryModal();
+      return;
+    }
+
     const projectPortfolioMetric = e.target.closest('[data-action="open-project-portfolio-metric"]');
     if (projectPortfolioMetric) {
       e.preventDefault();
@@ -309,6 +317,7 @@ function initEvents() {
       if (sa.dataset.statAction === 'view-employees') openResourceModal();
       if (sa.dataset.statAction === 'view-projects') openProjectsModal();
       if (sa.dataset.statAction === 'view-total-ps-projects') openRunningProjectMetricModal('total');
+      if (sa.dataset.statAction === 'view-pipeline-presale-summary') openPipelinePreSaleSummaryModal();
     }
   });
 
