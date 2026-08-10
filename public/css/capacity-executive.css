@@ -279,7 +279,12 @@
 
 .capacity-allocation-chart-column { min-width: 0; }
 .capacity-allocation-chart-wrap { position: relative; width: 100%; min-width: 0; height: 245px; }
-.capacity-allocation-chart-wrap canvas { width: 100% !important; height: 100% !important; }
+.capacity-allocation-chart-wrap canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  image-rendering: auto;
+}
 .capacity-allocation-chart-caption { margin-top: 2px; color: #173a67; font-size: 10px; font-style: italic; font-weight: 700; text-align: center; }
 
 .capacity-allocation-legend {

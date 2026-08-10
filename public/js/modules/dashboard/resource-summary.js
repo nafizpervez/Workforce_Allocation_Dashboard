@@ -110,7 +110,7 @@ function formatMatrixMandays(value) {
   const numericValue = Number(value);
   return (Number.isFinite(numericValue) ? numericValue : 0).toLocaleString(
     'en-US',
-    { minimumFractionDigits: 0, maximumFractionDigits: 1 },
+    { minimumFractionDigits: 0, maximumFractionDigits: 0 },
   );
 }
 

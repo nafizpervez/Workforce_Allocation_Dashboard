@@ -280,10 +280,7 @@ window.downloadAllProjectsExcel = downloadAllProjectsExcel;
 
 /* ================================================================ PROJECTS DRILL-DOWN (All Projects modal) */
 function openProjectsModal() {
-  const sorted = [...S.projects].sort((a, b) => {
-    const so = ['Prospect', 'Qualify', 'Validate', 'Presentation - Solve', 'Proposal', 'Negotiate', 'Closed Won', 'Closed Lost'];
-    return so.indexOf(a.stage) - so.indexOf(b.stage);
-  });
+  const projects = [...S.projects];
 
   const stageCounts = {};
   for (const p of S.projects) stageCounts[p.stage] = (stageCounts[p.stage] || 0) + 1;
@@ -295,10 +292,43 @@ function openProjectsModal() {
     .map(([stage, count]) => `<span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold ${STAGE_PILL[stage] || 'bg-gray-100 text-gray-700'} cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="${esc(stage)}">${esc(stage)}: ${count}</span>`)
     .join('');
 
-  function buildRows(filterStage, searchQ) {
+  function isProfessionalServiceProject(project) {
+    return typeof classifyProduct === 'function'
+      ? classifyProduct(project?.product_name, project?.product_family) === 'PS'
+      : (() => {
+          const compact = String(project?.product_name || '').toUpperCase().replace(/[^A-Z0-9]/g, '');
+          return compact.includes('PSSYSTEMSUPPORT') || [
+            'PSPROJECTIMPLEMENTATION',
+            'PSPROJECTIMPLEMENT',
+            'PSPROJECTIMPLEMETATION',
+            'PSPROJECTIMPLEMENTAION',
+          ].some(variant => compact.includes(variant));
+        })();
+  }
+
+  function sortProjects(list, sortMode) {
+    if (sortMode === 'closed-won-desc') {
+      return [...list].sort((a, b) => {
+        const aDate = String(a.end_date || '');
+        const bDate = String(b.end_date || '');
+        if (aDate && bDate && aDate !== bDate) return bDate.localeCompare(aDate);
+        if (aDate && !bDate) return -1;
+        if (!aDate && bDate) return 1;
+        return Number(b.id || 0) - Number(a.id || 0);
+      });
+    }
+
+    return [...list].sort((a, b) => {
+      const stageDiff = STAGE_ORDER.indexOf(a.stage) - STAGE_ORDER.indexOf(b.stage);
+      return stageDiff || Number(a.id || 0) - Number(b.id || 0);
+    });
+  }
+
+  function buildRows(filterStage, searchQ, projectType, sortMode) {
     const q = (searchQ || '').toLowerCase().trim();
-    const filtered = sorted.filter(p => {
+    const filtered = projects.filter(p => {
       if (filterStage && p.stage !== filterStage) return false;
+      if (projectType === 'ps' && !isProfessionalServiceProject(p)) return false;
       if (!q) return true;
       return (p.code || '').toLowerCase().includes(q)
         || (p.name || '').toLowerCase().includes(q)
@@ -306,12 +336,15 @@ function openProjectsModal() {
         || (p.fiscal_period || '').toLowerCase().includes(q);
     });
 
-    const rowsHtml = filtered.map((p, i) => `
+    const sorted = sortProjects(filtered, sortMode);
+    const rowsHtml = sorted.map((p, i) => {
+      const progress = Math.max(0, Math.min(100, Number(p.progress) || 0));
+      return `
       <div class="flex items-start gap-3 py-3 px-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer last:border-0" data-action="edit-project" data-project="${p.id}">
         <span class="text-xs font-semibold text-gray-400 w-5 flex-shrink-0 pt-0.5">${i + 1}</span>
         <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5" style="background:${p.color || '#8B5CF6'}"></div>
         <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-0.5">
+          <div class="flex items-center gap-2 mb-0.5 flex-wrap">
             <span class="text-xs font-bold text-blue-600 mono">${esc(p.code)}</span>
             <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${STAGE_PILL[p.stage] || 'bg-gray-100 text-gray-700'}">${esc(p.stage)}</span>
             ${p.fiscal_period ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">${esc(p.fiscal_period)}</span>` : ''}
@@ -321,14 +354,16 @@ function openProjectsModal() {
           <div class="text-xs text-gray-500 truncate">${esc(p.account_name || p.client || '—')}${p.opportunity_owner ? ` · ${esc(p.opportunity_owner)}` : ''}</div>
           ${p.product_name ? `<div class="text-xs text-gray-400 truncate mt-0.5">${esc(p.product_name)}</div>` : ''}
         </div>
-        <div class="text-right flex-shrink-0 min-w-[90px]">
+        <div class="text-right flex-shrink-0 min-w-[190px] space-y-0.5">
           <div class="text-xs font-bold text-gray-800 mono">${(p.product_amount || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 0 })} USD</div>
-          <div class="text-xs text-gray-400">${p.fiscal_period || '—'}</div>
-          <div class="text-[10px] text-gray-300">${p.end_date || '—'}</div>
+          <div class="text-[11px] text-gray-500">Closed Won Date: <span class="font-semibold text-gray-700">${esc(p.end_date || '—')}</span></div>
+          <div class="text-[11px] text-gray-500">Project Close Date: <span class="font-semibold text-gray-700">${esc(p.project_closing_date || '—')}</span></div>
+          <div class="text-[11px] text-gray-500">Progress: <span class="font-semibold text-gray-700">${progress.toFixed(progress % 1 ? 1 : 0)}%</span></div>
         </div>
-      </div>`).join('');
+      </div>`;
+    }).join('');
 
-    return { rowsHtml, count: filtered.length };
+    return { rowsHtml, count: sorted.length };
   }
 
   openModal(`${mHdr('All Projects', `${S.projects.length} total`)}
@@ -336,12 +371,20 @@ function openProjectsModal() {
       <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-semibold bg-gray-200 text-gray-700 cursor-pointer hover:opacity-75 transition-opacity" data-stage-pill="">All</span>
       ${summaryPills}
     </div>
-    <div class="px-4 py-2.5 border-b border-gray-100 bg-white">
+    <div class="px-4 py-3 border-b border-gray-100 bg-white grid grid-cols-1 md:grid-cols-[minmax(0,1fr)_210px_220px] gap-2">
       <input id="projModalSearch" type="text" placeholder="Search by SA code, project name, or product name…"
         class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400">
+      <select id="projModalTypeFilter" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+        <option value="">All Project Types</option>
+        <option value="ps">PS / Professional Service</option>
+      </select>
+      <select id="projModalSort" class="w-full px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+        <option value="closed-won-desc" selected>Closed Won Date (Desc)</option>
+        <option value="stage">Stage</option>
+      </select>
     </div>
     <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:55vh">
-      ${buildRows('', '').rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
+      ${buildRows('', '', '', 'closed-won-desc').rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
     </div>
     <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
       <span class="text-xs text-gray-400" id="projModalCount">${S.projects.length} project${S.projects.length === 1 ? '' : 's'}</span>
@@ -349,13 +392,15 @@ function openProjectsModal() {
         <button onclick="window.downloadAllProjectsExcel()" class="btn-blue">Download Excel</button>
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>
-    </div>`, 'max-w-3xl');
+    </div>`, 'max-w-5xl');
 
   let activeStage = '';
 
   function refresh() {
     const q = document.getElementById('projModalSearch')?.value || '';
-    const { rowsHtml, count } = buildRows(activeStage, q);
+    const projectType = document.getElementById('projModalTypeFilter')?.value || '';
+    const sortMode = document.getElementById('projModalSort')?.value || 'closed-won-desc';
+    const { rowsHtml, count } = buildRows(activeStage, q, projectType, sortMode);
     const list = document.getElementById('projModalList');
     const countEl = document.getElementById('projModalCount');
     if (list) list.innerHTML = rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>';
@@ -363,6 +408,8 @@ function openProjectsModal() {
   }
 
   document.getElementById('projModalSearch')?.addEventListener('input', refresh);
+  document.getElementById('projModalTypeFilter')?.addEventListener('change', refresh);
+  document.getElementById('projModalSort')?.addEventListener('change', refresh);
 
   document.getElementById('projStagePills')?.addEventListener('click', e => {
     const pill = e.target.closest('[data-stage-pill]');

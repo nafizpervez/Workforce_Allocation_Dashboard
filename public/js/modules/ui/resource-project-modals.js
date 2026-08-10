@@ -234,7 +234,14 @@ async function saveProject(id) {
   const name = document.getElementById('fp_name').value.trim();
   if (!code || !name) { toast('Opportunity Number and Project Name are required', 'error'); return; }
   const amount = +document.getElementById('fp_opp_amount').value;
-  const payload = { code, name, account_name: document.getElementById('fp_account').value.trim(), client: document.getElementById('fp_account').value.trim(), product_name: document.getElementById('fp_product_name').value.trim(), product_family: document.getElementById('fp_product_family').value.trim(), opportunity_owner: document.getElementById('fp_owner').value.trim(), stage: document.getElementById('fp_stage').value, fiscal_period: document.getElementById('fp_fiscal_period').value.trim(), priority: document.getElementById('fp_pri').value, product_amount: +document.getElementById('fp_product_amount').value, probability: +document.getElementById('fp_probability').value, created_date: document.getElementById('fp_created').value, end_date: document.getElementById('fp_end').value, project_closing_date: document.getElementById('fp_closing').value, opp_amount: amount, budget: amount, progress: +document.getElementById('fp_prog').value, not_local_project: document.getElementById('fp_not_local_project').checked ? 1 : 0, color: document.getElementById('fp_color').value };
+  const projectClosingDate = document.getElementById('fp_closing').value;
+  const progress = +document.getElementById('fp_prog').value;
+  if (progress >= 100 && !projectClosingDate) {
+    toast('Project Closing Date is required before Progress can be set to 100%.', 'error');
+    document.getElementById('fp_closing')?.focus();
+    return;
+  }
+  const payload = { code, name, account_name: document.getElementById('fp_account').value.trim(), client: document.getElementById('fp_account').value.trim(), product_name: document.getElementById('fp_product_name').value.trim(), product_family: document.getElementById('fp_product_family').value.trim(), opportunity_owner: document.getElementById('fp_owner').value.trim(), stage: document.getElementById('fp_stage').value, fiscal_period: document.getElementById('fp_fiscal_period').value.trim(), priority: document.getElementById('fp_pri').value, product_amount: +document.getElementById('fp_product_amount').value, probability: +document.getElementById('fp_probability').value, created_date: document.getElementById('fp_created').value, end_date: document.getElementById('fp_end').value, project_closing_date: projectClosingDate, opp_amount: amount, budget: amount, progress, not_local_project: document.getElementById('fp_not_local_project').checked ? 1 : 0, color: document.getElementById('fp_color').value };
   try { if (id) await api('PUT', `/api/projects/${id}`, payload); else await api('POST', '/api/projects', payload); closeModal(); toast(`Project ${id ? 'updated' : 'created'}`); await loadAll(); } catch (e) { toast(e.message, 'error'); }
 }
 
