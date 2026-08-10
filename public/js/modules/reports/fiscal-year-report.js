@@ -767,25 +767,17 @@ function fiscalYearReportDocxPageOne(library, reportData) {
 
 function fiscalYearReportDocxExecutiveRows(reportData) {
   const summary = reportData.summary;
-  const metrics = summary.executiveMetrics || {};
-  const combinedMetric = (percentage, fte) => `${fiscalYearReportPercent(percentage)} - ${fiscalYearReportFte(fte, true)}`;
-  const teamLabel = reportData.nonAssignableActiveCount > 0
-    ? `${summary.allActiveCount.toLocaleString()} (Including Manager)`
-    : summary.allActiveCount.toLocaleString();
+  const rows = typeof getExecutiveMatrixRows === 'function'
+    ? getExecutiveMatrixRows(summary)
+    : [];
 
-  return [
-    { cells: [{ text: 'Revenue Generating Capacity', bold: true }, { text: combinedMetric(metrics.revenueGeneratingShare, metrics.revenueGeneratingFte), bold: true }] },
-    { cells: [{ text: 'Revenue Enabling Capacity', bold: true }, { text: combinedMetric(metrics.revenueEnablingShare, metrics.revenueEnablingFte), bold: true }] },
-    { cells: [{ text: 'Investment & Overhead', bold: true }, { text: combinedMetric(metrics.investmentOverheadShare, metrics.investmentOverheadFte), bold: true }] },
-    { cells: ['Total Team Size', teamLabel] },
-    { cells: ['Available Capacity', `${summary.assignableCount.toLocaleString()} FTE`] },
-    { cells: ['Annual Capacity', fiscalYearReportDays(summary.availableCapacityDays, 'person-days')] },
-    { cells: ['Equivalent Capacity', `${fiscalYearReportFte(summary.equivalentCapacity)} man-years (assuming ${fiscalYearReportDays(summary.defaultAnnualWorkdays)} working days/year)`] },
-    { cells: ['Maximum Revenue Generating Capacity', fiscalYearReportCurrency(summary.maximumRevenueCapacity, true)] },
-    { cells: ['Intra-Sourcing Revenue Target', fiscalYearReportCurrency(summary.committedTargets?.intrasourcing, true)] },
-    { cells: ['Local PS Revenue Target', fiscalYearReportCurrency(summary.committedTargets?.local, true)] },
-    { total: true, cells: ['Total Committed Revenue Target', fiscalYearReportCurrency(summary.committedTarget, true)] },
-  ];
+  return rows.map(row => ({
+    cells: [
+      { text: row.metric, bold: Boolean(row.headline) },
+      { text: row.value, bold: Boolean(row.headline), align: 'right' },
+      { text: row.fte, bold: Boolean(row.headline), align: 'right' },
+    ],
+  }));
 }
 
 function fiscalYearReportDocxPageTwo(library, reportData) {
@@ -820,16 +812,16 @@ function fiscalYearReportDocxPageTwo(library, reportData) {
   });
 
   return [
-    fiscalYearReportDocxSectionHeading(library, '1. Executive Summary'),
+    fiscalYearReportDocxSectionHeading(library, '1. Executive Matrix'),
     fiscalYearReportDocxParagraph(library, intro, { size: 20, after: 165, line: 268 }),
     fiscalYearReportDocxSubheading(library, `The ${reportData.compactFyLabel} operating model is designed to:`, { size: 23, after: 40 }),
     ...operatingBullets.map(runs => fiscalYearReportDocxBullet(library, runs)),
     fiscalYearReportDocxSubheading(library, 'Executive Metrics', { size: 22, before: 80, after: 35 }),
     fiscalYearReportDocxTable(library,
-      ['Metric', 'Value'],
+      ['Metric', 'Value', 'FTE'],
       fiscalYearReportDocxExecutiveRows(reportData),
-      [6380, 3366],
-      { alternate: true, headerSize: 17, fontSize: 19, cellMargin: 47 }),
+      [5450, 2550, 1746],
+      { alternate: true, headerSize: 17, fontSize: 18, cellMargin: 47 }),
     fiscalYearReportDocxSpacer(library, 105),
     fiscalYearReportDocxSectionHeading(library, '2. Available Capacity Summary', { size: 31, after: 35 }),
     fiscalYearReportDocxTable(library,
@@ -849,7 +841,8 @@ function fiscalYearReportDocxMaximumRevenueRows(reportData) {
       fiscalYearReportDays(row.days),
       fiscalYearReportRate(row.avgIntraDailyRate),
       fiscalYearReportRate(row.avgLocalDailyRate),
-      fiscalYearReportCurrency(row.maxCapacity, true),
+      fiscalYearReportCurrency(row.intraCapacity, true),
+      fiscalYearReportCurrency(row.localCapacity, true),
     ],
   }));
   rows.push({
@@ -860,7 +853,8 @@ function fiscalYearReportDocxMaximumRevenueRows(reportData) {
       fiscalYearReportDays(summary.availableCapacityDays),
       '',
       '',
-      fiscalYearReportCurrency(summary.maximumRevenueCapacity, true),
+      fiscalYearReportCurrency(summary.intrasourcingRevenueCapacity, true),
+      fiscalYearReportCurrency(summary.localRevenueCapacity, true),
     ],
   });
   return rows;
@@ -917,9 +911,9 @@ function fiscalYearReportDocxPageThree(library, reportData) {
   return [
     fiscalYearReportDocxSectionHeading(library, '3. Maximum Revenue Capacity', { after: 35 }),
     fiscalYearReportDocxTable(library,
-      ['Resource Category', 'FTE', 'Available\nWorking Days', 'Rate/Day Intra\n(USD)', 'Rate/Day Local\n(USD)', 'Maximum Revenue\nCapacity (USD)'],
+      ['Resource Category', 'FTE', 'Available\nWorking Days', 'Rate/Day Intra\n(USD)', 'Rate/Day Local\n(USD)', 'Maximum Revenue Capacity\nIntra-Sourcing (USD)', 'Maximum Revenue Capacity\nLocal (USD)'],
       fiscalYearReportDocxMaximumRevenueRows(reportData),
-      [2470, 660, 1350, 1480, 1480, 2306],
+      [2050, 600, 1150, 1200, 1200, 1773, 1773],
       { alternate: true, headerSize: 14, fontSize: 16, cellMargin: 38, headerMargin: 35 }),
     fiscalYearReportDocxSubheading(library, 'Revenue Capacity by Resource Group', { size: 22, before: 90, after: 35 }),
     fiscalYearReportDocxTable(library,
