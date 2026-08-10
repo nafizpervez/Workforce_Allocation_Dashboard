@@ -38,6 +38,27 @@ function formatExecutiveTableCurrency(value) {
     : `USD ${Math.round(amount).toLocaleString('en-US')}`;
 }
 
+// Report planning cards (3-6) display monetary values at fixed two-decimal precision.
+// Keep this formatter scoped to those cards so other dashboard sections preserve
+// their existing currency presentation.
+function formatExecutiveReportCurrency(value) {
+  const amount = Number(value) || 0;
+  const absoluteText = Math.abs(amount).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
+  return amount < 0 ? `-USD ${absoluteText}` : `USD ${absoluteText}`;
+}
+
+function formatExecutiveReportRate(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return '—';
+  return `USD ${amount.toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  })}`;
+}
+
 function formatExecutiveDays(value, suffix = 'days') {
   const amount = Number(value) || 0;
   const text = amount.toLocaleString('en-US', {
@@ -610,8 +631,8 @@ function renderMaximumRevenueCapacityCard(summary) {
         <table class="capacity-executive-table capacity-executive-table--dense capacity-executive-table--wide">
           <thead><tr><th>Resource Category</th><th>FTE</th><th>Available Days</th><th>Rate/Day Intra</th><th>Rate/Day Local</th><th>Maximum Revenue Capacity</th></tr></thead>
           <tbody>
-            ${detailRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.displayGroup)}</td><td class="capacity-executive-table__value">${row.fte}</td><td class="capacity-executive-table__value">${esc(formatExecutiveDays(row.days, ''))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveRate(row.avgIntraDailyRate))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveRate(row.avgLocalDailyRate))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.maxCapacity))}</td></tr>`).join('')}
-            <tr class="capacity-executive-table__total"><td>Annual Revenue Capacity</td><td>${summary.assignableCount}</td><td>${esc(formatExecutiveDays(summary.availableCapacityDays, ''))}</td><td></td><td></td><td>${esc(formatExecutiveTableCurrency(summary.maximumRevenueCapacity))}</td></tr>
+            ${detailRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.displayGroup)}</td><td class="capacity-executive-table__value">${row.fte}</td><td class="capacity-executive-table__value">${esc(formatExecutiveDays(row.days, ''))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportRate(row.avgIntraDailyRate))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportRate(row.avgLocalDailyRate))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.maxCapacity))}</td></tr>`).join('')}
+            <tr class="capacity-executive-table__total"><td>Annual Revenue Capacity</td><td>${summary.assignableCount}</td><td>${esc(formatExecutiveDays(summary.availableCapacityDays, ''))}</td><td></td><td></td><td>${esc(formatExecutiveReportCurrency(summary.maximumRevenueCapacity))}</td></tr>
           </tbody>
         </table>
       </div>
@@ -621,8 +642,8 @@ function renderMaximumRevenueCapacityCard(summary) {
           <colgroup><col style="width:25%"><col style="width:10%"><col style="width:24%"><col style="width:24%"><col style="width:17%"></colgroup>
           <thead><tr><th>Resource Group</th><th>FTE</th><th>Revenue Capacity Intra-Sourcing</th><th>Revenue Capacity Local</th><th>Contribution</th></tr></thead>
           <tbody>
-            ${groupRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.group)}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.intrasourcingCapacity))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.localCapacity))}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.contribution))}</td></tr>`).join('')}
-            <tr class="capacity-executive-table__total"><td>Total Annual Revenue Capacity</td><td>${esc(formatExecutiveFte(summary.equivalentCapacity, false))}</td><td>${esc(formatExecutiveTableCurrency(summary.intrasourcingRevenueCapacity))}</td><td>${esc(formatExecutiveTableCurrency(summary.localRevenueCapacity))}</td><td>100%</td></tr>
+            ${groupRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.group)}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.intrasourcingCapacity))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.localCapacity))}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.contribution))}</td></tr>`).join('')}
+            <tr class="capacity-executive-table__total"><td>Total Annual Revenue Capacity</td><td>${esc(formatExecutiveFte(summary.equivalentCapacity, false))}</td><td>${esc(formatExecutiveReportCurrency(summary.intrasourcingRevenueCapacity))}</td><td>${esc(formatExecutiveReportCurrency(summary.localRevenueCapacity))}</td><td>100%</td></tr>
           </tbody>
         </table>
       </div>
@@ -630,7 +651,7 @@ function renderMaximumRevenueCapacityCard(summary) {
   return capacityExecutiveCardShell({
     key: 'maximum-revenue-capacity', title: '3. Maximum Revenue Capacity', eyebrow: 'Commercial capacity',
     subtitle: 'Available working days multiplied by the higher configured Local or Intra-Sourcing daily rate.',
-    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveCurrency(summary.maximumRevenueCapacity), body,
+    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveReportCurrency(summary.maximumRevenueCapacity), body,
   });
 }
 
@@ -662,8 +683,8 @@ function renderRevenueTargetsCard(summary) {
       <table class="capacity-executive-table capacity-executive-table--dense">
         <thead><tr><th>Revenue Stream</th><th>Target</th><th>Avg. Rate/Day</th><th>Man Days</th><th>FTE</th></tr></thead>
         <tbody>
-          ${rows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${row.explicit ? esc(formatExecutiveTableCurrency(row.target)) : `<span class="capacity-opportunity-label">Matrix capacity opportunity</span><small>${esc(formatExecutiveTableCurrency(row.target))}</small>`}</td><td class="capacity-executive-table__value">${esc(formatExecutiveRate(row.rate))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveDays(row.manDays, ''))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td></tr>`).join('')}
-          <tr class="capacity-executive-table__total"><td>Total Revenue Target</td><td>${esc(formatExecutiveTableCurrency(totalTarget))}</td><td></td><td>${esc(formatExecutiveDays(totalDays, ''))}</td><td>${esc(formatExecutiveFte(totalFte, false))}</td></tr>
+          ${rows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${row.explicit ? esc(formatExecutiveReportCurrency(row.target)) : `<span class="capacity-opportunity-label">Matrix capacity opportunity</span><small>${esc(formatExecutiveReportCurrency(row.target))}</small>`}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportRate(row.rate))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveDays(row.manDays, ''))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td></tr>`).join('')}
+          <tr class="capacity-executive-table__total"><td>Total Revenue Target</td><td>${esc(formatExecutiveReportCurrency(totalTarget))}</td><td></td><td>${esc(formatExecutiveDays(totalDays, ''))}</td><td>${esc(formatExecutiveFte(totalFte, false))}</td></tr>
         </tbody>
       </table>
       <p class="capacity-table-footnote">Rates are allocation-weighted from the same designations and effective-dated rates used by the Resource Assignment Matrix. Training Delivery is shown as its matrix-derived capacity opportunity.</p>
@@ -671,7 +692,7 @@ function renderRevenueTargetsCard(summary) {
   return capacityExecutiveCardShell({
     key: 'revenue-targets', title: '4. Revenue Targets', eyebrow: 'Target conversion',
     subtitle: 'Saved targets converted to mandays and FTE using allocation-weighted matrix rates.',
-    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveCurrency(totalTarget), body,
+    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveReportCurrency(totalTarget), body,
   });
 }
 
@@ -734,19 +755,19 @@ function renderCapacityValueAllocationCard(summary) {
   const rows = getCapacityValueRows(summary);
   const body = `
     <div class="capacity-card-scroll nice-scroll">
-      <p class="capacity-table-intro">Resource Assignment Matrix allocation percentages are applied to each visible resource’s available workdays and applicable effective-dated rate. Total annualized allocated capacity value: <strong>${esc(formatExecutiveTableCurrency(summary.allocationMix.capacityValue))}</strong>.</p>
+      <p class="capacity-table-intro">Resource Assignment Matrix allocation percentages are applied to each visible resource’s available workdays and applicable effective-dated rate. Total annualized allocated capacity value: <strong>${esc(formatExecutiveReportCurrency(summary.allocationMix.capacityValue))}</strong>.</p>
       <div class="capacity-executive-table-scroll">
         <table class="capacity-executive-table capacity-executive-table--dense capacity-executive-table--wide">
           <thead><tr><th>Billable Utilization</th><th>Capacity %</th><th>FTE</th><th>Capacity Value</th><th>Target</th><th>Realized</th><th>Backlog</th><th>Remaining</th></tr></thead>
-          <tbody>${rows.billable.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.capacityValue))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveTableCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.realized))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.backlog))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveTableCurrency(row.remaining))}</td></tr>`).join('')}</tbody>
+          <tbody>${rows.billable.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.capacityValue))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveReportCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.realized))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.backlog))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveReportCurrency(row.remaining))}</td></tr>`).join('')}</tbody>
         </table>
       </div>
       <div class="capacity-executive-table-scroll capacity-function-table">
         <table class="capacity-executive-table capacity-executive-table--dense capacity-executive-table--wide">
           <thead><tr><th>Function</th><th>Capacity %</th><th>FTE</th><th>Opportunity Value</th><th>Target</th><th>Multiplier</th><th>Pipeline</th><th>Remaining</th></tr></thead>
           <tbody>
-            ${rows.functionRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.opportunity))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveTableCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${row.multiplier ? row.multiplier.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveTableCurrency(row.pipeline))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveTableCurrency(row.remaining))}</td></tr>`).join('')}
-            <tr class="capacity-executive-table__total"><td>Total</td><td>${esc(formatExecutivePercentage(summary.allocationMix.totalAllocationPercentage))}</td><td>${esc(formatExecutiveFte(summary.defaultAnnualWorkdays > 0 ? summary.allocationMix.allocatedMandays / summary.defaultAnnualWorkdays : 0, false))}</td><td>${esc(formatExecutiveTableCurrency(summary.allocationMix.capacityValue))}</td><td></td><td></td><td></td><td></td></tr>
+            ${rows.functionRows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.label)}</td><td class="capacity-executive-table__value">${esc(formatExecutivePercentage(row.share))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveFte(row.fte, false))}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.opportunity))}</td><td class="capacity-executive-table__value">${row.target > 0 ? esc(formatExecutiveReportCurrency(row.target)) : '—'}</td><td class="capacity-executive-table__value">${row.multiplier ? row.multiplier.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—'}</td><td class="capacity-executive-table__value">${esc(formatExecutiveReportCurrency(row.pipeline))}</td><td class="capacity-executive-table__value ${row.remaining < 0 ? 'capacity-value-negative' : ''}">${esc(formatExecutiveReportCurrency(row.remaining))}</td></tr>`).join('')}
+            <tr class="capacity-executive-table__total"><td>Total</td><td>${esc(formatExecutivePercentage(summary.allocationMix.totalAllocationPercentage))}</td><td>${esc(formatExecutiveFte(summary.defaultAnnualWorkdays > 0 ? summary.allocationMix.allocatedMandays / summary.defaultAnnualWorkdays : 0, false))}</td><td>${esc(formatExecutiveReportCurrency(summary.allocationMix.capacityValue))}</td><td></td><td></td><td></td><td></td></tr>
           </tbody>
         </table>
       </div>
@@ -754,7 +775,7 @@ function renderCapacityValueAllocationCard(summary) {
   return capacityExecutiveCardShell({
     key: 'capacity-value-allocation', title: '5. Capacity Value Allocation', eyebrow: 'Value distribution',
     subtitle: 'Capacity value, targets, realized revenue and current pipeline by work classification.',
-    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveCurrency(summary.allocationMix.capacityValue), body,
+    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveReportCurrency(summary.allocationMix.capacityValue), body,
   });
 }
 
@@ -771,12 +792,12 @@ function renderPipelineTargetSummaryCard(summary) {
     ['Prospect', `< ${formatExecutivePercentage(summary.preSalePipeline.bestCaseMinPercent)}`, summary.preSalePipeline.buckets.prospect],
   ];
   const rows = [
-    ['Local Pipeline Target', formatExecutiveTableCurrency(localPipelineTarget)],
+    ['Local Pipeline Target', formatExecutiveReportCurrency(localPipelineTarget)],
     ['Pipeline Multiplier', pipelineMultiplier.toLocaleString('en-US', { maximumFractionDigits: 2 })],
-    ['Base Pipeline Requirement', formatExecutiveTableCurrency(baseRequirement)],
-    ['Probable Realized This FY', formatExecutiveTableCurrency(probableRealizedThisFY)],
-    ['Local Target Next FY', formatExecutiveTableCurrency(localTargetNextFY)],
-    ['Already Working With', formatExecutiveTableCurrency(activePipeline)],
+    ['Base Pipeline Requirement', formatExecutiveReportCurrency(baseRequirement)],
+    ['Probable Realized This FY', formatExecutiveReportCurrency(probableRealizedThisFY)],
+    ['Local Target Next FY', formatExecutiveReportCurrency(localTargetNextFY)],
+    ['Already Working With', formatExecutiveReportCurrency(activePipeline)],
   ];
   const body = `
     <div class="capacity-card-scroll nice-scroll">
@@ -786,20 +807,20 @@ function renderPipelineTargetSummaryCard(summary) {
         <tbody>
           ${rows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row[0])}</td><td class="capacity-executive-table__value">${esc(row[1])}</td></tr>`).join('')}
           ${bucketRows.map(row => {
-            const value = `${row[1]} · ${formatExecutiveTableCurrency(row[2])}`;
+            const value = `${row[1]} · ${formatExecutiveReportCurrency(row[2])}`;
             return `<tr><td class="capacity-executive-table__metric">${esc(row[0])}</td><td class="capacity-executive-table__value">${esc(value)}</td></tr>`;
           }).join('')}
         </tbody>
       </table>
       <div class="capacity-pipeline-gap ${activePipeline >= localTargetNextFY && localTargetNextFY > 0 ? 'is-positive' : ''}">
         <span>Pipeline gap</span>
-        <strong>${esc(formatExecutiveTableCurrency(localTargetNextFY - activePipeline))}</strong>
+        <strong>${esc(formatExecutiveReportCurrency(localTargetNextFY - activePipeline))}</strong>
       </div>
     </div>`;
   return capacityExecutiveCardShell({
     key: 'pipeline-target-summary', title: '6. Pipeline Target Summary', eyebrow: 'Forward planning',
     subtitle: `Pipeline target coverage using saved Local Pipeline Target, config.js planning values and Pre-Sale Product confidence thresholds (Secured ≥ ${summary.preSalePipeline.securedMinPercent}%, Best Case ≥ ${summary.preSalePipeline.bestCaseMinPercent}%).`,
-    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveCurrency(activePipeline), body,
+    fiscalYearLabel: summary.fiscalYearLabel, collapsedValue: formatExecutiveReportCurrency(activePipeline), body,
   });
 }
 
@@ -808,6 +829,16 @@ function getCapacityExecutiveChartRows(summary) {
   // Unallocated capacity remains an empty arc in the ring rather than a data slice,
   // so it cannot appear in the legend or tooltip.
   return summary.allocationMix.rows.filter(row => row.share > 0);
+}
+
+function getCapacityExecutiveChartPixelRatio() {
+  // Chart.js normally follows window.devicePixelRatio. On standard 1x desktop
+  // displays that leaves the doughnut backed by roughly the same number of
+  // pixels as its CSS size, which can look soft once labels and curved edges
+  // are anti-aliased. Keep this single report chart on a denser backing store
+  // while capping the ratio to avoid unnecessary GPU/memory cost.
+  const browserRatio = Number(window.devicePixelRatio) || 1;
+  return Math.min(4, Math.max(3, browserRatio));
 }
 
 function renderCapacityExecutiveChart(summary) {
@@ -849,6 +880,9 @@ function renderCapacityExecutiveChart(summary) {
     options: {
       responsive: true,
       maintainAspectRatio: false,
+      // Force a high-density backing canvas so the in-app doughnut, its curved
+      // edges and all canvas-rendered text remain crisp at normal browser zoom.
+      devicePixelRatio: getCapacityExecutiveChartPixelRatio(),
       cutout: '56%',
       circumference: 360,
       rotation: 0,

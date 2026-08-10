@@ -40,6 +40,9 @@ router.get('/api/projects', (_, res) => {
 router.post('/api/projects', (req, res) => {
   const b = req.body || {};
   if (!b.code || !b.name) return res.status(400).json({ error: 'code and name are required' });
+  if (safeNum(b.progress, 0) >= 100 && !String(b.project_closing_date || '').trim()) {
+    return res.status(400).json({ error: 'Project Closing Date is required before Progress can be set to 100%.' });
+  }
   try {
     const info = db.prepare(`
       INSERT INTO projects (code,name,client,budget,spent_pct,end_date,stage,progress,color,priority,
@@ -339,6 +342,12 @@ router.put('/api/projects/:id', (req, res) => {
   }
 
   const nextProgress = has('progress') ? safeNum(body.progress, existing.progress) : safeNum(existing.progress, 0);
+  const nextProjectClosingDate = has('project_closing_date')
+    ? body.project_closing_date
+    : existing.project_closing_date;
+  if (nextProgress >= 100 && !String(nextProjectClosingDate || '').trim()) {
+    return res.status(400).json({ error: 'Project Closing Date is required before Progress can be set to 100%.' });
+  }
   const completingProject = has('progress') && nextProgress >= 100;
 
   if (has('end_date') || has('fiscal_period') || completingProject) {

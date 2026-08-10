@@ -52,12 +52,19 @@ function getFiscalYearExportChartImage() {
     const sourceCanvas = chart?.canvas || document.getElementById('capacityAllocationExecutiveChart');
     if (!sourceCanvas || typeof sourceCanvas.toDataURL !== 'function') return null;
 
-    const sourceWidth = Math.max(1, Number(sourceCanvas.width) || Number(sourceCanvas.clientWidth) || 1);
-    const sourceHeight = Math.max(1, Number(sourceCanvas.height) || Number(sourceCanvas.clientHeight) || 1);
+    // The in-app chart itself uses a high-DPI backing canvas. Size the report
+    // PNG from the CSS display dimensions rather than multiplying that already
+    // dense backing store again; this keeps the DOCX image sharp without
+    // creating an unnecessarily huge raster.
+    const backingWidth = Math.max(1, Number(sourceCanvas.width) || 1);
+    const backingHeight = Math.max(1, Number(sourceCanvas.height) || 1);
+    const chartPixelRatio = Math.max(1, Number(chart?.currentDevicePixelRatio) || Number(window.devicePixelRatio) || 1);
+    const displayWidth = Math.max(1, Number(sourceCanvas.clientWidth) || (backingWidth / chartPixelRatio));
+    const displayHeight = Math.max(1, Number(sourceCanvas.clientHeight) || (backingHeight / chartPixelRatio));
     const scale = 4;
     const targetCanvas = document.createElement('canvas');
-    targetCanvas.width = Math.round(sourceWidth * scale);
-    targetCanvas.height = Math.round(sourceHeight * scale);
+    targetCanvas.width = Math.round(displayWidth * scale);
+    targetCanvas.height = Math.round(displayHeight * scale);
 
     const context = targetCanvas.getContext('2d');
     if (!context) {
@@ -615,7 +622,7 @@ function fiscalYearReportDocxCapacityBlocks(library, capacity) {
       children: [new library.ImageRun({
         type: 'png',
         data: chartBytes,
-        transformation: { width: 380, height: 250 },
+        transformation: { width: 350, height: 250 },
         altText: {
           title: 'Capacity Allocation',
           description: 'Capacity Allocation doughnut chart for the selected fiscal year.',

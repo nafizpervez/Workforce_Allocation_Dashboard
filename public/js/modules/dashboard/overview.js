@@ -1,24 +1,12 @@
 /* Workforce Allocation Dashboard — dashboard/overview.js */
 
 /* ================================================================ STATS */
-function isFixedSeniorManagerResource(employee) {
-  const employeeCode = String(employee?.employee_code || '').trim().toUpperCase();
-  if (employeeCode === 'SGESA00026') return true;
-
-  const normalizedName = String(employee?.name || '')
-    .toLowerCase()
-    .replace(/[^a-z0-9]+/g, '');
-
-  return normalizedName === 'debashishbhowmick';
-}
-
 const ACTIVE_RESOURCE_DESIGNATION_GROUPS = Object.freeze([
   Object.freeze({
     label: 'SM',
     fullLabel: 'Senior Manager',
     tooltipLabel: 'Senior Manager',
     aliases: Object.freeze(['Senior Manager']),
-    fixedSeniorManager: true,
     isManager: true,
   }),
   Object.freeze({
@@ -55,9 +43,6 @@ const ACTIVE_RESOURCE_DESIGNATION_GROUPS = Object.freeze([
 
 function resourceMatchesActiveDesignationGroup(employee, group) {
   if (!employee || !group) return false;
-  if (group.fixedSeniorManager) return isFixedSeniorManagerResource(employee);
-  if (isFixedSeniorManagerResource(employee)) return false;
-
   const employeeDesignation = normalizeDesignationAliasKey(
     canonicalResourceDesignationLabel(employee.designation),
   );
@@ -70,18 +55,16 @@ function getActiveResourceDesignationSummary() {
   const employees = S.employees || [];
 
   return ACTIVE_RESOURCE_DESIGNATION_GROUPS.map(group => {
-    const matchingResources = group.fixedSeniorManager
-      ? employees.filter(isFixedSeniorManagerResource)
-      : employees.filter(employee => (
-        Number(employee?.active ?? 1) !== 0 &&
-        resourceMatchesActiveDesignationGroup(employee, group)
-      ));
+    const matchingResources = employees.filter(employee => (
+      Number(employee?.active ?? 1) !== 0 &&
+      resourceMatchesActiveDesignationGroup(employee, group)
+    ));
 
     return {
       label: group.label,
       fullLabel: group.fullLabel,
       tooltipLabel: group.tooltipLabel,
-      count: group.fixedSeniorManager ? Math.min(matchingResources.length, 1) : matchingResources.length,
+      count: matchingResources.length,
       isManager: Boolean(group.isManager),
     };
   });
@@ -120,11 +103,6 @@ function getDesignationModalResources(designation) {
     normalizeDesignationKey(item.fullLabel) === normalizedDesignation
   ));
 
-  if (group?.fixedSeniorManager) {
-    const fixedSeniorManager = (S.employees || []).find(isFixedSeniorManagerResource);
-    return fixedSeniorManager ? [fixedSeniorManager] : [];
-  }
-
   if (group) {
     return (S.employees || []).filter(employee => (
       Number(employee?.active ?? 1) !== 0 &&
@@ -143,7 +121,7 @@ function openDesignationResourceModal(designation) {
   const rows = resources.map((employee, index) => {
     const utilization = Number(S.employeeUtil?.get(Number(employee.id)) || 0);
     const displayedDesignation = canonicalResourceDesignationLabel(
-      isFixedSeniorManagerResource(employee) ? 'Senior Manager' : (employee.designation || designation),
+      employee.designation || designation,
     );
 
     return `
@@ -222,8 +200,8 @@ function renderRunningProjectSummary(s) {
     },
     {
       key: 'revenue',
-      label: 'PS Revenue',
-      value: formatRunningProjectRevenue(s.running_project_revenue),
+      label: 'Revenue Realization',
+      value: formatRunningProjectRevenue(s.revenue_realization),
       tone: 'revenue',
     },
   ];
@@ -1116,7 +1094,7 @@ function renderStats(s) {
       action: 'view-projects',
       bg: 'bg-purple-100',
       fg: 'text-purple-600',
-      formula: 'Closed Won Professional Services projects dated March 1, 2025 or later and below 100% progress. Delayed means the Close Won Date passed six months ago. PS Revenue is the direct sum of Product Amount (USD) for those running projects.',
+      formula: `Running Projects remain Closed Won Professional Services projects dated March 1, 2025 or later and below 100% progress. Delayed means the Closed Won Date passed six months ago. Revenue Realization is the Product Amount (USD) of Professional Services projects with Project Closing Date inside ${fiscalYearDisplayLabel(S.matrixFiscalYear)} and Progress exactly 100%.`,
       icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
       detailType: 'running-project-breakdown',
     },

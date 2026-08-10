@@ -4,6 +4,7 @@ const {
   RUNNING_CLOSED_WON_START_DATE,
   calcDealStatuses,
   isProfessionalServiceRunningProject,
+  isPSOnlyProject,
 } = require('../services/project-analytics');
 const { fiscalMonths, getFiscalYear } = require('../services/fiscal');
 const { safeNum } = require('../services/values');
@@ -254,6 +255,36 @@ function isRunningProjectInFiscalYear(project, fiscalYear) {
   return getFiscalYear(project?.end_date) === startYear;
 }
 
+function isDateInFiscalYear(dateText, fiscalYear) {
+  if (fiscalYear === null || fiscalYear === undefined || fiscalYear === '') return false;
+  const startYear = Math.trunc(Number(fiscalYear));
+  if (!Number.isInteger(startYear)) return false;
+  return getFiscalYear(dateText) === startYear;
+}
+
+function getProfessionalServicesRevenueSummary(projects, fiscalYear) {
+  const psProjects = (projects || []).filter(project => isPSOnlyProject(project));
+  const realizationProjects = psProjects.filter(project => (
+    Number(project?.progress) === 100 &&
+    isDateInFiscalYear(project?.project_closing_date, fiscalYear)
+  ));
+  const securedProjects = psProjects.filter(project => (
+    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
+    isDateInFiscalYear(project?.end_date, fiscalYear)
+  ));
+  const sumProductAmount = rows => +rows.reduce(
+    (total, project) => total + (Number(project?.product_amount) || 0),
+    0,
+  ).toFixed(2);
+
+  return {
+    realizationProjects,
+    securedProjects,
+    realizationRevenue: sumProductAmount(realizationProjects),
+    securedRevenue: sumProductAmount(securedProjects),
+  };
+}
+
 function getClosedWonProjectSummary(projects, now = new Date(), fiscalYear = null) {
   const runningProjects = projects.filter(project => (
     isProfessionalServiceRunningProject(project) &&
@@ -359,6 +390,7 @@ router.get('/api/dashboard/stats', (req, res) => {
       progress,
       probability,
       end_date,
+      project_closing_date,
       product_name,
       product_family,
       product_amount,
@@ -368,6 +400,7 @@ router.get('/api/dashboard/stats', (req, res) => {
   `).all().filter(project => !isUnavailableProjectName(project.name));
   const activeProjects = analyticProjects.filter(project => project.stage !== 'Closed Won').length;
   const runningProjectSummary = getClosedWonProjectSummary(analyticProjects, new Date(), fy);
+  const professionalServicesRevenueSummary = getProfessionalServicesRevenueSummary(analyticProjects, fy);
   const openProjectProbabilitySummary = getOpenProjectProbabilitySummary(
     analyticProjects,
   );
@@ -418,6 +451,10 @@ router.get('/api/dashboard/stats', (req, res) => {
     delayed_running_projects: runningProjectSummary.delayedProjects,
     on_time_running_projects: runningProjectSummary.onTimeProjects,
     running_project_revenue: runningProjectSummary.revenue,
+    revenue_realization: professionalServicesRevenueSummary.realizationRevenue,
+    revenue_secured: professionalServicesRevenueSummary.securedRevenue,
+    revenue_realization_projects: professionalServicesRevenueSummary.realizationProjects.length,
+    revenue_secured_projects: professionalServicesRevenueSummary.securedProjects.length,
     avg_utilization: +avgUtil.toFixed(1),
     avg_intrasourcing_utilization: fiscalAllocationSummary.intrasourcing,
     billable_utilization: fiscalAllocationSummary.billable,
@@ -595,7 +632,7 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
     return res.status(400).json({ error: 'Unknown running-project metric.' });
   }
 
-  const rows = db.prepare(`
+  const metricRows = db.prepare(`
     SELECT
       id,
       code,
@@ -604,6 +641,7 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
       client,
       end_date,
       project_closing_date,
+      fiscal_period,
       product_name,
       product_family,
       progress,
@@ -614,28 +652,56 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
       color,
       opportunity_owner
     FROM projects
-  `).all().filter(project => (
-    !isUnavailableProjectName(project.name) &&
-    isProfessionalServiceRunningProject(project) &&
-    isRunningProjectInFiscalYear(project, fiscalYear)
-  ));
+  `).all().filter(project => !isUnavailableProjectName(project.name));
 
-  const filtered = rows.filter(project => (
-    metric === 'revenue' || getRunningProjectTiming(project) === metric
-  ));
   const allProjects = db.prepare(`
     SELECT id, code, name, account_name, client, end_date,
            fiscal_period, stage, product_name
     FROM projects
   `).all();
   const statusMap = calcDealStatuses(allProjects);
+  const enrich = project => ({
+    ...project,
+    closing_date: project.project_closing_date || null,
+    deal_status: statusMap[project.id] || 'NEW LOGO',
+  });
 
+  if (metric === 'revenue') {
+    const summary = getProfessionalServicesRevenueSummary(metricRows, fiscalYear);
+    const realizationProjects = summary.realizationProjects
+      .map(enrich)
+      .sort((a, b) => (
+        String(b.project_closing_date || '').localeCompare(String(a.project_closing_date || '')) ||
+        Number(b.id) - Number(a.id)
+      ));
+    const securedProjects = summary.securedProjects
+      .map(enrich)
+      .sort((a, b) => (
+        String(b.end_date || '').localeCompare(String(a.end_date || '')) ||
+        Number(b.id) - Number(a.id)
+      ));
+
+    return res.json({
+      metric,
+      fiscal_year: fiscalYear,
+      revenue_realization_count: realizationProjects.length,
+      revenue_realization_total: summary.realizationRevenue,
+      revenue_realization_projects: realizationProjects,
+      revenue_secured_count: securedProjects.length,
+      revenue_secured_total: summary.securedRevenue,
+      revenue_secured_projects: securedProjects,
+    });
+  }
+
+  const rows = metricRows.filter(project => (
+    isProfessionalServiceRunningProject(project) &&
+    isRunningProjectInFiscalYear(project, fiscalYear)
+  ));
+  const filtered = rows.filter(project => getRunningProjectTiming(project) === metric);
   const projects = filtered
     .map(project => ({
-      ...project,
-      closing_date: project.project_closing_date || null,
+      ...enrich(project),
       timing: getRunningProjectTiming(project),
-      deal_status: statusMap[project.id] || 'NEW LOGO',
     }))
     .sort((a, b) => (
       String(a.project_closing_date || a.end_date || '9999-12-31')
