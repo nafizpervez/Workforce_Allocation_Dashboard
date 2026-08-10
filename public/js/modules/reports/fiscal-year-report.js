@@ -1,98 +1,51 @@
 /* Workforce Allocation Dashboard — reports/fiscal-year-report.js
-   Exports the selected Matrix fiscal year as a four-page A4 portrait DOCX.
+   Generates the selected Matrix fiscal year as a five-page A4 portrait DOCX.
 
-   Important: report text, KPI values and tables are created as native Word
-   content. The Capacity Allocation donut is the only graphical element that is
-   embedded as an image; dashboard cards/pages are never captured as screenshots. */
+   The Word layout intentionally follows the supplied management-report reference:
+     Page 1: report title, four KPI tiles, Capacity Allocation donut + legend, planning basis
+     Page 2: 1. Executive Summary + 2. Available Capacity Summary
+     Page 3: 3. Maximum Revenue Capacity + 4. Revenue Targets
+     Page 4: 5. Capacity Value Allocation
+     Page 5: 6. Pipeline Target Summary
 
-const FISCAL_YEAR_EXPORT_CARD_KEYS = Object.freeze({
-  capacityAllocation: 'capacity-allocation',
-  executiveMatrix: 'executive-metrics',
-  availableCapacity: 'available-capacity-summary',
-  maximumRevenue: 'maximum-revenue-capacity',
-  revenueTargets: 'revenue-targets',
-  capacityValue: 'capacity-value-allocation',
-  pipelineTarget: 'pipeline-target-summary',
-});
+   All report values remain live dashboard values for the currently selected Matrix FY.
+   Native Word text/tables are used throughout; only the donut is embedded as a PNG. */
 
 const FISCAL_YEAR_DOCX = Object.freeze({
-  pageWidth: 11906, // A4 portrait, twentieths of a point
+  pageWidth: 11906, // A4 portrait, twips
   pageHeight: 16838,
-  // Word's Normal margin preset: 1 inch (1,440 twips) on every side.
+  // Use Word's Normal margin preset: exactly 1 inch on every side.
   marginLeft: 1440,
   marginRight: 1440,
   marginTop: 1440,
   marginBottom: 1440,
+  headerDistance: 288,
+  footerDistance: 346,
   usableWidth: 9026,
-  blue: '1F4E78',
-  darkBlue: '173A67',
-  accentBlue: '2563EB',
-  lightBlue: 'EAF2FB',
-  lighterBlue: 'F5F8FC',
-  border: 'C8D5E5',
-  text: '0F172A',
-  muted: '64748B',
-  greenFill: 'ECFDF3',
-  greenText: '047857',
-  redFill: 'FFF1F2',
-  redText: 'BE123C',
+  tableRowHeightScale: 1.5,
+  navy: '173B63',
+  blue: '2F75B5',
+  text: '26313C',
+  muted: '66758A',
+  light: 'EEF3F9',
+  total: 'D6E4F3',
+  grid: 'C9D7E6',
+  white: 'FFFFFF',
+  lineBlue: '2E75B6',
 });
 
-function getFiscalYearExportCard(cardKey) {
-  return document.querySelector(`.dc[data-card-key="${cardKey}"]`);
-}
-
-function getFiscalYearExportChartImage() {
-  try {
-    // Export the donut as a high-resolution PNG while keeping the dashboard's
-    // surrounding report content as native Word text/tables.  Word displays the
-    // chart at roughly 3.7 inches wide, so a 4x raster copy provides ample pixel
-    // density for screen viewing, zooming and normal office printing.
-    const chart = S.charts?.capacityAllocationExecutive;
-    const sourceCanvas = chart?.canvas || document.getElementById('capacityAllocationExecutiveChart');
-    if (!sourceCanvas || typeof sourceCanvas.toDataURL !== 'function') return null;
-
-    // The in-app chart itself uses a high-DPI backing canvas. Size the report
-    // PNG from the CSS display dimensions rather than multiplying that already
-    // dense backing store again; this keeps the DOCX image sharp without
-    // creating an unnecessarily huge raster.
-    const backingWidth = Math.max(1, Number(sourceCanvas.width) || 1);
-    const backingHeight = Math.max(1, Number(sourceCanvas.height) || 1);
-    const chartPixelRatio = Math.max(1, Number(chart?.currentDevicePixelRatio) || Number(window.devicePixelRatio) || 1);
-    const displayWidth = Math.max(1, Number(sourceCanvas.clientWidth) || (backingWidth / chartPixelRatio));
-    const displayHeight = Math.max(1, Number(sourceCanvas.clientHeight) || (backingHeight / chartPixelRatio));
-    const scale = 4;
-    const targetCanvas = document.createElement('canvas');
-    targetCanvas.width = Math.round(displayWidth * scale);
-    targetCanvas.height = Math.round(displayHeight * scale);
-
-    const context = targetCanvas.getContext('2d');
-    if (!context) {
-      const fallback = sourceCanvas.toDataURL('image/png', 1);
-      return fallback?.startsWith('data:image/') ? fallback : null;
-    }
-
-    context.imageSmoothingEnabled = true;
-    context.imageSmoothingQuality = 'high';
-    context.clearRect(0, 0, targetCanvas.width, targetCanvas.height);
-    context.drawImage(sourceCanvas, 0, 0, targetCanvas.width, targetCanvas.height);
-
-    const dataUrl = targetCanvas.toDataURL('image/png', 1);
-    return dataUrl?.startsWith('data:image/') ? dataUrl : null;
-  } catch (error) {
-    console.warn('Unable to capture the Capacity Allocation chart for the fiscal-year report.', error);
-    return null;
-  }
-}
-
-function fiscalYearReportXmlEscape(value) {
-  return String(value ?? '')
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;')
-    .replace(/'/g, '&apos;');
-}
+const FISCAL_YEAR_CAPACITY_LEGEND_COLOR_MAP = Object.freeze({
+  'Intra-Sourcing': '377CB7',
+  'Local PS': '2A9D8F',
+  'Training Delivery': 'F2B51D',
+  'Training Support': 'F2B51D',
+  'Pre Sale': '8061A6',
+  'Pre-Sale': '8061A6',
+  'Presales': '8061A6',
+  'Skill Development': '6EAF45',
+  'General Admin': '5A9BD5',
+  'General Administration': '5A9BD5',
+});
 
 function fiscalYearReportNormalizeText(value) {
   return String(value ?? '')
@@ -102,26 +55,6 @@ function fiscalYearReportNormalizeText(value) {
     .replace(/ *\n */g, '\n')
     .replace(/\n{3,}/g, '\n\n')
     .trim();
-}
-
-function fiscalYearReportElementText(element) {
-  if (!element) return '';
-  const parts = [];
-  element.childNodes.forEach(node => {
-    if (node.nodeType === Node.TEXT_NODE) {
-      const text = fiscalYearReportNormalizeText(node.nodeValue);
-      if (text) parts.push(text);
-      return;
-    }
-    if (node.nodeType !== Node.ELEMENT_NODE) return;
-    if (node.tagName === 'BR') {
-      parts.push('\n');
-      return;
-    }
-    const text = fiscalYearReportElementText(node);
-    if (text) parts.push(text);
-  });
-  return fiscalYearReportNormalizeText(parts.join(' '));
 }
 
 function fiscalYearReportColorToHex(value, fallback = '94A3B8') {
@@ -143,188 +76,277 @@ function fiscalYearReportColorToHex(value, fallback = '94A3B8') {
   return fallback;
 }
 
-
-const FISCAL_YEAR_CAPACITY_LEGEND_COLOR_MAP = Object.freeze({
-  'Intra-Sourcing': '377CB7',
-  'Local PS': '2A9D8F',
-  'Training Delivery': 'F2B51D',
-  'Pre Sale': '8061A6',
-  'Pre-Sale': '8061A6',
-  'Presales': '8061A6',
-  'Skill Development': '6EAF45',
-  'General Admin': '5A9BD5',
-});
-
 function fiscalYearReportLegendColor(label, fallback) {
   const normalized = String(label || '').trim().toLowerCase().replace(/[^a-z0-9]+/g, ' ');
   const exact = Object.entries(FISCAL_YEAR_CAPACITY_LEGEND_COLOR_MAP)
     .find(([key]) => key.toLowerCase().replace(/[^a-z0-9]+/g, ' ') === normalized);
-  if (exact) return exact[1];
-  return fallback || '94A3B8';
+  return exact ? exact[1] : (fallback || '94A3B8');
 }
 
-function fiscalYearReportExtractColumnPercentages(table, columnCount) {
-  const cols = [...(table?.querySelectorAll(':scope > colgroup > col') || [])];
-  if (cols.length === columnCount) {
-    const values = cols.map(col => Number.parseFloat(col.style.width || col.getAttribute('width') || ''));
-    const total = values.reduce((sum, value) => sum + (Number.isFinite(value) ? value : 0), 0);
-    if (total > 0 && values.every(value => Number.isFinite(value) && value > 0)) {
-      return values.map(value => value / total);
-    }
+function fiscalYearReportCompactFyLabel(value) {
+  const text = String(value || '').trim();
+  const fourDigit = text.match(/(20\d{2})/);
+  if (fourDigit) return `FY${String(fourDigit[1]).slice(-2)}`;
+  const twoDigit = text.match(/FY\s*(\d{2})/i);
+  return twoDigit ? `FY${twoDigit[1]}` : text.replace(/\s+/g, '');
+}
+
+function fiscalYearReportNextFyLabel(value) {
+  const text = String(value || '').trim();
+  const fourDigit = text.match(/(20\d{2})/);
+  if (fourDigit) return `FY${String(Number(fourDigit[1]) + 1).slice(-2)}`;
+  const twoDigit = text.match(/FY\s*(\d{2})/i);
+  if (twoDigit) return `FY${String((Number(twoDigit[1]) + 1) % 100).padStart(2, '0')}`;
+  return 'Next FY';
+}
+
+function fiscalYearReportCurrency(value, decimals = true) {
+  const amount = Number(value) || 0;
+  const absoluteText = Math.abs(amount).toLocaleString('en-US', {
+    minimumFractionDigits: decimals ? 2 : 0,
+    maximumFractionDigits: decimals ? 2 : 0,
+  });
+  return amount < 0 ? `-USD ${absoluteText}` : `USD ${absoluteText}`;
+}
+
+function fiscalYearReportCompactCurrency(value) {
+  const amount = Number(value) || 0;
+  const absolute = Math.abs(amount);
+  if (absolute >= 1000000) {
+    const v = absolute / 1000000;
+    return `${amount < 0 ? '-' : ''}USD ${v.toLocaleString('en-US', { maximumFractionDigits: v >= 10 ? 0 : 1 })}M`;
   }
-
-  if (columnCount === 2) return [0.58, 0.42];
-  if (columnCount === 3) return [0.5, 0.27, 0.23];
-  if (columnCount === 4) return [0.34, 0.15, 0.27, 0.24];
-  if (columnCount === 5) return [0.28, 0.2, 0.18, 0.17, 0.17];
-  if (columnCount === 6) return [0.27, 0.09, 0.13, 0.16, 0.16, 0.19];
-  if (columnCount === 8) return [0.22, 0.1, 0.08, 0.15, 0.11, 0.11, 0.11, 0.12];
-  return Array.from({ length: columnCount }, () => 1 / Math.max(1, columnCount));
-}
-
-function fiscalYearReportExtractTable(table) {
-  const rows = [...table.querySelectorAll(':scope > thead > tr, :scope > tbody > tr, :scope > tfoot > tr')]
-    .map(row => ({
-      isHeader: row.parentElement?.tagName === 'THEAD',
-      isTotal: row.classList.contains('capacity-executive-table__total'),
-      isHeadline: row.classList.contains('capacity-executive-table__row--headline'),
-      cells: [...row.cells].map(cell => ({
-        text: fiscalYearReportElementText(cell),
-        align: cell.classList.contains('capacity-executive-table__center')
-          ? 'center'
-          : (cell.cellIndex === 0 ? 'left' : 'right'),
-      })),
-    }))
-    .filter(row => row.cells.length);
-
-  const columnCount = rows.reduce((max, row) => Math.max(max, row.cells.length), 0);
-  return {
-    type: 'table',
-    rows,
-    columnCount,
-    columnFractions: fiscalYearReportExtractColumnPercentages(table, columnCount),
-  };
-}
-
-function fiscalYearReportExtractCardSections(card) {
-  const root = card.querySelector(':scope > .card-expandable-content') || card;
-  const sections = [];
-
-  function visit(element) {
-    if (!(element instanceof Element)) return;
-
-    if (element.matches('.capacity-financial-strip, .capacity-allocation-visual')) return;
-    if (element.tagName === 'TABLE') {
-      sections.push(fiscalYearReportExtractTable(element));
-      return;
-    }
-    if (element.matches('.capacity-subtable-title')) {
-      const text = fiscalYearReportElementText(element);
-      if (text) sections.push({ type: 'subheading', text });
-      return;
-    }
-    if (element.matches('p.capacity-table-intro, p.capacity-table-footnote')) {
-      const text = fiscalYearReportElementText(element);
-      if (text) sections.push({ type: 'paragraph', text, footnote: element.classList.contains('capacity-table-footnote') });
-      return;
-    }
-    if (element.matches('.capacity-executive-note')) {
-      const items = [...element.querySelectorAll('.capacity-executive-note__item')].map(item => ({
-        label: fiscalYearReportElementText(item.querySelector('.capacity-executive-note__label')),
-        value: fiscalYearReportElementText(item.querySelector('.capacity-executive-note__value')),
-      })).filter(item => item.label || item.value);
-      if (items.length) sections.push({ type: 'notes', items });
-      return;
-    }
-    if (element.matches('.capacity-pipeline-gap')) {
-      sections.push({
-        type: 'gap',
-        label: fiscalYearReportElementText(element.querySelector('span')) || 'Pipeline gap',
-        value: fiscalYearReportElementText(element.querySelector('strong')),
-        positive: element.classList.contains('is-positive'),
-      });
-      return;
-    }
-
-    [...element.children].forEach(visit);
+  if (absolute >= 1000) {
+    const v = absolute / 1000;
+    return `${amount < 0 ? '-' : ''}USD ${v.toLocaleString('en-US', { maximumFractionDigits: v >= 10 ? 0 : 1 })}K`;
   }
-
-  visit(root);
-  return sections;
+  return fiscalYearReportCurrency(amount, false);
 }
 
-function fiscalYearReportExtractCard(cardKey) {
-  const card = getFiscalYearExportCard(cardKey);
-  if (!card) throw new Error('A required capacity-planning card is not available.');
-  return {
-    key: cardKey,
-    title: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__title')) || card.dataset.cardTitle || '',
-    eyebrow: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__eyebrow')),
-    subtitle: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__subtitle')),
-    fiscalYear: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__fy')),
-    sections: fiscalYearReportExtractCardSections(card),
-  };
+function fiscalYearReportDays(value, suffix = '') {
+  const amount = Number(value) || 0;
+  const text = amount.toLocaleString('en-US', {
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
+  });
+  return suffix ? `${text} ${suffix}` : text;
 }
 
-function fiscalYearReportExtractCapacityPage() {
-  const card = getFiscalYearExportCard(FISCAL_YEAR_EXPORT_CARD_KEYS.capacityAllocation);
-  if (!card) throw new Error('Capacity Allocation is still loading.');
+function fiscalYearReportFte(value, suffix = false) {
+  const amount = Number(value) || 0;
+  const text = amount.toLocaleString('en-US', {
+    minimumFractionDigits: 1,
+    maximumFractionDigits: 2,
+  });
+  return suffix ? `${text} FTE` : text;
+}
 
-  const metrics = [...card.querySelectorAll('.capacity-financial-metric')].map(metric => ({
-    value: fiscalYearReportElementText(metric.querySelector('.capacity-financial-metric__value')),
-    label: fiscalYearReportElementText(metric.querySelector('.capacity-financial-metric__label')),
-  }));
+function fiscalYearReportPercent(value) {
+  const amount = Number(value) || 0;
+  return `${amount.toLocaleString('en-US', {
+    minimumFractionDigits: Number.isInteger(amount) ? 0 : 1,
+    maximumFractionDigits: 1,
+  })}%`;
+}
 
-  const legend = [...card.querySelectorAll('.capacity-allocation-legend__item')].map(item => {
-    const label = fiscalYearReportElementText(item.querySelector('.capacity-allocation-legend__label'));
-    const inlineColor = fiscalYearReportColorToHex(item.querySelector('.capacity-allocation-legend__swatch')?.style?.background);
-    return {
-      label,
-      value: fiscalYearReportElementText(item.querySelector('.capacity-allocation-legend__value')),
-      color: fiscalYearReportLegendColor(label, inlineColor),
-    };
+function fiscalYearReportRate(value) {
+  const amount = Number(value);
+  if (!Number.isFinite(amount) || amount <= 0) return '—';
+  return fiscalYearReportCurrency(amount, true);
+}
+
+function fiscalYearReportSafeRatioPercent(value, total) {
+  const numerator = Number(value) || 0;
+  const denominator = Number(total) || 0;
+  return denominator > 0 ? (numerator / denominator) * 100 : 0;
+}
+
+function getFiscalYearExportChartImage() {
+  try {
+    const chart = S.charts?.capacityAllocationExecutive;
+    const sourceCanvas = chart?.canvas || document.getElementById('capacityAllocationExecutiveChart');
+    if (!sourceCanvas || typeof sourceCanvas.toDataURL !== 'function') return null;
+
+    const backingWidth = Math.max(1, Number(sourceCanvas.width) || 1);
+    const backingHeight = Math.max(1, Number(sourceCanvas.height) || 1);
+    const logicalWidth = Math.max(1, Number(chart?.width) || Number(sourceCanvas.clientWidth) || backingWidth);
+    const logicalHeight = Math.max(1, Number(chart?.height) || Number(sourceCanvas.clientHeight) || backingHeight);
+    const scaleX = backingWidth / logicalWidth;
+    const scaleY = backingHeight / logicalHeight;
+
+    // Crop the actual doughnut to a square before placing it in Word. This keeps
+    // the exported chart circular even though the dashboard canvas is a wide,
+    // responsive rectangle.
+    const arc = chart?.getDatasetMeta?.(0)?.data?.[0];
+    const radius = Math.max(1, Number(arc?.outerRadius) || Math.min(logicalWidth, logicalHeight) * 0.42);
+    const centerX = Number(arc?.x) || logicalWidth / 2;
+    const centerY = Number(arc?.y) || logicalHeight / 2;
+    const padding = Math.max(10, Math.min(24, radius * 0.1));
+    const cropSize = Math.min(logicalWidth, logicalHeight, (radius + padding) * 2);
+    const sourceX = Math.max(0, Math.min(logicalWidth - cropSize, centerX - cropSize / 2));
+    const sourceY = Math.max(0, Math.min(logicalHeight - cropSize, centerY - cropSize / 2));
+
+    const outputSize = 1400;
+    const targetCanvas = document.createElement('canvas');
+    targetCanvas.width = outputSize;
+    targetCanvas.height = outputSize;
+    const context = targetCanvas.getContext('2d');
+    if (!context) return sourceCanvas.toDataURL('image/png', 1);
+
+    context.imageSmoothingEnabled = true;
+    context.imageSmoothingQuality = 'high';
+    context.clearRect(0, 0, outputSize, outputSize);
+    context.drawImage(
+      sourceCanvas,
+      sourceX * scaleX,
+      sourceY * scaleY,
+      cropSize * scaleX,
+      cropSize * scaleY,
+      0,
+      0,
+      outputSize,
+      outputSize,
+    );
+
+    const dataUrl = targetCanvas.toDataURL('image/png', 1);
+    return dataUrl?.startsWith('data:image/') ? dataUrl : null;
+  } catch (error) {
+    console.warn('Unable to capture the Capacity Allocation chart for the fiscal-year report.', error);
+    return null;
+  }
+}
+
+function fiscalYearReportBuildPlanningBasis(summary, nonAssignableActiveCount = 0) {
+  const parts = [`Planning basis: ${summary.assignableCount.toLocaleString()} visible delivery resources`];
+  if (nonAssignableActiveCount > 0) {
+    parts.push(`${nonAssignableActiveCount.toLocaleString()} active non-assignable management resource${nonAssignableActiveCount === 1 ? '' : 's'} excluded`);
+  }
+  const partialRows = (summary.availableRows || []).filter(row => String(row.basis || '') !== 'Full Year');
+  if (partialRows.length) {
+    parts.push('available working days reflect configured fiscal-year availability');
+  } else {
+    parts.push('all visible delivery resources use their configured annual workdays');
+  }
+  return `${parts.join('; ')}.`;
+}
+
+function fiscalYearReportBuildRevenueTargets(summary) {
+  const trainingMetric = summary.categoryMetrics?.training || {};
+  const definitions = [
+    { label: 'Intra-Sourcing', target: Number(summary.committedTargets?.intrasourcing) || 0, key: 'intrasourcing', explicit: true },
+    { label: 'Local Professional Services', target: Number(summary.committedTargets?.local) || 0, key: 'local', explicit: true },
+    { label: 'Training Delivery', target: Number(trainingMetric.capacityValue) || 0, key: 'training', explicit: false },
+  ];
+
+  const rows = definitions.map(row => {
+    const metric = summary.categoryMetrics?.[row.key] || {};
+    let rate = 0;
+    if (Number(metric.allocatedMandays) > 0 && Number(metric.capacityValue) > 0) {
+      rate = Number(metric.capacityValue) / Number(metric.allocatedMandays);
+    } else if (summary.availableCapacityDays > 0) {
+      rate = row.key === 'intrasourcing'
+        ? Number(summary.intrasourcingRevenueCapacity) / Number(summary.availableCapacityDays)
+        : Number(summary.localRevenueCapacity) / Number(summary.availableCapacityDays);
+    }
+    const manDays = rate > 0 ? row.target / rate : 0;
+    const fte = summary.defaultAnnualWorkdays > 0 ? manDays / summary.defaultAnnualWorkdays : 0;
+    return { ...row, rate, manDays, fte };
   });
 
   return {
-    title: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__title')) || 'Capacity Allocation',
-    eyebrow: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__eyebrow')),
-    subtitle: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__subtitle')),
-    fiscalYear: fiscalYearReportElementText(card.querySelector('.capacity-executive-card__fy')),
-    metrics,
-    legend,
-    chartImage: getFiscalYearExportChartImage(),
-    chartCaption: fiscalYearReportElementText(card.querySelector('.capacity-allocation-chart-caption')),
+    rows,
+    totalTarget: rows.filter(row => row.explicit).reduce((sum, row) => sum + row.target, 0),
+    totalDays: rows.reduce((sum, row) => sum + row.manDays, 0),
+    totalFte: rows.reduce((sum, row) => sum + row.fte, 0),
+  };
+}
+
+function fiscalYearReportBuildPipelineNotes(summary, fiscalYearLabel) {
+  const localPipelineTarget = Number(summary.committedTargets?.localPipeline) || 0;
+  const multiplier = typeof getCapacityPipelineMultiplier === 'function' ? getCapacityPipelineMultiplier() : 0;
+  const baseRequirement = localPipelineTarget * multiplier;
+  const probableRealizedThisFY = typeof getCapacityProbableRealizedThisFY === 'function' ? getCapacityProbableRealizedThisFY() : 0;
+  const localTargetNextFY = baseRequirement + probableRealizedThisFY;
+  const alreadyWorkingWith = Number(summary.preSalePipeline?.totalAmount) || 0;
+  const buckets = summary.preSalePipeline?.buckets || { secured: 0, bestCase: 0, prospect: 0 };
+
+  return {
+    nextFyLabel: fiscalYearReportNextFyLabel(fiscalYearLabel),
+    localPipelineTarget,
+    multiplier,
+    baseRequirement,
+    probableRealizedThisFY,
+    localTargetNextFY,
+    alreadyWorkingWith,
+    securedMinPercent: Number(summary.preSalePipeline?.securedMinPercent) || 0,
+    bestCaseMinPercent: Number(summary.preSalePipeline?.bestCaseMinPercent) || 0,
+    securedAmount: Number(buckets.secured) || 0,
+    bestCaseAmount: Number(buckets.bestCase) || 0,
+    prospectAmount: Number(buckets.prospect) || 0,
+    pipelineGap: localTargetNextFY - alreadyWorkingWith,
+    securedShare: fiscalYearReportSafeRatioPercent(buckets.secured, alreadyWorkingWith),
+    bestCaseShare: fiscalYearReportSafeRatioPercent(buckets.bestCase, alreadyWorkingWith),
+    prospectShare: fiscalYearReportSafeRatioPercent(buckets.prospect, alreadyWorkingWith),
   };
 }
 
 function collectFiscalYearReportData() {
-  const requiredKeys = Object.values(FISCAL_YEAR_EXPORT_CARD_KEYS);
-  const missingCards = requiredKeys.filter(cardKey => !getFiscalYearExportCard(cardKey));
-  if (missingCards.length) throw new Error('The capacity-planning cards are still loading. Try the export again in a moment.');
+  if (typeof getCapacityExecutiveSummary !== 'function') {
+    throw new Error('Capacity planning data is still loading. Try the export again in a moment.');
+  }
 
-  const fiscalYearLabel = typeof fiscalYearDisplayLabel === 'function'
+  const requiredCardKeys = [
+    'capacity-allocation',
+    'executive-metrics',
+    'available-capacity-summary',
+    'maximum-revenue-capacity',
+    'revenue-targets',
+    'capacity-value-allocation',
+    'pipeline-target-summary',
+  ];
+  const missing = requiredCardKeys.filter(key => !document.querySelector(`.dc[data-card-key="${key}"]`));
+  if (missing.length) throw new Error('The capacity-planning cards are still loading. Try the export again in a moment.');
+
+  const summary = getCapacityExecutiveSummary();
+  const activeTeam = typeof getCapacityExecutiveActiveTeam === 'function'
+    ? getCapacityExecutiveActiveTeam()
+    : { allActive: [], assignable: [] };
+  const nonAssignableActiveCount = Math.max(0, (activeTeam.allActive?.length || 0) - (activeTeam.assignable?.length || 0));
+  const fiscalYearLabel = summary.fiscalYearLabel || (typeof fiscalYearDisplayLabel === 'function'
     ? fiscalYearDisplayLabel(S.matrixFiscalYear)
-    : `FY ${Number(S.matrixFiscalYear) + 1}`;
-  const fiscalYearRange = typeof fiscalYearRangeLabel === 'function'
-    ? fiscalYearRangeLabel(S.matrixFiscalYear)
-    : '';
+    : `FY ${Number(S.matrixFiscalYear) + 1}`);
+  const compactFyLabel = fiscalYearReportCompactFyLabel(fiscalYearLabel);
+  const chartImage = getFiscalYearExportChartImage();
+  const capacityValueRows = typeof getCapacityValueRows === 'function'
+    ? getCapacityValueRows(summary)
+    : { billable: [], functionRows: [] };
+  const revenueTargets = fiscalYearReportBuildRevenueTargets(summary);
+  const pipelineNotes = fiscalYearReportBuildPipelineNotes(summary, fiscalYearLabel);
+
+  const legend = (summary.allocationMix?.rows || []).map(row => ({
+    label: fiscalYearReportNormalizeText(row.label),
+    value: fiscalYearReportPercent(row.share),
+    color: fiscalYearReportLegendColor(row.label, fiscalYearReportColorToHex(row.color)),
+  }));
 
   return {
+    summary,
     fiscalYearLabel,
-    fiscalYearRange,
-    capacity: fiscalYearReportExtractCapacityPage(),
-    executive: fiscalYearReportExtractCard(FISCAL_YEAR_EXPORT_CARD_KEYS.executiveMatrix),
-    available: fiscalYearReportExtractCard(FISCAL_YEAR_EXPORT_CARD_KEYS.availableCapacity),
-    maximumRevenue: fiscalYearReportExtractCard(FISCAL_YEAR_EXPORT_CARD_KEYS.maximumRevenue),
-    revenueTargets: fiscalYearReportExtractCard(FISCAL_YEAR_EXPORT_CARD_KEYS.revenueTargets),
-    capacityValue: fiscalYearReportExtractCard(FISCAL_YEAR_EXPORT_CARD_KEYS.capacityValue),
-    pipelineTarget: fiscalYearReportExtractCard(FISCAL_YEAR_EXPORT_CARD_KEYS.pipelineTarget),
+    compactFyLabel,
+    chartImage,
+    chartCaption: `Capacity allocation ${compactFyLabel.replace(/^FY/, 'FY ')}`,
+    planningBasis: fiscalYearReportBuildPlanningBasis(summary, nonAssignableActiveCount),
+    nonAssignableActiveCount,
+    legend,
+    revenueTargets,
+    capacityValueRows,
+    pipelineNotes,
   };
 }
 
 function fiscalYearReportDocxLibrary() {
   const library = typeof window !== 'undefined' ? window.docx : null;
-  if (!library?.Document || !library?.Packer || !library?.Paragraph || !library?.Table) {
+  if (!library?.Document || !library?.Packer || !library?.Paragraph || !library?.Table || !library?.Footer) {
     throw new Error('The Word report generator library is unavailable. Refresh the page and try again.');
   }
   return library;
@@ -336,46 +358,76 @@ function fiscalYearReportDocxAlignment(library, value) {
   return library.AlignmentType.LEFT;
 }
 
-function fiscalYearReportDocxRuns(library, text, options = {}) {
-  const value = String(text ?? '');
-  const lines = value.split('\n');
-  return lines.map((line, index) => new library.TextRun({
-    text: line,
+function fiscalYearReportDocxScaleWidths(widths, targetWidth = FISCAL_YEAR_DOCX.usableWidth) {
+  const source = (widths || []).map(value => Math.max(1, Number(value) || 1));
+  const sourceTotal = source.reduce((sum, value) => sum + value, 0) || 1;
+  const target = Math.max(1, Math.round(Number(targetWidth) || FISCAL_YEAR_DOCX.usableWidth));
+  let used = 0;
+  return source.map((value, index) => {
+    if (index === source.length - 1) return Math.max(1, target - used);
+    const scaled = Math.max(1, Math.round((value / sourceTotal) * target));
+    used += scaled;
+    return scaled;
+  });
+}
+
+function fiscalYearReportDocxScaledRowMargin(value) {
+  const base = Math.max(0, Number(value) || 0);
+  return Math.round(base * FISCAL_YEAR_DOCX.tableRowHeightScale);
+}
+
+function fiscalYearReportDocxRun(library, text, options = {}) {
+  return new library.TextRun({
+    text: String(text ?? ''),
     bold: Boolean(options.bold),
     italics: Boolean(options.italic),
     color: options.color || FISCAL_YEAR_DOCX.text,
-    size: options.size || 18,
-    font: options.font || 'Arial',
+    size: options.size || 20,
+    font: 'Arial',
+    break: options.break,
+  });
+}
+
+function fiscalYearReportDocxRuns(library, text, options = {}) {
+  return String(text ?? '').split('\n').map((line, index) => fiscalYearReportDocxRun(library, line, {
+    ...options,
     break: index ? 1 : undefined,
   }));
 }
 
 function fiscalYearReportDocxParagraph(library, text, options = {}) {
-  return new library.Paragraph({
+  const config = {
     children: fiscalYearReportDocxRuns(library, text, options),
     alignment: fiscalYearReportDocxAlignment(library, options.align || 'left'),
     spacing: {
       before: Number(options.before) || 0,
       after: options.after === undefined ? 80 : Number(options.after) || 0,
-      line: Number(options.line) || 264,
+      line: Number(options.line) || 276,
     },
     keepNext: Boolean(options.keepNext),
-  });
+  };
+  if (options.indent) config.indent = options.indent;
+  if (options.border) config.border = options.border;
+  return new library.Paragraph(config);
 }
 
-function fiscalYearReportDocxSpacer(library, after = 70) {
+function fiscalYearReportDocxSpacer(library, after = 80) {
   return new library.Paragraph({
-    children: [new library.TextRun({ text: '', size: 4, font: 'Arial' })],
+    children: [fiscalYearReportDocxRun(library, '', { size: 4 })],
     spacing: { before: 0, after, line: 80 },
   });
 }
 
-function fiscalYearReportDocxBorder(library, color = FISCAL_YEAR_DOCX.border) {
-  return { style: library.BorderStyle.SINGLE, size: 1, color };
+function fiscalYearReportDocxBorder(library, color = FISCAL_YEAR_DOCX.grid, size = 1) {
+  return { style: library.BorderStyle.SINGLE, size, color };
 }
 
-function fiscalYearReportDocxTableBorders(library, color = FISCAL_YEAR_DOCX.border) {
-  const edge = fiscalYearReportDocxBorder(library, color);
+function fiscalYearReportDocxNoBorder(library) {
+  return { style: library.BorderStyle.NONE, size: 0, color: FISCAL_YEAR_DOCX.white };
+}
+
+function fiscalYearReportDocxBorders(library, color = FISCAL_YEAR_DOCX.grid) {
+  const edge = fiscalYearReportDocxBorder(library, color, 1);
   return {
     top: edge,
     bottom: edge,
@@ -386,24 +438,29 @@ function fiscalYearReportDocxTableBorders(library, color = FISCAL_YEAR_DOCX.bord
   };
 }
 
-function fiscalYearReportDocxCell(library, paragraphs, options = {}) {
+function fiscalYearReportDocxCell(library, children, options = {}) {
+  const noBorder = fiscalYearReportDocxNoBorder(library);
+  const sourceBorders = options.borders;
+  const cellBorders = sourceBorders ? {
+    top: sourceBorders.top || noBorder,
+    bottom: sourceBorders.bottom || noBorder,
+    left: sourceBorders.left || noBorder,
+    right: sourceBorders.right || noBorder,
+  } : (options.borderless ? {
+    top: noBorder, bottom: noBorder, left: noBorder, right: noBorder,
+  } : undefined);
   return new library.TableCell({
-    children: Array.isArray(paragraphs) ? paragraphs : [paragraphs],
+    children: Array.isArray(children) ? children : [children],
     width: options.width ? { size: Math.max(1, Math.round(options.width)), type: library.WidthType.DXA } : undefined,
     shading: options.fill ? { fill: options.fill, color: 'auto', type: library.ShadingType.CLEAR } : undefined,
     verticalAlign: options.vertical || library.VerticalAlign.CENTER,
     margins: {
-      top: options.marginTop ?? 55,
+      top: fiscalYearReportDocxScaledRowMargin(options.marginTop ?? 55),
       right: options.marginRight ?? 70,
-      bottom: options.marginBottom ?? 55,
+      bottom: fiscalYearReportDocxScaledRowMargin(options.marginBottom ?? 55),
       left: options.marginLeft ?? 70,
     },
-    borders: options.borders ? {
-      top: options.borders.top,
-      bottom: options.borders.bottom,
-      left: options.borders.left,
-      right: options.borders.right,
-    } : undefined,
+    borders: cellBorders,
   });
 }
 
@@ -413,113 +470,173 @@ function fiscalYearReportDocxCellParagraph(library, text, options = {}) {
     bold: Boolean(options.bold),
     italic: Boolean(options.italic),
     color: options.color || FISCAL_YEAR_DOCX.text,
-    size: options.size || 16,
+    size: options.size || 18,
     after: 0,
-    line: options.line || 240,
+    line: options.line || 248,
   });
 }
 
-function fiscalYearReportDocxColumnWidths(tableData, width) {
-  const columnCount = tableData.columnCount || tableData.rows?.[0]?.cells?.length || 1;
-  const fractions = tableData.columnFractions?.length === columnCount
-    ? tableData.columnFractions
-    : Array.from({ length: columnCount }, () => 1 / columnCount);
-  const widths = fractions.map(fraction => Math.max(300, Math.round(width * fraction)));
-  const total = widths.reduce((sum, value) => sum + value, 0);
-  widths[widths.length - 1] += width - total;
-  return widths;
+function fiscalYearReportDocxSectionHeading(library, text, options = {}) {
+  return fiscalYearReportDocxParagraph(library, text, {
+    bold: true,
+    color: FISCAL_YEAR_DOCX.navy,
+    size: options.size || 31,
+    before: options.before || 0,
+    after: options.after ?? 80,
+    line: 252,
+    keepNext: true,
+    border: {
+      bottom: {
+        style: library.BorderStyle.SINGLE,
+        color: 'D8E5F1',
+        size: 5,
+        space: 5,
+      },
+    },
+  });
 }
 
-function fiscalYearReportDocxTable(library, tableData, options = {}) {
-  const width = options.width || FISCAL_YEAR_DOCX.usableWidth;
-  const columnCount = tableData.columnCount || tableData.rows?.[0]?.cells?.length || 1;
-  const widths = fiscalYearReportDocxColumnWidths(tableData, width);
-  const fontSize = options.fontSize || (columnCount >= 8 ? 13 : columnCount >= 6 ? 14 : columnCount >= 5 ? 15 : 16);
-  const borders = fiscalYearReportDocxTableBorders(library, options.borderColor || FISCAL_YEAR_DOCX.border);
+function fiscalYearReportDocxSubheading(library, text, options = {}) {
+  return fiscalYearReportDocxParagraph(library, text, {
+    bold: true,
+    color: options.color || FISCAL_YEAR_DOCX.blue,
+    size: options.size || 24,
+    before: options.before || 0,
+    after: options.after ?? 35,
+    line: 252,
+    keepNext: true,
+  });
+}
 
-  const rows = (tableData.rows || []).map(row => {
-    const fill = row.customFill || (row.isHeader ? FISCAL_YEAR_DOCX.blue : (row.isTotal ? FISCAL_YEAR_DOCX.lightBlue : undefined));
-    const color = row.customColor || (row.isHeader ? 'FFFFFF' : FISCAL_YEAR_DOCX.text);
-    const bold = row.isHeader || row.isTotal || row.isHeadline;
-    return new library.TableRow({
+function fiscalYearReportDocxBullet(library, runs) {
+  const children = [fiscalYearReportDocxRun(library, '•  ', { size: 20, color: '000000' }), ...(runs || [])];
+  return new library.Paragraph({
+    children,
+    spacing: { before: 0, after: 72, line: 272 },
+    indent: { left: 270, hanging: 150 },
+  });
+}
+
+function fiscalYearReportDocxTable(library, headers, rows, widths, options = {}) {
+  const scaledWidths = fiscalYearReportDocxScaleWidths(widths);
+  const tableWidth = scaledWidths.reduce((sum, value) => sum + value, 0);
+  const borders = fiscalYearReportDocxBorders(library, options.borderColor || FISCAL_YEAR_DOCX.grid);
+  const outputRows = [];
+
+  if (headers?.length) {
+    outputRows.push(new library.TableRow({
       cantSplit: true,
-      children: Array.from({ length: columnCount }, (_, index) => {
-        const cell = row.cells[index] || { text: '', align: index === 0 ? 'left' : 'right' };
+      tableHeader: true,
+      children: headers.map((header, index) => fiscalYearReportDocxCell(
+        library,
+        fiscalYearReportDocxCellParagraph(library, header, {
+          align: 'center', bold: true, color: FISCAL_YEAR_DOCX.white, size: options.headerSize || 16,
+        }),
+        {
+          width: scaledWidths[index], fill: FISCAL_YEAR_DOCX.navy, borders,
+          marginTop: Math.max(62, options.headerMargin ?? 45),
+          marginBottom: Math.max(62, options.headerMargin ?? 45),
+        },
+      )),
+    }));
+  }
+
+  (rows || []).forEach((row, rowIndex) => {
+    const rowData = Array.isArray(row) ? { cells: row } : row;
+    const isTotal = Boolean(rowData.total);
+    const fill = rowData.fill || (isTotal
+      ? FISCAL_YEAR_DOCX.total
+      : (options.alternate && rowIndex % 2 === 1 ? FISCAL_YEAR_DOCX.light : FISCAL_YEAR_DOCX.white));
+    const totalTop = isTotal ? fiscalYearReportDocxBorder(library, FISCAL_YEAR_DOCX.lineBlue, 8) : null;
+
+    outputRows.push(new library.TableRow({
+      cantSplit: true,
+      children: scaledWidths.map((width, cellIndex) => {
+        const rawCell = rowData.cells?.[cellIndex];
+        const cell = rawCell && typeof rawCell === 'object' && !Array.isArray(rawCell)
+          ? rawCell
+          : { text: rawCell ?? '' };
+        const cellBorders = totalTop ? {
+          top: totalTop,
+          bottom: fiscalYearReportDocxBorder(library, FISCAL_YEAR_DOCX.grid, 1),
+          left: fiscalYearReportDocxBorder(library, FISCAL_YEAR_DOCX.grid, 1),
+          right: fiscalYearReportDocxBorder(library, FISCAL_YEAR_DOCX.grid, 1),
+        } : borders;
         return fiscalYearReportDocxCell(library,
           fiscalYearReportDocxCellParagraph(library, cell.text, {
-            align: row.isHeader ? 'center' : cell.align,
-            bold,
-            color,
-            size: row.isHeader ? Math.max(13, fontSize) : fontSize,
+            align: cell.align || (cellIndex === 0 ? 'left' : 'right'),
+            bold: Boolean(cell.bold || isTotal),
+            italic: Boolean(cell.italic),
+            color: cell.color || FISCAL_YEAR_DOCX.text,
+            size: cell.size || options.fontSize || 18,
+            line: cell.line || 248,
           }),
-          { width: widths[index], fill, borders });
+          {
+            width,
+            fill: cell.fill || fill,
+            borders: cellBorders,
+            marginTop: Math.max(66, cell.marginTop ?? options.cellMargin ?? 45),
+            marginBottom: Math.max(66, cell.marginBottom ?? options.cellMargin ?? 45),
+          });
       }),
-    });
+    }));
   });
 
   return new library.Table({
-    rows,
-    width: { size: width, type: library.WidthType.DXA },
-    columnWidths: widths,
-    borders,
+    width: { size: tableWidth, type: library.WidthType.DXA },
+    columnWidths: scaledWidths,
+    rows: outputRows,
     layout: library.TableLayoutType.FIXED,
+    borders,
   });
 }
 
-function fiscalYearReportDocxCardBlocks(library, card, options = {}) {
-  const compact = Boolean(options.compact);
-  const blocks = [];
-  if (card.eyebrow) blocks.push(fiscalYearReportDocxParagraph(library, card.eyebrow.toUpperCase(), {
-    bold: true, color: FISCAL_YEAR_DOCX.accentBlue, size: 12, after: 20, keepNext: true,
-  }));
-  blocks.push(fiscalYearReportDocxParagraph(library, card.title, {
-    bold: true, color: FISCAL_YEAR_DOCX.text, size: compact ? 19 : 20, after: 20, keepNext: true,
-  }));
-  if (card.subtitle) blocks.push(fiscalYearReportDocxParagraph(library, card.subtitle, {
-    color: FISCAL_YEAR_DOCX.muted, size: compact ? 13 : 14, after: 75,
-  }));
-
-  (card.sections || []).forEach((section, index) => {
-    if (section.type === 'subheading') {
-      blocks.push(fiscalYearReportDocxParagraph(library, section.text, {
-        bold: true, color: FISCAL_YEAR_DOCX.darkBlue, size: 14, before: index ? 65 : 0, after: 35, keepNext: true,
-      }));
-    } else if (section.type === 'paragraph') {
-      blocks.push(fiscalYearReportDocxParagraph(library, section.text, {
-        color: section.footnote ? FISCAL_YEAR_DOCX.muted : FISCAL_YEAR_DOCX.text,
-        italic: section.footnote,
-        size: section.footnote ? 12 : 13,
-        after: 55,
-      }));
-    } else if (section.type === 'table') {
-      blocks.push(fiscalYearReportDocxTable(library, section));
-      blocks.push(fiscalYearReportDocxSpacer(library, 40));
-    } else if (section.type === 'notes') {
-      blocks.push(fiscalYearReportDocxTable(library, {
-        columnCount: 2,
-        columnFractions: [0.28, 0.72],
-        rows: section.items.map(item => ({
-          cells: [{ text: item.label, align: 'left' }, { text: item.value, align: 'left' }],
-        })),
-      }, { fontSize: 13 }));
-      blocks.push(fiscalYearReportDocxSpacer(library, 25));
-    } else if (section.type === 'gap') {
-      const fill = section.positive ? FISCAL_YEAR_DOCX.greenFill : FISCAL_YEAR_DOCX.redFill;
-      const color = section.positive ? FISCAL_YEAR_DOCX.greenText : FISCAL_YEAR_DOCX.redText;
-      blocks.push(fiscalYearReportDocxTable(library, {
-        columnCount: 2,
-        columnFractions: [0.55, 0.45],
-        rows: [{
-          isTotal: true,
-          customFill: fill,
-          customColor: color,
-          cells: [{ text: section.label, align: 'left' }, { text: section.value, align: 'right' }],
-        }],
-      }, { fontSize: 16 }));
-    }
+function fiscalYearReportDocxKpiTable(library, reportData) {
+  const summary = reportData.summary;
+  const metrics = [
+    {
+      value: fiscalYearReportCurrency(summary.localRevenueCapacity, false),
+      label: 'Maximum Revenue Capacity\n(Based on local rates)',
+    },
+    {
+      value: fiscalYearReportCurrency(summary.intrasourcingRevenueCapacity, false),
+      label: 'Maximum Revenue Capacity\n(Based on Intra rates)',
+    },
+    {
+      value: fiscalYearReportDays(summary.availableCapacityDays, 'days'),
+      label: 'Available capacity',
+    },
+    {
+      value: fiscalYearReportCompactCurrency(summary.committedTarget),
+      label: 'Committed target',
+    },
+  ];
+  const widths = fiscalYearReportDocxScaleWidths([2436, 2436, 2437, 2437]);
+  const borders = fiscalYearReportDocxBorders(library, 'D4E1EF');
+  return new library.Table({
+    width: { size: FISCAL_YEAR_DOCX.usableWidth, type: library.WidthType.DXA },
+    columnWidths: widths,
+    layout: library.TableLayoutType.FIXED,
+    borders,
+    rows: [
+      new library.TableRow({
+        cantSplit: true,
+        children: metrics.map((metric, index) => fiscalYearReportDocxCell(library,
+          fiscalYearReportDocxCellParagraph(library, metric.value, {
+            align: 'center', bold: true, size: 31, color: index === 1 ? '000000' : FISCAL_YEAR_DOCX.navy,
+          }),
+          { width: widths[index], fill: FISCAL_YEAR_DOCX.light, borders, marginTop: 105, marginBottom: 90 })),
+      }),
+      new library.TableRow({
+        cantSplit: true,
+        children: metrics.map((metric, index) => fiscalYearReportDocxCell(library,
+          fiscalYearReportDocxCellParagraph(library, metric.label, {
+            align: 'center', size: 15, color: FISCAL_YEAR_DOCX.muted, line: 205,
+          }),
+          { width: widths[index], fill: FISCAL_YEAR_DOCX.light, borders, marginTop: 75, marginBottom: 90 })),
+      }),
+    ],
   });
-
-  return blocks;
 }
 
 function fiscalYearReportDataUrlBytes(dataUrl) {
@@ -531,168 +648,452 @@ function fiscalYearReportDataUrlBytes(dataUrl) {
   return bytes;
 }
 
-function fiscalYearReportDocxMetricsTable(library, metrics) {
-  const values = [...(metrics || [])];
-  while (values.length < 4) values.push({ value: '—', label: '' });
-  const cellWidth = Math.floor(FISCAL_YEAR_DOCX.usableWidth / 2);
-  const borders = fiscalYearReportDocxTableBorders(library);
-  const metricCell = metric => fiscalYearReportDocxCell(library, [
-    fiscalYearReportDocxParagraph(library, metric.value, {
-      bold: true, size: 22, color: FISCAL_YEAR_DOCX.darkBlue, align: 'center', after: 18,
-    }),
-    fiscalYearReportDocxParagraph(library, metric.label, {
-      size: 11, color: FISCAL_YEAR_DOCX.muted, align: 'center', after: 0,
-    }),
-  ], {
-    width: cellWidth,
-    fill: FISCAL_YEAR_DOCX.lighterBlue,
-    borders,
-    marginTop: 90,
-    marginBottom: 90,
-  });
-
-  return new library.Table({
-    width: { size: FISCAL_YEAR_DOCX.usableWidth, type: library.WidthType.DXA },
-    columnWidths: [cellWidth, FISCAL_YEAR_DOCX.usableWidth - cellWidth],
-    borders,
-    layout: library.TableLayoutType.FIXED,
-    rows: [
-      new library.TableRow({ cantSplit: true, children: [metricCell(values[0]), metricCell(values[1])] }),
-      new library.TableRow({ cantSplit: true, children: [metricCell(values[2]), metricCell(values[3])] }),
-    ],
-  });
-}
-
-function fiscalYearReportDocxLegendTable(library, legend, options = {}) {
-  const width = options.width || FISCAL_YEAR_DOCX.usableWidth;
-  const fontSize = options.fontSize || 13;
-  const swatchWidth = options.swatchWidth || 280;
-  const valueWidth = options.valueWidth || Math.max(900, Math.round(width * 0.26));
-  const labelWidth = Math.max(1200, width - swatchWidth - valueWidth);
+function fiscalYearReportDocxLegend(library, legend) {
   const rows = (legend || []).map(item => new library.TableRow({
     cantSplit: true,
     children: [
-      fiscalYearReportDocxCell(library, fiscalYearReportDocxCellParagraph(library, ' ', { size: 7 }), {
-        width: swatchWidth,
+      fiscalYearReportDocxCell(library, fiscalYearReportDocxCellParagraph(library, ' ', { size: 6 }), {
+        width: 260,
         fill: item.color,
-        marginTop: 45,
-        marginRight: 35,
-        marginBottom: 45,
-        marginLeft: 35,
+        borderless: true,
+        marginTop: 30,
+        marginRight: 20,
+        marginBottom: 30,
+        marginLeft: 20,
       }),
-      fiscalYearReportDocxCell(library, fiscalYearReportDocxCellParagraph(library, item.label, { size: fontSize }), {
-        width: labelWidth,
+      fiscalYearReportDocxCell(library, fiscalYearReportDocxCellParagraph(library, item.label, { size: 17 }), {
+        width: 1780,
+        borderless: true,
+        marginTop: 24,
+        marginBottom: 24,
       }),
-      fiscalYearReportDocxCell(library, fiscalYearReportDocxCellParagraph(library, item.value, { size: fontSize, bold: true, align: 'right' }), {
-        width: valueWidth,
+      fiscalYearReportDocxCell(library, fiscalYearReportDocxCellParagraph(library, item.value, {
+        size: 17, bold: true, align: 'right',
+      }), {
+        width: 700,
+        borderless: true,
+        marginTop: 24,
+        marginBottom: 24,
       }),
     ],
   }));
+
   return new library.Table({
-    width: { size: width, type: library.WidthType.DXA },
-    columnWidths: [swatchWidth, labelWidth, valueWidth],
+    width: { size: 2740, type: library.WidthType.DXA },
+    columnWidths: [260, 1780, 700],
     rows,
     layout: library.TableLayoutType.FIXED,
+    borders: {
+      top: fiscalYearReportDocxNoBorder(library),
+      bottom: fiscalYearReportDocxNoBorder(library),
+      left: fiscalYearReportDocxNoBorder(library),
+      right: fiscalYearReportDocxNoBorder(library),
+      insideHorizontal: fiscalYearReportDocxNoBorder(library),
+      insideVertical: fiscalYearReportDocxNoBorder(library),
+    },
   });
 }
 
-function fiscalYearReportDocxCapacityBlocks(library, capacity) {
-  const blocks = [];
-  if (capacity.eyebrow) blocks.push(fiscalYearReportDocxParagraph(library, capacity.eyebrow.toUpperCase(), {
-    bold: true, color: FISCAL_YEAR_DOCX.accentBlue, size: 12, after: 20, keepNext: true,
-  }));
-  blocks.push(fiscalYearReportDocxParagraph(library, capacity.title, {
-    bold: true, size: 21, color: FISCAL_YEAR_DOCX.text, after: 20, keepNext: true,
-  }));
-  if (capacity.subtitle) blocks.push(fiscalYearReportDocxParagraph(library, capacity.subtitle, {
-    size: 13, color: FISCAL_YEAR_DOCX.muted, after: 70,
-  }));
-  blocks.push(fiscalYearReportDocxMetricsTable(library, capacity.metrics));
-  blocks.push(fiscalYearReportDocxSpacer(library, 75));
-
-  const chartBytes = fiscalYearReportDataUrlBytes(capacity.chartImage);
-  const leftWidth = 5200;
-  const rightWidth = FISCAL_YEAR_DOCX.usableWidth - leftWidth;
-  const chartCellChildren = [];
-
+function fiscalYearReportDocxPageOne(library, reportData) {
+  const chartBytes = fiscalYearReportDataUrlBytes(reportData.chartImage);
+  const chartChildren = [];
   if (chartBytes) {
-    chartCellChildren.push(new library.Paragraph({
+    chartChildren.push(new library.Paragraph({
       alignment: library.AlignmentType.CENTER,
-      spacing: { before: 0, after: capacity.chartCaption ? 20 : 0 },
+      spacing: { before: 0, after: 0 },
       children: [new library.ImageRun({
         type: 'png',
         data: chartBytes,
-        transformation: { width: 350, height: 250 },
+        // Square display dimensions intentionally preserve the doughnut circle.
+        transformation: { width: 315, height: 315 },
         altText: {
           title: 'Capacity Allocation',
-          description: 'Capacity Allocation doughnut chart for the selected fiscal year.',
+          description: 'Capacity Allocation doughnut chart for the selected Matrix fiscal year.',
           name: 'Capacity Allocation chart',
         },
       })],
     }));
   } else {
-    chartCellChildren.push(fiscalYearReportDocxParagraph(library, 'Capacity Allocation chart unavailable.', {
-      size: 14, color: FISCAL_YEAR_DOCX.muted, align: 'center', after: 15,
+    chartChildren.push(fiscalYearReportDocxParagraph(library, 'Capacity Allocation chart unavailable.', {
+      size: 18, color: FISCAL_YEAR_DOCX.muted, align: 'center', after: 0,
     }));
   }
 
-  if (capacity.chartCaption) chartCellChildren.push(fiscalYearReportDocxParagraph(library, capacity.chartCaption, {
-    italic: true, size: 11, color: FISCAL_YEAR_DOCX.muted, align: 'center', after: 0,
-  }));
-
-  const sideBySide = new library.Table({
+  const chartWidths = fiscalYearReportDocxScaleWidths([6500, 3246]);
+  const chartLayout = new library.Table({
     width: { size: FISCAL_YEAR_DOCX.usableWidth, type: library.WidthType.DXA },
-    columnWidths: [leftWidth, rightWidth],
+    columnWidths: chartWidths,
     layout: library.TableLayoutType.FIXED,
     borders: {
-      top: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      bottom: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      left: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      right: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      insideHorizontal: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-      insideVertical: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
+      top: fiscalYearReportDocxNoBorder(library), bottom: fiscalYearReportDocxNoBorder(library),
+      left: fiscalYearReportDocxNoBorder(library), right: fiscalYearReportDocxNoBorder(library),
+      insideHorizontal: fiscalYearReportDocxNoBorder(library), insideVertical: fiscalYearReportDocxNoBorder(library),
     },
     rows: [new library.TableRow({
       cantSplit: true,
       children: [
-        fiscalYearReportDocxCell(library, chartCellChildren, {
-          width: leftWidth,
-          marginTop: 20,
-          marginRight: 80,
-          marginBottom: 20,
-          marginLeft: 20,
-          borders: {
-            top: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            bottom: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            left: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            right: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-          },
+        fiscalYearReportDocxCell(library, chartChildren, {
+          width: chartWidths[0], borderless: true, marginTop: 0, marginRight: 60, marginBottom: 0, marginLeft: 0,
         }),
-        fiscalYearReportDocxCell(library, fiscalYearReportDocxLegendTable(library, capacity.legend, {
-          width: rightWidth - 100,
-          fontSize: 13,
-          swatchWidth: 260,
-          valueWidth: 980,
-        }), {
-          width: rightWidth,
-          marginTop: 30,
-          marginRight: 10,
-          marginBottom: 20,
-          marginLeft: 10,
-          vertical: library.VerticalAlign.CENTER,
-          borders: {
-            top: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            bottom: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            left: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-            right: { style: library.BorderStyle.NONE, size: 0, color: 'FFFFFF' },
-          },
+        fiscalYearReportDocxCell(library, fiscalYearReportDocxLegend(library, reportData.legend), {
+          width: chartWidths[1], borderless: true, vertical: library.VerticalAlign.CENTER,
+          marginTop: 0, marginRight: 0, marginBottom: 0, marginLeft: 110,
         }),
       ],
     })],
   });
 
-  blocks.push(sideBySide);
-  return blocks;
+  return [
+    fiscalYearReportDocxParagraph(library, `${reportData.compactFyLabel} Professional Services`, {
+      bold: true, color: FISCAL_YEAR_DOCX.navy, size: 46, after: 0, line: 225,
+    }),
+    fiscalYearReportDocxParagraph(library, 'Capacity & Revenue Forecast', {
+      bold: true, color: FISCAL_YEAR_DOCX.navy, size: 46, after: 30, line: 225,
+    }),
+    fiscalYearReportDocxParagraph(library, 'Final management planning report | Fiscal year: April to March', {
+      color: FISCAL_YEAR_DOCX.muted, size: 21, after: 470, line: 260,
+    }),
+    fiscalYearReportDocxKpiTable(library, reportData),
+    fiscalYearReportDocxSpacer(library, 520),
+    chartLayout,
+    fiscalYearReportDocxParagraph(library, reportData.chartCaption, {
+      bold: true, italic: true, color: FISCAL_YEAR_DOCX.navy, size: 17, align: 'center', before: 80, after: 530,
+    }),
+    fiscalYearReportDocxParagraph(library, reportData.planningBasis, {
+      color: FISCAL_YEAR_DOCX.muted, size: 21, after: 0, line: 285,
+    }),
+  ];
+}
+
+function fiscalYearReportDocxExecutiveRows(reportData) {
+  const summary = reportData.summary;
+  const metrics = summary.executiveMetrics || {};
+  const combinedMetric = (percentage, fte) => `${fiscalYearReportPercent(percentage)} - ${fiscalYearReportFte(fte, true)}`;
+  const teamLabel = reportData.nonAssignableActiveCount > 0
+    ? `${summary.allActiveCount.toLocaleString()} (Including Manager)`
+    : summary.allActiveCount.toLocaleString();
+
+  return [
+    { cells: [{ text: 'Revenue Generating Capacity', bold: true }, { text: combinedMetric(metrics.revenueGeneratingShare, metrics.revenueGeneratingFte), bold: true }] },
+    { cells: [{ text: 'Revenue Enabling Capacity', bold: true }, { text: combinedMetric(metrics.revenueEnablingShare, metrics.revenueEnablingFte), bold: true }] },
+    { cells: [{ text: 'Investment & Overhead', bold: true }, { text: combinedMetric(metrics.investmentOverheadShare, metrics.investmentOverheadFte), bold: true }] },
+    { cells: ['Total Team Size', teamLabel] },
+    { cells: ['Available Capacity', `${summary.assignableCount.toLocaleString()} FTE`] },
+    { cells: ['Annual Capacity', fiscalYearReportDays(summary.availableCapacityDays, 'person-days')] },
+    { cells: ['Equivalent Capacity', `${fiscalYearReportFte(summary.equivalentCapacity)} man-years (assuming ${fiscalYearReportDays(summary.defaultAnnualWorkdays)} working days/year)`] },
+    { cells: ['Maximum Revenue Generating Capacity', fiscalYearReportCurrency(summary.maximumRevenueCapacity, true)] },
+    { cells: ['Intra-Sourcing Revenue Target', fiscalYearReportCurrency(summary.committedTargets?.intrasourcing, true)] },
+    { cells: ['Local PS Revenue Target', fiscalYearReportCurrency(summary.committedTargets?.local, true)] },
+    { total: true, cells: ['Total Committed Revenue Target', fiscalYearReportCurrency(summary.committedTarget, true)] },
+  ];
+}
+
+function fiscalYearReportDocxPageTwo(library, reportData) {
+  const summary = reportData.summary;
+  const operatingBullets = [
+    [fiscalYearReportDocxRun(library, 'Deliver ', { size: 20 }), fiscalYearReportDocxRun(library, `${fiscalYearReportCompactCurrency(summary.committedTargets?.intrasourcing)} Intra-Sourcing revenue`, { size: 20, bold: true })],
+    [fiscalYearReportDocxRun(library, 'Deliver ', { size: 20 }), fiscalYearReportDocxRun(library, `${fiscalYearReportCompactCurrency(summary.committedTargets?.local)} Local PS revenue`, { size: 20, bold: true })],
+    [fiscalYearReportDocxRun(library, 'Support additional Training revenue opportunities', { size: 20 })],
+    [fiscalYearReportDocxRun(library, 'Maintain strong presales support for future pipeline generation', { size: 20 })],
+    [fiscalYearReportDocxRun(library, 'Continue investing in capability development while maintaining operational governance', { size: 20 })],
+  ];
+
+  const excludedPhrase = reportData.nonAssignableActiveCount > 0 ? ' (excluding non-assignable management capacity)' : '';
+  const intro = `The Professional Services organization consists of ${summary.assignableCount.toLocaleString()} delivery resources${excludedPhrase} supporting Intra-Sourcing, Local Professional Services (PS), Training Delivery, Presales, Skill Development, and General Administration activities.`;
+
+  const availableRows = (summary.availableRows || []).map(row => ({
+    cells: [
+      row.displayGroup,
+      { text: Number(row.fte).toLocaleString('en-US'), align: 'right' },
+      { text: row.basis, align: 'center' },
+      fiscalYearReportDays(row.days),
+    ],
+  }));
+  availableRows.push({
+    total: true,
+    cells: [
+      'Total Available Capacity',
+      summary.assignableCount.toLocaleString('en-US'),
+      '',
+      fiscalYearReportDays(summary.availableCapacityDays, 'Days'),
+    ],
+  });
+
+  return [
+    fiscalYearReportDocxSectionHeading(library, '1. Executive Summary'),
+    fiscalYearReportDocxParagraph(library, intro, { size: 20, after: 165, line: 268 }),
+    fiscalYearReportDocxSubheading(library, `The ${reportData.compactFyLabel} operating model is designed to:`, { size: 23, after: 40 }),
+    ...operatingBullets.map(runs => fiscalYearReportDocxBullet(library, runs)),
+    fiscalYearReportDocxSubheading(library, 'Executive Metrics', { size: 22, before: 80, after: 35 }),
+    fiscalYearReportDocxTable(library,
+      ['Metric', 'Value'],
+      fiscalYearReportDocxExecutiveRows(reportData),
+      [6380, 3366],
+      { alternate: true, headerSize: 17, fontSize: 19, cellMargin: 47 }),
+    fiscalYearReportDocxSpacer(library, 105),
+    fiscalYearReportDocxSectionHeading(library, '2. Available Capacity Summary', { size: 31, after: 35 }),
+    fiscalYearReportDocxTable(library,
+      ['Resource Category', 'FTE', 'Availability Basis', 'Available Working Days'],
+      availableRows,
+      [3200, 1300, 2900, 2346],
+      { alternate: true, headerSize: 16, fontSize: 18, cellMargin: 42 }),
+  ];
+}
+
+function fiscalYearReportDocxMaximumRevenueRows(reportData) {
+  const summary = reportData.summary;
+  const rows = (summary.availableRows || []).map(row => ({
+    cells: [
+      row.displayGroup,
+      Number(row.fte).toLocaleString('en-US'),
+      fiscalYearReportDays(row.days),
+      fiscalYearReportRate(row.avgIntraDailyRate),
+      fiscalYearReportRate(row.avgLocalDailyRate),
+      fiscalYearReportCurrency(row.maxCapacity, true),
+    ],
+  }));
+  rows.push({
+    total: true,
+    cells: [
+      'Annual Revenue Capacity',
+      summary.assignableCount.toLocaleString('en-US'),
+      fiscalYearReportDays(summary.availableCapacityDays),
+      '',
+      '',
+      fiscalYearReportCurrency(summary.maximumRevenueCapacity, true),
+    ],
+  });
+  return rows;
+}
+
+function fiscalYearReportDocxRevenueGroupRows(reportData) {
+  const summary = reportData.summary;
+  const rows = (summary.revenueGroupRows || []).map(row => ({
+    cells: [
+      row.group,
+      fiscalYearReportFte(row.fte),
+      fiscalYearReportCurrency(row.intrasourcingCapacity, true),
+      fiscalYearReportCurrency(row.localCapacity, true),
+      fiscalYearReportPercent(row.contribution),
+    ],
+  }));
+  rows.push({
+    total: true,
+    cells: [
+      'Total Annual Revenue Capacity',
+      fiscalYearReportFte(summary.equivalentCapacity),
+      fiscalYearReportCurrency(summary.intrasourcingRevenueCapacity, true),
+      fiscalYearReportCurrency(summary.localRevenueCapacity, true),
+      '100%',
+    ],
+  });
+  return rows;
+}
+
+function fiscalYearReportDocxRevenueTargetRows(reportData) {
+  const rows = reportData.revenueTargets.rows.map(row => ({
+    cells: [
+      row.label,
+      row.explicit ? fiscalYearReportCurrency(row.target, true) : `Matrix capacity opportunity\n${fiscalYearReportCurrency(row.target, true)}`,
+      fiscalYearReportRate(row.rate),
+      fiscalYearReportDays(row.manDays),
+      fiscalYearReportFte(row.fte),
+    ],
+  }));
+  rows.push({
+    total: true,
+    cells: [
+      'Total Revenue Target',
+      fiscalYearReportCurrency(reportData.revenueTargets.totalTarget, true),
+      '',
+      fiscalYearReportDays(reportData.revenueTargets.totalDays),
+      `${fiscalYearReportFte(reportData.revenueTargets.totalFte)} FTE`,
+    ],
+  });
+  return rows;
+}
+
+function fiscalYearReportDocxPageThree(library, reportData) {
+  return [
+    fiscalYearReportDocxSectionHeading(library, '3. Maximum Revenue Capacity', { after: 35 }),
+    fiscalYearReportDocxTable(library,
+      ['Resource Category', 'FTE', 'Available\nWorking Days', 'Rate/Day Intra\n(USD)', 'Rate/Day Local\n(USD)', 'Maximum Revenue\nCapacity (USD)'],
+      fiscalYearReportDocxMaximumRevenueRows(reportData),
+      [2470, 660, 1350, 1480, 1480, 2306],
+      { alternate: true, headerSize: 14, fontSize: 16, cellMargin: 38, headerMargin: 35 }),
+    fiscalYearReportDocxSubheading(library, 'Revenue Capacity by Resource Group', { size: 22, before: 90, after: 35 }),
+    fiscalYearReportDocxTable(library,
+      ['Resource Group', 'FTE', 'Revenue Capacity\nIntra-Sourcing', 'Revenue Capacity\nLocal', 'Contribution'],
+      fiscalYearReportDocxRevenueGroupRows(reportData),
+      [2500, 1050, 2350, 2300, 1546],
+      { alternate: true, headerSize: 14, fontSize: 17, cellMargin: 40, headerMargin: 35 }),
+    fiscalYearReportDocxSpacer(library, 100),
+    fiscalYearReportDocxSectionHeading(library, '4. Revenue Targets', { after: 35 }),
+    fiscalYearReportDocxTable(library,
+      ['Revenue Stream', 'Target', 'Avg. Rate\n(USD/Day)', 'Man Days', 'FTE'],
+      fiscalYearReportDocxRevenueTargetRows(reportData),
+      [2900, 2400, 1750, 1450, 1246],
+      { alternate: true, headerSize: 15, fontSize: 17, cellMargin: 40, headerMargin: 35 }),
+  ];
+}
+
+function fiscalYearReportDocxCapacityValueRows(reportData) {
+  return (reportData.capacityValueRows.billable || []).map(row => ({
+    cells: [
+      row.label,
+      fiscalYearReportPercent(row.share),
+      fiscalYearReportFte(row.fte),
+      fiscalYearReportCurrency(row.capacityValue, true),
+      row.target > 0 ? fiscalYearReportCurrency(row.target, true) : '—',
+      fiscalYearReportCurrency(row.realized, true),
+      fiscalYearReportCurrency(row.backlog, true),
+      fiscalYearReportCurrency(row.remaining, true),
+    ],
+  }));
+}
+
+function fiscalYearReportDocxFunctionRows(reportData) {
+  const summary = reportData.summary;
+  const rows = (reportData.capacityValueRows.functionRows || []).map(row => ({
+    cells: [
+      row.label,
+      fiscalYearReportPercent(row.share),
+      fiscalYearReportFte(row.fte),
+      fiscalYearReportCurrency(row.opportunity, true),
+      row.target > 0 ? fiscalYearReportCurrency(row.target, true) : '—',
+      row.multiplier ? row.multiplier.toLocaleString('en-US', { maximumFractionDigits: 2 }) : '—',
+      fiscalYearReportCurrency(row.pipeline, true),
+      fiscalYearReportCurrency(row.remaining, true),
+    ],
+  }));
+  rows.push({
+    total: true,
+    cells: [
+      'Total',
+      fiscalYearReportPercent(summary.allocationMix?.totalAllocationPercentage),
+      fiscalYearReportFte(summary.defaultAnnualWorkdays > 0 ? summary.allocationMix.allocatedMandays / summary.defaultAnnualWorkdays : 0),
+      fiscalYearReportCurrency(summary.allocationMix?.capacityValue, true),
+      '', '', '', '',
+    ],
+  });
+  return rows;
+}
+
+function fiscalYearReportDocxPageFour(library, reportData) {
+  const summary = reportData.summary;
+
+  return [
+    fiscalYearReportDocxSectionHeading(library, '5. Capacity Value Allocation', { after: 170 }),
+    fiscalYearReportDocxParagraph(library,
+      `The allocation below applies the approved capacity percentages to the total annual capability value of ${fiscalYearReportCurrency(summary.allocationMix?.capacityValue, true)}.`,
+      { size: 18, after: 190, line: 268 }),
+    fiscalYearReportDocxTable(library,
+      ['Billable Utilization', 'Capacity %', 'FTE', 'Capacity Value\n(USD)', 'Target\n(USD)', 'Realized\n(USD)', 'Backlog\n(USD)', 'Remaining\n(USD)'],
+      fiscalYearReportDocxCapacityValueRows(reportData),
+      [1700, 1050, 820, 1450, 1200, 1200, 1200, 1126],
+      { alternate: true, headerSize: 13, fontSize: 16, cellMargin: 38, headerMargin: 32 }),
+    fiscalYearReportDocxSpacer(library, 20),
+    fiscalYearReportDocxTable(library,
+      ['Function', 'Capacity %', 'FTE', 'Opportunity Value\n(USD)', 'Target\n(USD)', 'Multiplier', 'Pipeline\n(USD)', 'Remaining\n(USD)'],
+      fiscalYearReportDocxFunctionRows(reportData),
+      [1700, 1050, 820, 1450, 1200, 1200, 1200, 1126],
+      { alternate: true, headerSize: 13, fontSize: 16, cellMargin: 38, headerMargin: 32 }),
+  ];
+}
+
+
+function fiscalYearReportDocxPipelineTargetRows(reportData) {
+  const notes = reportData.pipelineNotes;
+  return [
+    { cells: ['Local Pipeline Target', fiscalYearReportCurrency(notes.localPipelineTarget, true)] },
+    { cells: ['Pipeline Multiplier', notes.multiplier.toLocaleString('en-US', { maximumFractionDigits: 2 })] },
+    { cells: ['Base Pipeline Requirement', fiscalYearReportCurrency(notes.baseRequirement, true)] },
+    { cells: ['Probable Realized This FY', fiscalYearReportCurrency(notes.probableRealizedThisFY, true)] },
+    { cells: ['Local Target Next FY', fiscalYearReportCurrency(notes.localTargetNextFY, true)] },
+    { cells: ['Already Working With', fiscalYearReportCurrency(notes.alreadyWorkingWith, true)] },
+    {
+      cells: [
+        'Secured',
+        `≥ ${fiscalYearReportPercent(notes.securedMinPercent)} · ${fiscalYearReportCurrency(notes.securedAmount, true)}`,
+      ],
+    },
+    {
+      cells: [
+        'Best Case',
+        `≥ ${fiscalYearReportPercent(notes.bestCaseMinPercent)} · ${fiscalYearReportCurrency(notes.bestCaseAmount, true)}`,
+      ],
+    },
+    {
+      cells: [
+        'Prospect',
+        `< ${fiscalYearReportPercent(notes.bestCaseMinPercent)} · ${fiscalYearReportCurrency(notes.prospectAmount, true)}`,
+      ],
+    },
+    {
+      total: true,
+      cells: [
+        'Pipeline Gap',
+        fiscalYearReportCurrency(notes.pipelineGap, true),
+      ],
+    },
+  ];
+}
+
+function fiscalYearReportDocxPageFive(library, reportData) {
+  const summary = reportData.summary;
+  return [
+    fiscalYearReportDocxSectionHeading(library, '6. Pipeline Target Summary', { before: 240, after: 150 }),
+    fiscalYearReportDocxParagraph(library,
+      `Forward pipeline planning for ${reportData.compactFyLabel} using the saved Local Pipeline Target, config.js planning values, and current Pre-Sale Product confidence thresholds (Secured ≥ ${fiscalYearReportPercent(summary.preSalePipeline?.securedMinPercent)}, Best Case ≥ ${fiscalYearReportPercent(summary.preSalePipeline?.bestCaseMinPercent)}).`,
+      { size: 18, after: 190, line: 268 }),
+    fiscalYearReportDocxTable(library,
+      ['Planning Metric', 'Value'],
+      fiscalYearReportDocxPipelineTargetRows(reportData),
+      [5650, 4096],
+      { alternate: true, headerSize: 17, fontSize: 19, cellMargin: 70, headerMargin: 68 }),
+  ];
+}
+
+function fiscalYearReportDocxFooter(library, reportData) {
+  const noBorder = fiscalYearReportDocxNoBorder(library);
+  const topBorder = fiscalYearReportDocxBorder(library, 'D8E5F1', 4);
+  const footerWidths = fiscalYearReportDocxScaleWidths([8000, 1746]);
+  const leftCell = new library.TableCell({
+    width: { size: footerWidths[0], type: library.WidthType.DXA },
+    children: [fiscalYearReportDocxCellParagraph(library,
+      `${reportData.compactFyLabel} Professional Services Capacity & Revenue Forecast (Final)`,
+      { size: 13, color: FISCAL_YEAR_DOCX.muted })],
+    margins: { top: 90, right: 20, bottom: 0, left: 0 },
+    borders: { top: topBorder, bottom: noBorder, left: noBorder, right: noBorder },
+  });
+
+  const pageChildren = [
+    fiscalYearReportDocxRun(library, 'Page ', { size: 13, color: FISCAL_YEAR_DOCX.muted }),
+    library.PageNumber.CURRENT,
+  ];
+  const rightCell = new library.TableCell({
+    width: { size: footerWidths[1], type: library.WidthType.DXA },
+    children: [new library.Paragraph({
+      alignment: library.AlignmentType.RIGHT,
+      spacing: { before: 0, after: 0 },
+      children: pageChildren,
+    })],
+    margins: { top: 90, right: 0, bottom: 0, left: 20 },
+    borders: { top: topBorder, bottom: noBorder, left: noBorder, right: noBorder },
+  });
+
+  return new library.Footer({
+    children: [new library.Table({
+      width: { size: FISCAL_YEAR_DOCX.usableWidth, type: library.WidthType.DXA },
+      columnWidths: footerWidths,
+      rows: [new library.TableRow({ children: [leftCell, rightCell] })],
+      layout: library.TableLayoutType.FIXED,
+      borders: {
+        top: noBorder, bottom: noBorder, left: noBorder, right: noBorder,
+        insideHorizontal: noBorder, insideVertical: noBorder,
+      },
+    })],
+  });
 }
 
 function fiscalYearReportDocxPageBreak(library) {
@@ -705,42 +1106,35 @@ function fiscalYearReportDocxPageBreak(library) {
 async function buildFiscalYearReportDocx(reportData) {
   const library = fiscalYearReportDocxLibrary();
   const children = [
-    ...fiscalYearReportDocxCapacityBlocks(library, reportData.capacity),
+    ...fiscalYearReportDocxPageOne(library, reportData),
     fiscalYearReportDocxPageBreak(library),
-    ...fiscalYearReportDocxCardBlocks(library, reportData.executive),
-    fiscalYearReportDocxSpacer(library, 95),
-    ...fiscalYearReportDocxCardBlocks(library, reportData.available),
+    ...fiscalYearReportDocxPageTwo(library, reportData),
     fiscalYearReportDocxPageBreak(library),
-    ...fiscalYearReportDocxCardBlocks(library, reportData.maximumRevenue, { compact: true }),
-    fiscalYearReportDocxSpacer(library, 95),
-    ...fiscalYearReportDocxCardBlocks(library, reportData.revenueTargets, { compact: true }),
+    ...fiscalYearReportDocxPageThree(library, reportData),
     fiscalYearReportDocxPageBreak(library),
-    ...fiscalYearReportDocxCardBlocks(library, reportData.capacityValue, { compact: true }),
-    fiscalYearReportDocxSpacer(library, 95),
-    ...fiscalYearReportDocxCardBlocks(library, reportData.pipelineTarget, { compact: true }),
+    ...fiscalYearReportDocxPageFour(library, reportData),
+    ...fiscalYearReportDocxPageFive(library, reportData),
   ];
 
   const documentFile = new library.Document({
     creator: 'Workforce Allocation Dashboard',
-    title: `Workforce Allocation Fiscal Year Report - ${reportData.fiscalYearLabel}`,
-    description: 'Fiscal year capacity planning report generated by the Workforce Allocation Dashboard.',
+    title: `${reportData.compactFyLabel} Professional Services Capacity & Revenue Forecast`,
+    description: 'Professional Services capacity and revenue forecast generated from the selected Matrix fiscal year.',
     sections: [{
       properties: {
         page: {
-          size: {
-            width: FISCAL_YEAR_DOCX.pageWidth,
-            height: FISCAL_YEAR_DOCX.pageHeight,
-          },
+          size: { width: FISCAL_YEAR_DOCX.pageWidth, height: FISCAL_YEAR_DOCX.pageHeight },
           margin: {
             top: FISCAL_YEAR_DOCX.marginTop,
             right: FISCAL_YEAR_DOCX.marginRight,
             bottom: FISCAL_YEAR_DOCX.marginBottom,
             left: FISCAL_YEAR_DOCX.marginLeft,
-            header: 720,
-            footer: 720,
+            header: FISCAL_YEAR_DOCX.headerDistance,
+            footer: FISCAL_YEAR_DOCX.footerDistance,
           },
         },
       },
+      footers: { default: fiscalYearReportDocxFooter(library, reportData) },
       children,
     }],
   });
@@ -748,12 +1142,12 @@ async function buildFiscalYearReportDocx(reportData) {
   return library.Packer.toBlob(documentFile);
 }
 
-function downloadFiscalYearReportBlob(blob, fiscalYearLabel) {
-  const fileLabel = String(fiscalYearLabel || 'FY').replace(/\s+/g, '_').replace(/[^A-Za-z0-9_-]/g, '');
+function downloadFiscalYearReportBlob(blob, compactFyLabel) {
+  const fileLabel = String(compactFyLabel || 'FY').replace(/\s+/g, '').replace(/[^A-Za-z0-9_-]/g, '');
   const url = URL.createObjectURL(blob);
   const link = document.createElement('a');
   link.href = url;
-  link.download = `Workforce_Allocation_Fiscal_Year_Report_${fileLabel}.docx`;
+  link.download = `${fileLabel}_Professional_Services_Capacity_Revenue_Forecast.docx`;
   document.body.appendChild(link);
   link.click();
   link.remove();
@@ -768,7 +1162,7 @@ async function exportFiscalYearReport() {
   if (document.fonts?.ready) await document.fonts.ready;
   const reportData = collectFiscalYearReportData();
   const docxBlob = await buildFiscalYearReportDocx(reportData);
-  downloadFiscalYearReportBlob(docxBlob, reportData.fiscalYearLabel);
+  downloadFiscalYearReportBlob(docxBlob, reportData.compactFyLabel);
 }
 
 function setFiscalYearExportBusy(button, busy) {

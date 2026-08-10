@@ -766,8 +766,8 @@ function getCapacityAllocationSummary() {
 function formatCapacityDays(value) {
   const amount = Number(value) || 0;
   return `${amount.toLocaleString('en-US', {
-    minimumFractionDigits: amount % 1 === 0 ? 0 : 2,
-    maximumFractionDigits: 2,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   })} days`;
 }
 
@@ -858,7 +858,7 @@ function renderMaximumCapacityDetails(details) {
             <button type="button" onclick="saveEmployeeWorkdays(${row.id}, 'capacityWorkdays-${row.id}', 'maximum')">Save</button>
           </div>
         </td>
-        <td class="px-3 py-3 text-right text-sm text-amber-700">${row.unavailableMonthCount ? `${esc(String(row.unavailableMonthCount))} × ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)}` : '—'}</td>
+        <td class="px-3 py-3 text-right text-sm text-amber-700">${row.unavailableMonthCount ? `${esc(String(row.unavailableMonthCount))} × ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toLocaleString('en-US', { maximumFractionDigits: 0 })}` : '—'}</td>
         <td class="px-3 py-3 text-right"><span class="adjusted-workdays-badge">${esc(formatCapacityDays(row.workdays).replace(' days', ''))}</span></td>
         <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(row.capacityHours.toLocaleString('en-US', { maximumFractionDigits: 2 }))}h</td>
         <td class="px-3 py-3 text-right text-sm text-gray-600">${esc(formatCapacityRate(row.hourlyRate))}</td>
@@ -874,7 +874,7 @@ function renderMaximumCapacityDetails(details) {
       { label: 'Resources Without Rate', value: String(excludedCount) },
     ])}
     <div class="mx-5 mt-4 rounded-lg border border-indigo-100 bg-indigo-50 px-4 py-3 text-xs text-indigo-800">
-      Formula per resource: adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY} hours/day × saved Local / Pre-Sale / Training hourly rate. Each fiscal month containing one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)} days once for that resource, with a zero-day floor. Resources without a supported rate contribute $0.
+      Formula per resource: adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY} hours/day × saved Local / Pre-Sale / Training hourly rate. Each fiscal month containing one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toLocaleString('en-US', { maximumFractionDigits: 0 })} days once for that resource, with a zero-day floor. Resources without a supported rate contribute $0.
     </div>
     <div class="nice-scroll mt-4 overflow-x-auto">
       <table class="w-full min-w-[900px] border-collapse text-left">
@@ -924,11 +924,11 @@ function renderAvailableCapacityDetails(details) {
     ${capacityDetailSummaryCards([
       { label: 'Available Capacity', value: formatCapacityDays(details.availableCapacityDays) },
       { label: 'Active Resources', value: String(details.resourceRows.length) },
-      { label: 'Average Workdays', value: `${averageDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days` },
+      { label: 'Average Workdays', value: `${averageDays.toLocaleString('en-US', { maximumFractionDigits: 0 })} days` },
       { label: 'Hours Per Workday', value: String(CAPACITY_HOURS_PER_WORKDAY) },
     ])}
     <div class="mx-5 mt-4 rounded-lg border border-teal-100 bg-teal-50 px-4 py-3 text-xs text-teal-800">
-      Available Capacity is the sum of adjusted Workdays for active resources. Each affected resource-month with one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toFixed(2)} days once, never below zero. Capacity hours are adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY}.
+      Available Capacity is the sum of adjusted Workdays for active resources. Each affected resource-month with one or more N/A assignments deducts ${N_A_MONTHLY_WORKDAYS_DEDUCTION.toLocaleString('en-US', { maximumFractionDigits: 0 })} days once, never below zero. Capacity hours are adjusted Workdays × ${CAPACITY_HOURS_PER_WORKDAY}.
     </div>
     <div class="nice-scroll mt-4 overflow-x-auto">
       <table class="w-full min-w-[880px] border-collapse text-left">

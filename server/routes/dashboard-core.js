@@ -224,13 +224,24 @@ function isOpenProject(project) {
   return String(project?.stage || '').trim().toLowerCase() !== 'closed won';
 }
 
+function isProfessionalServicesProductFamily(project) {
+  return String(project?.product_family || '')
+    .trim()
+    .replace(/\s+/g, ' ')
+    .toLowerCase() === 'professional services';
+}
+
 function matchesProjectPortfolioMetric(project, metric) {
   if (metric === 'running') return isProfessionalServiceRunningProject(project);
   if (metric === 'weighted') {
     return isOpenProject(project) && Number(project?.probability) >= 75;
   }
   if (metric === 'prospect') {
-    return isOpenProject(project) && Number(project?.probability) < 75;
+    return (
+      isOpenProject(project) &&
+      Number(project?.probability) < 75 &&
+      isProfessionalServicesProductFamily(project)
+    );
   }
   return false;
 }

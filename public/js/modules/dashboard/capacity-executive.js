@@ -62,8 +62,8 @@ function formatExecutiveReportRate(value) {
 function formatExecutiveDays(value, suffix = 'days') {
   const amount = Number(value) || 0;
   const text = amount.toLocaleString('en-US', {
-    minimumFractionDigits: Number.isInteger(amount) ? 0 : 1,
-    maximumFractionDigits: 1,
+    minimumFractionDigits: 0,
+    maximumFractionDigits: 0,
   });
   return suffix ? `${text} ${suffix}` : text;
 }

@@ -216,8 +216,8 @@ const PROJECT_PORTFOLIO_MODAL_CONFIG = Object.freeze({
   }),
   prospect: Object.freeze({
     title: 'Prospects',
-    empty: 'No non-Closed Won projects with probability below 75%',
-    subtitle: 'Stage is not Closed Won · probability < 75%',
+    empty: 'No Professional Services prospects with probability below 75%',
+    subtitle: 'Product Family: Professional Services · Stage is not Closed Won · probability < 75%',
   }),
 });
 
