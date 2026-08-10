@@ -367,11 +367,11 @@ function openProjectsModal() {
     });
   }
 
-  function buildRows(filterStage, searchQ, productFamily, sortMode, fiscalYearEnd) {
+  function getFilteredProjects(filterStage, searchQ, productFamily, fiscalYearEnd) {
     const q = (searchQ || '').toLowerCase().trim();
     const normalizedFamily = normalizeProductFamily(productFamily);
     const fyEnd = Number(fiscalYearEnd);
-    const filtered = projects.filter(project => {
+    return projects.filter(project => {
       if (getProjectFiscalYearEndForModal(project) !== fyEnd) return false;
       if (filterStage && project.stage !== filterStage) return false;
       if (normalizedFamily && normalizeProductFamily(project.product_family) !== normalizedFamily) return false;
@@ -382,7 +382,10 @@ function openProjectsModal() {
         || (project.product_family || '').toLowerCase().includes(q)
         || (project.fiscal_period || '').toLowerCase().includes(q);
     });
+  }
 
+  function buildRows(filterStage, searchQ, productFamily, sortMode, fiscalYearEnd) {
+    const filtered = getFilteredProjects(filterStage, searchQ, productFamily, fiscalYearEnd);
     const sorted = sortProjects(filtered, sortMode);
     const rowsHtml = sorted.map((project, index) => {
       const progress = Math.max(0, Math.min(100, Number(project.progress) || 0));
@@ -463,16 +466,16 @@ function openProjectsModal() {
     const tone = tones[label] || { row: 'bg-slate-50', label: 'text-slate-700', value: 'text-slate-900', amount: 'text-slate-700' };
     return `
       <tr class="${tone.row}">
-        <td class="py-2.5 px-3 ${tone.label} font-semibold">${esc(label)}</td>
-        <td class="py-2.5 px-4 text-right ${tone.value} font-bold">${rows.length.toLocaleString()}</td>
-        <td class="py-2.5 px-3 text-right ${tone.amount} font-semibold mono">${amount}</td>
+        <td class="py-1.5 px-3 ${tone.label} font-semibold">${esc(label)}</td>
+        <td class="py-1.5 px-4 text-right ${tone.value} font-bold">${rows.length.toLocaleString()}</td>
+        <td class="py-1.5 px-3 text-right ${tone.amount} font-semibold mono">${amount}</td>
       </tr>`;
   }
 
-  async function buildFiscalYearSummary(fiscalYearEnd) {
+  async function buildFiscalYearSummary(fiscalYearEnd, filterStage = '', searchQ = '', productFamily = '') {
     const fyEnd = Number(fiscalYearEnd);
     const fyStart = fyEnd - 1;
-    const fiscalProjects = projectsForFiscalYear(fyEnd);
+    const fiscalProjects = getFilteredProjects(filterStage, searchQ, productFamily, fyEnd);
     const assignments = await getAssignmentsForFiscalYearEnd(fyEnd);
     const assignedProjectIds = new Set(
       (assignments || []).map(assignment => Number(assignment?.project_id)).filter(Number.isFinite),
@@ -488,18 +491,17 @@ function openProjectsModal() {
     const closedProjects = fiscalProjects.filter(project => Number(project?.progress) >= 100);
 
     return `
-      <div class="mx-auto max-w-3xl overflow-hidden rounded-2xl border-2 border-blue-200 bg-gradient-to-br from-blue-50 via-white to-violet-50 shadow-sm">
-        <div class="flex items-center justify-between gap-3 bg-gradient-to-r from-blue-600 via-indigo-600 to-violet-600 px-5 py-3">
-          <div class="text-xs font-bold uppercase tracking-[0.12em] text-white">FY ${fyEnd} Project Summary</div>
-          <div class="rounded-full bg-white/20 px-3 py-1 text-[10px] font-semibold text-white">Fiscal-year portfolio</div>
+      <div class="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white px-3 py-2">
+        <div class="flex items-center justify-between gap-3 px-1 pb-1.5">
+          <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-700">FY ${fyEnd} Project Summary</div>
+          <div class="text-[10px] font-semibold text-slate-400">Filtered portfolio</div>
         </div>
-        <div class="p-3">
-        <table class="w-full text-xs border-0" style="border-collapse:separate;border-spacing:0 6px">
+        <table class="w-full text-xs border-0" style="border-collapse:separate;border-spacing:0 3px">
         <thead>
           <tr class="text-[10px] uppercase tracking-wide text-slate-500">
-            <th class="pb-1 px-3 text-left font-bold">Metric</th>
-            <th class="pb-1 px-4 text-right font-bold">Projects</th>
-            <th class="pb-1 px-3 text-right font-bold">Product Amount</th>
+            <th class="pb-0.5 px-3 text-left font-bold">Metric</th>
+            <th class="pb-0.5 px-4 text-right font-bold">Projects</th>
+            <th class="pb-0.5 px-3 text-right font-bold">Product Amount</th>
           </tr>
         </thead>
         <tbody>
@@ -507,12 +509,11 @@ function openProjectsModal() {
           ${summaryRow('Resource Assigned', assignedProjects)}
           ${summaryRow('Resource Not Assigned', notAssignedProjects)}
           ${summaryRow('Closed Won', closedWonProjects)}
-          ${summaryRow('Running Project', runningProjects, null)}
-          ${summaryRow('Delayed Project', delayedProjects, null)}
-          ${summaryRow('Closed Project', closedProjects, null)}
+          ${summaryRow('Running Project', runningProjects)}
+          ${summaryRow('Delayed Project', delayedProjects)}
+          ${summaryRow('Closed Project', closedProjects)}
           </tbody>
         </table>
-        </div>
       </div>`;
   }
 
@@ -520,29 +521,29 @@ function openProjectsModal() {
   const initialRows = buildRows('', '', '', 'closed-won-desc', initialFiscalYearEnd);
 
   openModal(`${mHdr('All Projects', `${S.projects.length} total`)}
-    <div class="px-4 py-3 border-b border-gray-100 bg-gray-50 flex flex-wrap gap-1.5" id="projStagePills">
+    <div class="px-4 py-2 border-b border-gray-100 bg-white flex flex-wrap gap-1.5" id="projStagePills">
       ${buildStagePills(initialFiscalYearEnd)}
     </div>
-    <div class="px-4 py-3 border-b border-gray-100 bg-white flex flex-wrap items-center gap-2">
+    <div class="px-4 py-2 border-b border-gray-100 bg-white grid grid-cols-2 md:grid-cols-[300px_190px_120px_210px] items-center gap-2">
       <input id="projModalSearch" type="text" placeholder="Search by SA code, project name, or product name…"
-        class="w-full md:w-[320px] md:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400">
-      <select id="projModalProductFamilyFilter" aria-label="Product Family" title="Product Family" class="w-full sm:w-[190px] sm:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+        class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400">
+      <select id="projModalProductFamilyFilter" aria-label="Product Family" title="Product Family" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
         <option value="">Product Family: All</option>
         ${productFamilies.map(family => `<option value="${esc(family)}">${esc(family)}</option>`).join('')}
       </select>
-      <select id="projModalFiscalYear" aria-label="Select Fiscal Year" title="Select Fiscal Year" class="w-full sm:w-[150px] sm:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+      <select id="projModalFiscalYear" aria-label="Select Fiscal Year" title="Select Fiscal Year" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
         ${fiscalYearEnds.map(fyEnd => `<option value="${fyEnd}"${fyEnd === initialFiscalYearEnd ? ' selected' : ''}>FY ${fyEnd}</option>`).join('')}
       </select>
-      <select id="projModalSort" class="w-full sm:w-[210px] sm:flex-none px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
+      <select id="projModalSort" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
         <option value="closed-won-desc" selected>Closed Won Date (DESC)</option>
         <option value="closed-won-asc">Closed Won Date (ASC)</option>
       </select>
     </div>
-    <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:48vh">
-      ${initialRows.rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
-    </div>
-    <div class="px-5 py-3 border-t border-gray-100 bg-white" id="projModalFiscalSummary">
+    <div class="px-4 pt-2 pb-2 bg-white border-b border-gray-100" id="projModalFiscalSummary">
       <div class="text-xs text-gray-400">Loading FY ${initialFiscalYearEnd} summary…</div>
+    </div>
+    <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:44vh">
+      ${initialRows.rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
     </div>
     <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
       <span class="text-xs text-gray-400" id="projModalCount">${initialRows.count} project${initialRows.count === 1 ? '' : 's'}</span>
@@ -550,20 +551,22 @@ function openProjectsModal() {
         <button onclick="window.downloadAllProjectsExcel()" class="btn-blue">Download Excel</button>
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>
-    </div>`, 'max-w-4xl');
+    </div>`, 'max-w-5xl');
 
   let activeStage = '';
   let summaryRequestToken = 0;
 
   async function refreshFiscalSummary() {
     const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
+    const searchQuery = document.getElementById('projModalSearch')?.value || '';
+    const productFamily = document.getElementById('projModalProductFamilyFilter')?.value || '';
     const summary = document.getElementById('projModalFiscalSummary');
     if (!summary) return;
 
     const token = ++summaryRequestToken;
     summary.innerHTML = `<div class="text-xs text-gray-400">Loading FY ${fiscalYearEnd} summary…</div>`;
     try {
-      const html = await buildFiscalYearSummary(fiscalYearEnd);
+      const html = await buildFiscalYearSummary(fiscalYearEnd, activeStage, searchQuery, productFamily);
       if (token === summaryRequestToken && document.getElementById('projModalFiscalSummary')) summary.innerHTML = html;
     } catch (error) {
       if (token === summaryRequestToken && document.getElementById('projModalFiscalSummary')) {
@@ -584,8 +587,14 @@ function openProjectsModal() {
     if (countEl) countEl.textContent = `${count} project${count === 1 ? '' : 's'}`;
   }
 
-  document.getElementById('projModalSearch')?.addEventListener('input', refresh);
-  document.getElementById('projModalProductFamilyFilter')?.addEventListener('change', refresh);
+  document.getElementById('projModalSearch')?.addEventListener('input', () => {
+    refresh();
+    refreshFiscalSummary();
+  });
+  document.getElementById('projModalProductFamilyFilter')?.addEventListener('change', () => {
+    refresh();
+    refreshFiscalSummary();
+  });
   document.getElementById('projModalSort')?.addEventListener('change', refresh);
   document.getElementById('projModalFiscalYear')?.addEventListener('change', () => {
     const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
@@ -607,6 +616,7 @@ function openProjectsModal() {
       item.classList.toggle('ring-gray-400', isActive);
     });
     refresh();
+    refreshFiscalSummary();
   });
 
   refreshFiscalSummary();

@@ -80,6 +80,53 @@ const S = {
 };
 
 
+function getPreSalePipelineKpiSummary(products = S.preSaleProducts, thresholds = S.preSaleProductThresholds) {
+  const securedMinPercent = Number(thresholds?.securedMinPercent);
+  const bestCaseMinPercent = Number(thresholds?.bestCaseMinPercent);
+  const securedThreshold = Number.isFinite(securedMinPercent) ? securedMinPercent : 90;
+  const bestCaseThreshold = Number.isFinite(bestCaseMinPercent) ? bestCaseMinPercent : 70;
+  const summary = {
+    totalAmount: 0,
+    converted: [],
+    weighted: [],
+    prospect: [],
+  };
+
+  for (const product of products || []) {
+    const amount = Math.max(0, Number(product?.amount) || 0);
+    const percent = Number(product?.percent);
+    const normalizedProduct = {
+      ...product,
+      amount,
+      percent: Number.isFinite(percent) ? percent : 0,
+    };
+
+    summary.totalAmount += amount;
+
+    if (normalizedProduct.percent === 100) {
+      summary.converted.push(normalizedProduct);
+    } else if (normalizedProduct.percent >= securedThreshold) {
+      summary.weighted.push(normalizedProduct);
+    } else if (normalizedProduct.percent < bestCaseThreshold) {
+      summary.prospect.push(normalizedProduct);
+    }
+  }
+
+  const amountOf = rows => +rows.reduce((total, product) => (
+    total + (Number(product?.amount) || 0)
+  ), 0).toFixed(2);
+
+  return {
+    ...summary,
+    totalAmount: +summary.totalAmount.toFixed(2),
+    convertedAmount: amountOf(summary.converted),
+    weightedAmount: amountOf(summary.weighted),
+    prospectAmount: amountOf(summary.prospect),
+    securedMinPercent: securedThreshold,
+    bestCaseMinPercent: bestCaseThreshold,
+  };
+}
+
 function getDefaultAnnualWorkdays() {
   const configured = Number(S.appConfig?.defaultAnnualWorkdays);
   return Number.isInteger(configured) && configured >= 0

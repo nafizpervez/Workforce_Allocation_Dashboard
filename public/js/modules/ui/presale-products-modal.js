@@ -355,6 +355,10 @@ function openPreSaleProductsModal() {
           <strong id="presaleThresholdHeading">Classification thresholds</strong>
           <span>Percent values are classified automatically throughout the Plan-to-Execution Map.</span>
         </div>
+        <div class="presale-product-threshold-field is-converted" aria-label="Converted threshold">
+          <span>Converted</span>
+          <strong>= 100%</strong>
+        </div>
         <label class="presale-product-threshold-field is-secured">
           <span>Secured ≥</span>
           <input
@@ -496,6 +500,9 @@ async function savePreSaleProducts() {
     }
     if (typeof renderCapacityExecutiveCards === 'function') {
       renderCapacityExecutiveCards();
+    }
+    if (typeof renderStats === 'function' && S.dashboardStats) {
+      renderStats(S.dashboardStats);
     }
     toast('Pre-Sale Products and thresholds saved');
   } catch (error) {

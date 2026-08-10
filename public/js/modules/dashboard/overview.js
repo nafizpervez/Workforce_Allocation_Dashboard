@@ -410,30 +410,30 @@ function renderUtilizationCard(c, td, s) {
     </div>`;
 }
 
-function renderPipelineBreakdown(s) {
+function renderPipelineBreakdown(summary) {
   const rows = [
+    {
+      key: 'converted',
+      label: 'Converted',
+      value: (summary.converted?.length || 0).toLocaleString(),
+      tone: 'converted',
+    },
     {
       key: 'weighted',
       label: 'Weighted',
-      value: (Number(s.pipeline_weighted_projects) || 0).toLocaleString(),
+      value: (summary.weighted?.length || 0).toLocaleString(),
       tone: 'weighted',
     },
     {
       key: 'prospect',
       label: 'Prospect',
-      value: (Number(s.pipeline_prospect_projects) || 0).toLocaleString(),
+      value: (summary.prospect?.length || 0).toLocaleString(),
       tone: 'prospect',
-    },
-    {
-      key: 'converted',
-      label: 'Converted',
-      value: (Number(s.pipeline_converted_projects) || 0).toLocaleString(),
-      tone: 'converted',
     },
   ];
 
   return `
-    <section class="assigned-project-breakdown" aria-label="Pipeline portfolio counts">
+    <section class="assigned-project-breakdown" aria-label="Pre-Sale Product pipeline classifications">
       <div class="assigned-project-breakdown__heading">
         <span class="assigned-project-breakdown__hint">Pipeline</span>
       </div>
@@ -442,9 +442,8 @@ function renderPipelineBreakdown(s) {
           <button
             type="button"
             class="assigned-project-breakdown__item assigned-project-breakdown__item--${row.tone}"
-            data-action="open-project-portfolio-metric"
-            data-project-portfolio-metric="${esc(row.key)}"
-            aria-label="Open ${esc(row.label)} project list"
+            data-action="open-pipeline-presale-summary"
+            aria-label="Open Converted, Weighted and Prospect pipeline summary"
           >
             <span class="assigned-project-breakdown__label">${esc(row.label)}</span>
             <span class="assigned-project-breakdown__value">${esc(row.value)}</span>
@@ -454,7 +453,8 @@ function renderPipelineBreakdown(s) {
     </section>`;
 }
 
-function renderPipelineCard(c, s) {
+
+function renderPipelineCard(c, summary) {
   return `
     <div class="assigned-project-card">
       <div class="assigned-project-card__summary">
@@ -464,9 +464,10 @@ function renderPipelineCard(c, s) {
         <div class="text-2xl font-semibold text-gray-900 mb-0.5">${esc(c.v)}</div>
         <div class="text-sm text-gray-500 mb-2">${esc(c.summaryLabel || c.label)}</div>
       </div>
-      ${renderPipelineBreakdown(s)}
+      ${renderPipelineBreakdown(summary)}
     </div>`;
 }
+
 
 
 function getCalculatedCommittedTargetSummary() {
@@ -1075,6 +1076,7 @@ function renderStatSummary(c, td, { activeResource = false } = {}) {
 function renderStats(s) {
   S.dashboardStats = s;
   const t = s.trends || {};
+  const preSalePipelineSummary = getPreSalePipelineKpiSummary();
   const cards = [
     {
       v: s.active_employees.toLocaleString(),
@@ -1109,12 +1111,13 @@ function renderStats(s) {
       detailType: 'utilization-breakdown',
     },
     {
-      v: formatCommittedTargetRevenue(Number(s.pipeline_total_amount) || 0),
+      v: formatCommittedTargetRevenue(preSalePipelineSummary.totalAmount),
       label: 'Pipeline',
       summaryLabel: 'Total Pipeline Amount',
+      action: 'view-pipeline-presale-summary',
       bg: 'bg-orange-100',
       fg: 'text-orange-600',
-      formula: `Pipeline for ${fiscalYearDisplayLabel(S.matrixFiscalYear)} uses projects in the selected fiscal year. Total Pipeline Amount is the sum of Product Amount for open projects only (Closed Won and Closed Lost excluded). Weighted = open projects with probability ≥ 75%; Prospect = open projects with probability < 75%; Converted = Closed Won projects in the selected fiscal year.`,
+      formula: `Total Pipeline Amount is the Total Amount configured in Pre-Sale Product. Converted = Percent exactly 100%. Weighted = Percent at or above the configured Secured threshold (${preSalePipelineSummary.securedMinPercent}%) but below 100%. Prospect = Percent below the configured Best Case threshold (${preSalePipelineSummary.bestCaseMinPercent}%).`,
       icon: '<path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/>',
       detailType: 'pipeline-breakdown',
     },
@@ -1173,7 +1176,7 @@ function renderStats(s) {
         : isUtilizationCard
           ? renderUtilizationCard(c, td, s)
           : isPipelineCard
-            ? renderPipelineCard(c, s)
+            ? renderPipelineCard(c, preSalePipelineSummary)
             : isCommittedTargetCard
               ? renderCommittedTargetCard(c, committedTargetSummary)
               : isCapacityAllocationCard
