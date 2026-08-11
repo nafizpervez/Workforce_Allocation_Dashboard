@@ -632,13 +632,74 @@ function renderExecutiveMetricsTableCard(summary) {
 
 function renderCapacityExecutiveFinancialStrip(summary) {
   const items = [
-    [formatExecutiveCurrency(summary.localRevenueCapacity), 'Maximum Revenue Capacity (Local rates)'],
-    [formatExecutiveCurrency(summary.intrasourcingRevenueCapacity), 'Maximum Revenue Capacity (Intra rates)'],
     [formatExecutiveDays(summary.availableCapacityDays), 'Available capacity'],
     [formatExecutiveCurrency(summary.committedTarget), 'Committed target'],
   ];
-  return `<div class="capacity-financial-strip">${items.map(item => `
+  return `<div class="capacity-financial-strip capacity-financial-strip--two">${items.map(item => `
     <div class="capacity-financial-metric"><div class="capacity-financial-metric__value">${esc(item[0])}</div><div class="capacity-financial-metric__label">${esc(item[1])}</div></div>`).join('')}</div>`;
+}
+
+function getCapacityAllocationFinancialRows(summary) {
+  // Reuse the exact Target / Realized / Backlog logic from 5. Capacity Value Allocation
+  // so both cards always reconcile to the same business calculation.
+  const valueRows = getCapacityValueRows(summary).billable || [];
+  const intraRow = valueRows.find(row => row.key === 'intrasourcing') || {};
+  const localRow = valueRows.find(row => row.key === 'local') || {};
+  const pipelineSummary = typeof getPreSalePipelineKpiSummary === 'function'
+    ? getPreSalePipelineKpiSummary()
+    : { weightedAmount: 0 };
+  const weightedPipelineLocal = Number(pipelineSummary?.weightedAmount) || 0;
+  const localBacklog = Number(localRow.backlog) || 0;
+
+  return [
+    {
+      metric: 'Maximum Revenue Capacity',
+      local: Number(summary.localRevenueCapacity) || 0,
+      intra: Number(summary.intrasourcingRevenueCapacity) || 0,
+    },
+    {
+      metric: 'Committed Target',
+      local: Number(localRow.target) || 0,
+      intra: Number(intraRow.target) || 0,
+    },
+    {
+      metric: 'Revenue Realized',
+      local: Number(localRow.realized) || 0,
+      intra: Number(intraRow.realized) || 0,
+    },
+    {
+      metric: 'Revenue Backlog',
+      local: localBacklog,
+      intra: Number(intraRow.backlog) || 0,
+    },
+    {
+      metric: 'Weighted Pipeline',
+      local: weightedPipelineLocal,
+      intra: null,
+    },
+    {
+      metric: 'Pipeline Capacity',
+      local: localBacklog - weightedPipelineLocal,
+      intra: null,
+    },
+  ];
+}
+
+function renderCapacityAllocationFinancialTable(summary) {
+  const rows = getCapacityAllocationFinancialRows(summary);
+  const renderValue = value => value === null || value === undefined
+    ? '—'
+    : esc(formatExecutiveReportCurrency(value));
+  return `
+    <div class="capacity-allocation-financial-table-wrap">
+      <table class="capacity-executive-table capacity-executive-table--dense capacity-allocation-financial-table">
+        <colgroup><col style="width:46%"><col style="width:27%"><col style="width:27%"></colgroup>
+        <thead><tr><th>Metric</th><th>Local</th><th>Intra-Sourcing</th></tr></thead>
+        <tbody>
+          ${rows.map(row => `<tr><td class="capacity-executive-table__metric">${esc(row.metric)}</td><td class="capacity-executive-table__value">${renderValue(row.local)}</td><td class="capacity-executive-table__value">${renderValue(row.intra)}</td></tr>`).join('')}
+        </tbody>
+      </table>
+    </div>`;
 }
 
 function renderCapacityExecutiveLegend(summary) {
@@ -659,7 +720,8 @@ function renderCapacityAllocationExecutiveCard(summary) {
         <div class="capacity-allocation-chart-caption">Matrix allocation ${esc(summary.fiscalYearLabel)}</div>
       </div>
       <div class="capacity-allocation-legend nice-scroll">${renderCapacityExecutiveLegend(summary)}</div>
-    </div>`;
+    </div>
+    ${renderCapacityAllocationFinancialTable(summary)}`;
   return capacityExecutiveCardShell({
     key: 'capacity-allocation', title: 'Capacity Allocation', eyebrow: 'Annual capacity',
     subtitle: 'Allocation percentages exactly match the Resource Assignment Matrix total/average row.',

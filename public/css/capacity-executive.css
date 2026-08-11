@@ -242,13 +242,14 @@
 
 .capacity-financial-metric {
   min-width: 0;
-  min-height: 82px;
-  padding: 12px 8px 10px;
+  min-height: 60px;
+  padding: 7px 8px 6px;
   text-align: center;
 }
 
 .capacity-financial-metric:nth-child(even) { border-left: 1px solid #cbd5e1; }
 .capacity-financial-metric:nth-child(n+3) { border-top: 1px solid #cbd5e1; }
+.capacity-financial-strip--two .capacity-financial-metric:nth-child(n+3) { border-top: 0; }
 
 .capacity-financial-metric__value {
   overflow: hidden;
@@ -261,7 +262,7 @@
 }
 
 .capacity-financial-metric__label {
-  margin-top: 7px;
+  margin-top: 4px;
   color: #52627a;
   font-size: 9px;
   font-weight: 500;
@@ -307,6 +308,22 @@
 .capacity-allocation-legend__swatch { width: 10px; height: 10px; border-radius: 2px; }
 .capacity-allocation-legend__label { overflow: hidden; color: #334155; font-size: 10px; font-weight: 600; line-height: 1.2; text-overflow: ellipsis; white-space: nowrap; }
 .capacity-allocation-legend__value { color: #0f172a; font-size: 10px; font-weight: 700; white-space: nowrap; }
+
+.capacity-allocation-financial-table-wrap {
+  padding: 0 14px 16px;
+}
+
+.capacity-allocation-financial-table {
+  width: 100%;
+}
+
+.capacity-allocation-financial-table .capacity-executive-table__metric {
+  font-weight: 650;
+}
+
+.capacity-allocation-financial-table .capacity-executive-table__value {
+  font-weight: 700;
+}
 
 .capacity-executive-table-wrap { padding: 14px; }
 .capacity-executive-table-wrap--compact { height: calc(100% - 96px); overflow: auto; }
