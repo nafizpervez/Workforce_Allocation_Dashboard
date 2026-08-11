@@ -2,7 +2,7 @@
    Generates the selected Matrix fiscal year as a five-page A4 portrait DOCX.
 
    The Word layout intentionally follows the supplied management-report reference:
-     Page 1: report title, four KPI tiles, Capacity Allocation donut + legend, planning basis
+     Page 1: Capacity Allocation only — summary metrics, donut + legend, financial table
      Page 2: 1. Executive Summary + 2. Available Capacity Summary
      Page 3: 3. Maximum Revenue Capacity + 4. Revenue Targets
      Page 4: 5. Capacity Value Allocation
@@ -98,6 +98,15 @@ function fiscalYearReportNextFyLabel(value) {
   const twoDigit = text.match(/FY\s*(\d{2})/i);
   if (twoDigit) return `FY${String((Number(twoDigit[1]) + 1) % 100).padStart(2, '0')}`;
   return 'Next FY';
+}
+
+function fiscalYearReportFullYear(value) {
+  const text = String(value || '').trim();
+  const fourDigit = text.match(/(20\d{2})/);
+  if (fourDigit) return fourDigit[1];
+  const twoDigit = text.match(/FY\s*(\d{2})/i);
+  if (twoDigit) return String(2000 + Number(twoDigit[1]));
+  return text.replace(/\D+/g, '') || '';
 }
 
 function fiscalYearReportCurrency(value, decimals = true) {
@@ -322,6 +331,9 @@ function collectFiscalYearReportData() {
     : { billable: [], functionRows: [] };
   const revenueTargets = fiscalYearReportBuildRevenueTargets(summary);
   const pipelineNotes = fiscalYearReportBuildPipelineNotes(summary, fiscalYearLabel);
+  const capacityAllocationFinancialRows = typeof getCapacityAllocationFinancialRows === 'function'
+    ? getCapacityAllocationFinancialRows(summary)
+    : [];
 
   const legend = (summary.allocationMix?.rows || []).map(row => ({
     label: fiscalYearReportNormalizeText(row.label),
@@ -340,6 +352,7 @@ function collectFiscalYearReportData() {
     legend,
     revenueTargets,
     capacityValueRows,
+    capacityAllocationFinancialRows,
     pipelineNotes,
   };
 }
@@ -707,6 +720,63 @@ function fiscalYearReportDocxLegend(library, legend) {
   });
 }
 
+function fiscalYearReportDocxCapacityAllocationSummaryTable(library, reportData) {
+  const summary = reportData.summary;
+  const metrics = [
+    {
+      value: fiscalYearReportDays(summary.availableCapacityDays, 'days'),
+      label: 'Available capacity',
+    },
+    {
+      value: fiscalYearReportCurrency(summary.committedTarget, false),
+      label: 'Committed target',
+    },
+  ];
+  const widths = fiscalYearReportDocxScaleWidths([4873, 4873]);
+  const borders = fiscalYearReportDocxBorders(library, 'D4E1EF');
+
+  return new library.Table({
+    width: { size: FISCAL_YEAR_DOCX.usableWidth, type: library.WidthType.DXA },
+    columnWidths: widths,
+    layout: library.TableLayoutType.FIXED,
+    borders,
+    rows: [
+      new library.TableRow({
+        cantSplit: true,
+        children: metrics.map((metric, index) => fiscalYearReportDocxCell(library,
+          fiscalYearReportDocxCellParagraph(library, metric.value, {
+            align: 'center', bold: true, size: 34, color: FISCAL_YEAR_DOCX.navy,
+          }),
+          {
+            width: widths[index], fill: FISCAL_YEAR_DOCX.light, borders,
+            marginTop: 120, marginBottom: 92,
+          })),
+      }),
+      new library.TableRow({
+        cantSplit: true,
+        children: metrics.map((metric, index) => fiscalYearReportDocxCell(library,
+          fiscalYearReportDocxCellParagraph(library, metric.label, {
+            align: 'center', size: 16, color: FISCAL_YEAR_DOCX.muted,
+          }),
+          {
+            width: widths[index], fill: FISCAL_YEAR_DOCX.light, borders,
+            marginTop: 80, marginBottom: 105,
+          })),
+      }),
+    ],
+  });
+}
+
+function fiscalYearReportDocxCapacityAllocationFinancialRows(reportData) {
+  return (reportData.capacityAllocationFinancialRows || []).map(row => ({
+    cells: [
+      row.metric,
+      row.local === null || row.local === undefined ? '—' : fiscalYearReportCurrency(row.local, true),
+      row.intra === null || row.intra === undefined ? '—' : fiscalYearReportCurrency(row.intra, true),
+    ],
+  }));
+}
+
 function fiscalYearReportDocxPageOne(library, reportData) {
   const chartBytes = fiscalYearReportDataUrlBytes(reportData.chartImage);
   const chartChildren = [];
@@ -718,7 +788,7 @@ function fiscalYearReportDocxPageOne(library, reportData) {
         type: 'png',
         data: chartBytes,
         // Square display dimensions intentionally preserve the doughnut circle.
-        transformation: { width: 315, height: 315 },
+        transformation: { width: 330, height: 330 },
         altText: {
           title: 'Capacity Allocation',
           description: 'Capacity Allocation doughnut chart for the selected Matrix fiscal year.',
@@ -732,7 +802,7 @@ function fiscalYearReportDocxPageOne(library, reportData) {
     }));
   }
 
-  const chartWidths = fiscalYearReportDocxScaleWidths([6500, 3246]);
+  const chartWidths = fiscalYearReportDocxScaleWidths([6200, 3546]);
   const chartLayout = new library.Table({
     width: { size: FISCAL_YEAR_DOCX.usableWidth, type: library.WidthType.DXA },
     columnWidths: chartWidths,
@@ -750,31 +820,35 @@ function fiscalYearReportDocxPageOne(library, reportData) {
         }),
         fiscalYearReportDocxCell(library, fiscalYearReportDocxLegend(library, reportData.legend), {
           width: chartWidths[1], borderless: true, vertical: library.VerticalAlign.CENTER,
-          marginTop: 0, marginRight: 0, marginBottom: 0, marginLeft: 110,
+          marginTop: 0, marginRight: 0, marginBottom: 0, marginLeft: 90,
         }),
       ],
     })],
   });
 
+  const fiscalYearNumber = fiscalYearReportFullYear(reportData.fiscalYearLabel);
+
   return [
     fiscalYearReportDocxParagraph(library, `${reportData.compactFyLabel} Professional Services`, {
-      bold: true, color: FISCAL_YEAR_DOCX.navy, size: 46, after: 0, line: 225,
+      bold: true, color: FISCAL_YEAR_DOCX.navy, size: 42, after: 0, line: 220,
     }),
     fiscalYearReportDocxParagraph(library, 'Capacity & Revenue Forecast', {
-      bold: true, color: FISCAL_YEAR_DOCX.navy, size: 46, after: 30, line: 225,
+      bold: true, color: FISCAL_YEAR_DOCX.navy, size: 42, after: 24, line: 220,
     }),
-    fiscalYearReportDocxParagraph(library, 'Final management planning report | Fiscal year: April to March', {
-      color: FISCAL_YEAR_DOCX.muted, size: 21, after: 470, line: 260,
+    fiscalYearReportDocxParagraph(library, `Final Management Planning Report | Fiscal Year: ${fiscalYearNumber}`, {
+      color: FISCAL_YEAR_DOCX.muted, size: 19, after: 175, line: 250,
     }),
-    fiscalYearReportDocxKpiTable(library, reportData),
-    fiscalYearReportDocxSpacer(library, 520),
+    fiscalYearReportDocxCapacityAllocationSummaryTable(library, reportData),
+    fiscalYearReportDocxSpacer(library, 220),
     chartLayout,
     fiscalYearReportDocxParagraph(library, reportData.chartCaption, {
-      bold: true, italic: true, color: FISCAL_YEAR_DOCX.navy, size: 17, align: 'center', before: 80, after: 530,
+      bold: true, italic: true, color: FISCAL_YEAR_DOCX.navy, size: 17, align: 'center', before: 55, after: 155,
     }),
-    fiscalYearReportDocxParagraph(library, reportData.planningBasis, {
-      color: FISCAL_YEAR_DOCX.muted, size: 21, after: 0, line: 285,
-    }),
+    fiscalYearReportDocxTable(library,
+      ['Metric', 'Local', 'Intra-Sourcing'],
+      fiscalYearReportDocxCapacityAllocationFinancialRows(reportData),
+      [4300, 2723, 2723],
+      { alternate: true, headerSize: 16, fontSize: 17, cellMargin: 40, headerMargin: 38 }),
   ];
 }
 
@@ -1076,7 +1150,7 @@ function fiscalYearReportDocxFooter(library, reportData) {
   const leftCell = new library.TableCell({
     width: { size: footerWidths[0], type: library.WidthType.DXA },
     children: [fiscalYearReportDocxCellParagraph(library,
-      `${reportData.compactFyLabel} Professional Services Capacity & Revenue Forecast (Final)`,
+      `${reportData.compactFyLabel} Professional Services Capacity & Revenue Forecast`,
       { size: 13, color: FISCAL_YEAR_DOCX.muted })],
     margins: { top: 90, right: 20, bottom: 0, left: 0 },
     borders: { top: topBorder, bottom: noBorder, left: noBorder, right: noBorder },
