@@ -392,25 +392,29 @@ function openProjectsModal() {
     const rowsHtml = sorted.map((project, index) => {
       const progress = Math.max(0, Math.min(100, Number(project.progress) || 0));
       return `
-      <div class="flex items-start gap-3 py-3 px-4 border-b border-gray-100 hover:bg-gray-50 transition-colors cursor-pointer last:border-0" data-action="edit-project" data-project="${project.id}">
-        <span class="text-xs font-semibold text-gray-400 w-5 flex-shrink-0 pt-0.5">${index + 1}</span>
-        <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5" style="background:${project.color || '#8B5CF6'}"></div>
-        <div class="flex-1 min-w-0">
-          <div class="flex items-center gap-2 mb-0.5 flex-wrap">
-            <span class="text-xs font-bold text-blue-600 mono">${esc(project.code)}</span>
-            <span class="px-1.5 py-0.5 rounded text-xs font-semibold ${STAGE_PILL[project.stage] || 'bg-gray-100 text-gray-700'}">${esc(project.stage)}</span>
-            ${project.fiscal_period ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-slate-100 text-slate-700 border border-slate-200">${esc(project.fiscal_period)}</span>` : ''}
-            ${project.product_family ? `<span class="px-1.5 py-0.5 rounded text-xs font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(project.product_family)}</span>` : ''}
+      <div class="group mx-4 my-2 rounded-xl border border-slate-200 bg-white px-4 py-3 shadow-sm hover:border-blue-200 hover:shadow-md hover:-translate-y-px transition-all cursor-pointer" data-action="edit-project" data-project="${project.id}">
+        <div class="flex items-start gap-3">
+          <span class="inline-flex h-6 w-6 items-center justify-center rounded-full bg-slate-100 text-[11px] font-bold text-slate-500 flex-shrink-0">${index + 1}</span>
+          <div class="w-2.5 h-2.5 rounded-full flex-shrink-0 mt-1.5 ring-4 ring-white" style="background:${project.color || '#8B5CF6'}"></div>
+          <div class="flex-1 min-w-0">
+            <div class="flex items-center gap-1.5 mb-1 flex-wrap">
+              <span class="text-xs font-bold text-blue-600 mono">${esc(project.code)}</span>
+              <span class="px-2 py-0.5 rounded-md text-[11px] font-semibold ${STAGE_PILL[project.stage] || 'bg-gray-100 text-gray-700'}">${esc(project.stage)}</span>
+              ${project.fiscal_period ? `<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-slate-100 text-slate-700 border border-slate-200">${esc(project.fiscal_period)}</span>` : ''}
+              ${project.product_family ? `<span class="px-2 py-0.5 rounded-md text-[11px] font-semibold bg-indigo-50 text-indigo-700 border border-indigo-100">${esc(project.product_family)}</span>` : ''}
+            </div>
+            <div class="text-sm font-bold text-slate-900 truncate group-hover:text-blue-700 transition-colors">${esc(project.name)}</div>
+            <div class="text-xs text-slate-500 truncate mt-0.5">${esc(project.account_name || project.client || '—')}${project.opportunity_owner ? ` · ${esc(project.opportunity_owner)}` : ''}</div>
+            ${project.product_name ? `<div class="text-xs text-slate-400 truncate mt-0.5">${esc(project.product_name)}</div>` : ''}
           </div>
-          <div class="text-sm font-semibold text-gray-900 truncate">${esc(project.name)}</div>
-          <div class="text-xs text-gray-500 truncate">${esc(project.account_name || project.client || '—')}${project.opportunity_owner ? ` · ${esc(project.opportunity_owner)}` : ''}</div>
-          ${project.product_name ? `<div class="text-xs text-gray-400 truncate mt-0.5">${esc(project.product_name)}</div>` : ''}
-        </div>
-        <div class="text-right flex-shrink-0 min-w-[190px] space-y-0.5">
-          <div class="text-xs font-bold text-gray-800 mono">${(Number(project.product_amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} USD</div>
-          <div class="text-[11px] text-gray-500">Closed Won Date: <span class="font-semibold text-gray-700">${esc(project.end_date || '—')}</span></div>
-          <div class="text-[11px] text-gray-500">Project Close Date: <span class="font-semibold text-gray-700">${esc(project.project_closing_date || '—')}</span></div>
-          <div class="text-[11px] text-gray-500">Progress: <span class="font-semibold text-gray-700">${progress.toFixed(progress % 1 ? 1 : 0)}%</span></div>
+          <div class="text-right flex-shrink-0 min-w-[210px]">
+            <div class="text-sm font-bold text-slate-900 mono mb-1">${(Number(project.product_amount) || 0).toLocaleString('en-US', { minimumFractionDigits: 0, maximumFractionDigits: 2 })} <span class="text-[10px] font-semibold text-slate-500">USD</span></div>
+            <div class="grid grid-cols-[auto_auto] justify-end gap-x-2 gap-y-0.5 text-[11px]">
+              <span class="text-slate-400">Closed Won</span><span class="font-semibold text-slate-700">${esc(project.end_date || '—')}</span>
+              <span class="text-slate-400">Project Close</span><span class="font-semibold text-slate-700">${esc(project.project_closing_date || '—')}</span>
+              <span class="text-slate-400">Progress</span><span class="font-bold ${progress >= 100 ? 'text-emerald-600' : progress > 0 ? 'text-blue-600' : 'text-slate-600'}">${progress.toFixed(progress % 1 ? 1 : 0)}%</span>
+            </div>
+          </div>
         </div>
       </div>`;
     }).join('');
@@ -510,63 +514,101 @@ function openProjectsModal() {
     const closedProjects = fiscalProjects.filter(project => Number(project?.progress) >= 100);
 
     return `
-      <div class="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white px-3 py-2">
-        <div class="flex items-center justify-between gap-3 px-1 pb-1.5">
-          <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-700">${isAllFiscalYears ? 'All FY' : `FY ${fyEnd}`} Project Summary</div>
-          <div class="text-[10px] font-semibold text-slate-400">Filtered portfolio</div>
+      <div class="mx-auto max-w-4xl overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm">
+        <div class="flex items-center justify-between gap-3 border-b border-slate-100 px-4 py-2.5">
+          <div class="flex items-center gap-2.5 min-w-0">
+            <span class="inline-flex h-8 w-8 items-center justify-center rounded-lg bg-blue-50 text-blue-600 flex-shrink-0">
+              <svg class="h-4 w-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="m7 16 4-4 3 3 5-7"/></svg>
+            </span>
+            <div class="min-w-0">
+              <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-800">${isAllFiscalYears ? 'All FY' : `FY ${fyEnd}`} Project Summary</div>
+              <div class="text-[10px] text-slate-400 mt-0.5">Updates automatically with the active filters</div>
+            </div>
+          </div>
+          <div class="inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-2.5 py-1 text-[10px] font-semibold text-slate-500">
+            <span class="h-1.5 w-1.5 rounded-full bg-emerald-500"></span> Filtered portfolio
+          </div>
         </div>
-        <table class="w-full text-xs border-0" style="border-collapse:separate;border-spacing:0 3px">
-        <thead>
-          <tr class="text-[10px] uppercase tracking-wide text-slate-500">
-            <th class="pb-0.5 px-3 text-left font-bold">Metric</th>
-            <th class="pb-0.5 px-4 text-right font-bold">Projects</th>
-            <th class="pb-0.5 px-3 text-right font-bold">Product Amount</th>
-          </tr>
-        </thead>
-        <tbody>
-          ${summaryRow('Total Projects', fiscalProjects)}
-          ${summaryRow('Resource Assigned', assignedProjects)}
-          ${summaryRow('Resource Not Assigned', notAssignedProjects)}
-          ${summaryRow('Closed Won', closedWonProjects)}
-          ${summaryRow('Running Project', runningProjects)}
-          ${summaryRow('Delayed Project', delayedProjects)}
-          ${summaryRow('Closed Project', closedProjects)}
-          </tbody>
-        </table>
+        <div class="px-3 py-2">
+          <table class="w-full text-xs border-0" style="border-collapse:separate;border-spacing:0 3px">
+          <thead>
+            <tr class="text-[10px] uppercase tracking-wide text-slate-400">
+              <th class="pb-0.5 px-3 text-left font-bold">Metric</th>
+              <th class="pb-0.5 px-4 text-right font-bold">Projects</th>
+              <th class="pb-0.5 px-3 text-right font-bold">Product Amount</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${summaryRow('Total Projects', fiscalProjects)}
+            ${summaryRow('Resource Assigned', assignedProjects)}
+            ${summaryRow('Resource Not Assigned', notAssignedProjects)}
+            ${summaryRow('Closed Won', closedWonProjects)}
+            ${summaryRow('Running Project', runningProjects)}
+            ${summaryRow('Delayed Project', delayedProjects)}
+            ${summaryRow('Closed Project', closedProjects)}
+            </tbody>
+          </table>
+        </div>
       </div>`;
   }
 
   const initialFiscalYearEnd = '';
   const initialRows = buildRows('', '', '', 'closed-won-desc', initialFiscalYearEnd);
 
-  openModal(`${mHdr('All Projects', `${S.projects.length} total`)}
-    <div class="px-4 py-2 border-b border-gray-100 bg-white flex flex-wrap gap-1.5" id="projStagePills">
-      ${buildStagePills(initialFiscalYearEnd)}
+  openModal(`${mHdr('All Projects', `${S.projects.length.toLocaleString()} total`)}
+    <div class="modal-scroll-body">
+      <div class="sticky top-0 z-20 border-b border-slate-200 bg-white/95 shadow-sm backdrop-blur">
+        <div class="px-5 pt-3 pb-2 flex items-start gap-3">
+          <div class="pt-1 text-[10px] font-bold uppercase tracking-[0.12em] text-slate-400 flex-shrink-0">Stage</div>
+          <div class="flex flex-wrap gap-1.5" id="projStagePills">
+            ${buildStagePills(initialFiscalYearEnd)}
+          </div>
+        </div>
+        <div class="px-5 pb-3 grid grid-cols-2 md:grid-cols-[minmax(230px,1fr)_190px_120px_210px] items-end gap-2.5">
+          <label class="min-w-0">
+            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Search projects</span>
+            <div class="relative">
+              <svg class="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.3-4.3"/></svg>
+              <input id="projModalSearch" type="text" placeholder="SA code, project or product name…"
+                class="w-full min-w-0 pl-9 pr-3 py-2 text-sm border border-slate-200 rounded-xl bg-slate-50/80 text-slate-700 focus:bg-white focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-300 placeholder-slate-400 transition-colors">
+            </div>
+          </label>
+          <label class="min-w-0">
+            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Product family</span>
+            <select id="projModalProductFamilyFilter" aria-label="Product Family" title="Product Family" class="w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-300">
+              <option value="">All Product Families</option>
+              ${productFamilies.map(family => `<option value="${esc(family)}">${esc(family)}</option>`).join('')}
+            </select>
+          </label>
+          <label class="min-w-0">
+            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Fiscal year</span>
+            <select id="projModalFiscalYear" aria-label="Select Fiscal Year" title="Select Fiscal Year" class="w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-300">
+              <option value="" selected>All FY</option>
+              ${fiscalYearEnds.map(fyEnd => `<option value="${fyEnd}">FY ${fyEnd}</option>`).join('')}
+            </select>
+          </label>
+          <label class="min-w-0">
+            <span class="block text-[10px] font-bold uppercase tracking-wide text-slate-400 mb-1">Sort by</span>
+            <select id="projModalSort" class="w-full min-w-0 px-3 py-2 text-sm border border-slate-200 rounded-xl bg-white text-slate-700 focus:outline-none focus:ring-2 focus:ring-blue-400/50 focus:border-blue-300">
+              <option value="closed-won-desc" selected>Closed Won Date (DESC)</option>
+              <option value="closed-won-asc">Closed Won Date (ASC)</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div class="px-5 py-3 bg-slate-50/60 border-b border-slate-100" id="projModalFiscalSummary">
+        <div class="mx-auto max-w-4xl rounded-xl border border-slate-200 bg-white px-4 py-3 text-xs text-slate-400 shadow-sm">Loading All FY summary…</div>
+      </div>
+      <div class="bg-slate-50/40 py-1.5" id="projModalList">
+        ${initialRows.rowsHtml || '<p class="text-sm text-gray-400 text-center py-10">No projects found</p>'}
+      </div>
     </div>
-    <div class="px-4 py-2 border-b border-gray-100 bg-white grid grid-cols-2 md:grid-cols-[300px_190px_120px_210px] items-center gap-2">
-      <input id="projModalSearch" type="text" placeholder="Search by SA code, project name, or product name…"
-        class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-gray-50 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent placeholder-gray-400">
-      <select id="projModalProductFamilyFilter" aria-label="Product Family" title="Product Family" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
-        <option value="">Product Family: All</option>
-        ${productFamilies.map(family => `<option value="${esc(family)}">${esc(family)}</option>`).join('')}
-      </select>
-      <select id="projModalFiscalYear" aria-label="Select Fiscal Year" title="Select Fiscal Year" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
-        <option value="" selected>All FY</option>
-        ${fiscalYearEnds.map(fyEnd => `<option value="${fyEnd}">FY ${fyEnd}</option>`).join('')}
-      </select>
-      <select id="projModalSort" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
-        <option value="closed-won-desc" selected>Closed Won Date (DESC)</option>
-        <option value="closed-won-asc">Closed Won Date (ASC)</option>
-      </select>
-    </div>
-    <div class="px-4 pt-2 pb-2 bg-white border-b border-gray-100" id="projModalFiscalSummary">
-      <div class="text-xs text-gray-400">Loading All FY summary…</div>
-    </div>
-    <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:44vh">
-      ${initialRows.rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
-    </div>
-    <div class="px-6 py-4 border-t border-gray-100 flex items-center justify-between bg-gray-50 rounded-b-2xl">
-      <span class="text-xs text-gray-400" id="projModalCount">${initialRows.count} project${initialRows.count === 1 ? '' : 's'}</span>
+    <div class="modal-footer px-5 py-3 border-t border-slate-200 flex items-center justify-between bg-white rounded-b-2xl">
+      <div class="flex items-center gap-2 text-xs text-slate-500">
+        <span class="inline-flex h-2 w-2 rounded-full bg-blue-500"></span>
+        <span id="projModalCount" class="font-semibold text-slate-700">${initialRows.count.toLocaleString()} project${initialRows.count === 1 ? '' : 's'}</span>
+        <span>shown</span>
+      </div>
       <div class="flex items-center gap-2">
         <button onclick="window.downloadAllProjectsExcel()" class="btn-blue">Download Excel</button>
         <button onclick="closeModal()" class="btn-gray">Close</button>
