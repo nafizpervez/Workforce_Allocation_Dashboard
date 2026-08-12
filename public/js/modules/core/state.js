@@ -80,6 +80,14 @@ const S = {
 };
 
 
+function isPreSaleProductActive(product) {
+  return product?.active !== false && Number(product?.active) !== 0;
+}
+
+function getActivePreSaleProducts(products = S.preSaleProducts) {
+  return (products || []).filter(isPreSaleProductActive);
+}
+
 function getPreSalePipelineKpiSummary(products = S.preSaleProducts, thresholds = S.preSaleProductThresholds) {
   const securedMinPercent = Number(thresholds?.securedMinPercent);
   const bestCaseMinPercent = Number(thresholds?.bestCaseMinPercent);
@@ -89,16 +97,18 @@ function getPreSalePipelineKpiSummary(products = S.preSaleProducts, thresholds =
     totalAmount: 0,
     converted: [],
     weighted: [],
+    bestCase: [],
     prospect: [],
   };
 
-  for (const product of products || []) {
+  for (const product of getActivePreSaleProducts(products)) {
     const amount = Math.max(0, Number(product?.amount) || 0);
     const percent = Number(product?.percent);
     const normalizedProduct = {
       ...product,
       amount,
       percent: Number.isFinite(percent) ? percent : 0,
+      active: true,
     };
 
     summary.totalAmount += amount;
@@ -107,7 +117,9 @@ function getPreSalePipelineKpiSummary(products = S.preSaleProducts, thresholds =
       summary.converted.push(normalizedProduct);
     } else if (normalizedProduct.percent >= securedThreshold) {
       summary.weighted.push(normalizedProduct);
-    } else if (normalizedProduct.percent < bestCaseThreshold) {
+    } else if (normalizedProduct.percent >= bestCaseThreshold) {
+      summary.bestCase.push(normalizedProduct);
+    } else {
       summary.prospect.push(normalizedProduct);
     }
   }
@@ -121,6 +133,7 @@ function getPreSalePipelineKpiSummary(products = S.preSaleProducts, thresholds =
     totalAmount: +summary.totalAmount.toFixed(2),
     convertedAmount: amountOf(summary.converted),
     weightedAmount: amountOf(summary.weighted),
+    bestCaseAmount: amountOf(summary.bestCase),
     prospectAmount: amountOf(summary.prospect),
     securedMinPercent: securedThreshold,
     bestCaseMinPercent: bestCaseThreshold,

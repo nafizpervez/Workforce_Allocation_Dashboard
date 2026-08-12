@@ -443,7 +443,7 @@ function renderPipelineBreakdown(summary) {
             type="button"
             class="assigned-project-breakdown__item assigned-project-breakdown__item--${row.tone}"
             data-action="open-pipeline-presale-summary"
-            aria-label="Open Converted, Weighted and Prospect pipeline summary"
+            aria-label="Open Converted, Weighted, Best Case and Prospect pipeline summary"
           >
             <span class="assigned-project-breakdown__label">${esc(row.label)}</span>
             <span class="assigned-project-breakdown__value">${esc(row.value)}</span>
@@ -1096,7 +1096,7 @@ function renderStats(s) {
       action: 'view-projects',
       bg: 'bg-purple-100',
       fg: 'text-purple-600',
-      formula: `Total Projects matches Deal Acquisition Chart → PS Only for ${fiscalYearDisplayLabel(S.matrixFiscalYear)}: Closed Won projects whose Product Name is a PS System Support or PS Project Implementation variation. Progress does not affect this total. Running Projects are the below-100% subset using the existing March 1, 2025 cutoff; Delayed Projects are Running Projects whose Project Closing Date exists, is earlier than today, and whose Progress is still below 100%. Revenue Realization is Product Amount for PS projects with Project Closing Date inside the selected FY and Progress exactly 100%.`,
+      formula: `Total Projects matches Deal Acquisition Chart → PS Only for ${fiscalYearDisplayLabel(S.matrixFiscalYear)}: Closed Won projects whose Product Name is a PS System Support or PS Project Implementation variation. Progress does not affect this total. Running Projects are the below-100% subset using the existing March 1, 2025 cutoff; Delayed Projects are evaluated across all fiscal years: Closed Won PS projects whose Project Closing Date exists, is earlier than today, and whose Progress is still below 100%. Revenue Realization is Product Amount for PS projects with Project Closing Date inside the selected FY and Progress exactly 100%.`,
       icon: '<rect x="2" y="7" width="20" height="14" rx="2"/><path d="M16 21V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v16"/>',
       detailType: 'running-project-breakdown',
     },
@@ -1117,7 +1117,7 @@ function renderStats(s) {
       action: 'view-pipeline-presale-summary',
       bg: 'bg-orange-100',
       fg: 'text-orange-600',
-      formula: `Total Pipeline Amount is the Total Amount configured in Pre-Sale Product. Converted = Percent exactly 100%. Weighted = Percent at or above the configured Secured threshold (${preSalePipelineSummary.securedMinPercent}%) but below 100%. Prospect = Percent below the configured Best Case threshold (${preSalePipelineSummary.bestCaseMinPercent}%).`,
+      formula: `Total Pipeline Amount includes Active Pre-Sale Products only. Converted = Percent exactly 100%. Weighted = Percent at or above the configured Secured threshold (${preSalePipelineSummary.securedMinPercent}%) but below 100%. Best Case = Percent from the configured Best Case threshold (${preSalePipelineSummary.bestCaseMinPercent}%) up to below Secured. Prospect = Percent below Best Case.`,
       icon: '<path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/>',
       detailType: 'pipeline-breakdown',
     },

@@ -320,6 +320,7 @@ function openProjectsModal() {
   ).values()].sort((a, b) => a.localeCompare(b));
 
   function projectsForFiscalYear(fiscalYearEnd) {
+    if (fiscalYearEnd === '' || fiscalYearEnd === null || fiscalYearEnd === undefined) return [...projects];
     const fyEnd = Number(fiscalYearEnd);
     return projects.filter(project => getProjectFiscalYearEndForModal(project) === fyEnd);
   }
@@ -370,9 +371,10 @@ function openProjectsModal() {
   function getFilteredProjects(filterStage, searchQ, productFamily, fiscalYearEnd) {
     const q = (searchQ || '').toLowerCase().trim();
     const normalizedFamily = normalizeProductFamily(productFamily);
-    const fyEnd = Number(fiscalYearEnd);
+    const hasFiscalYear = !(fiscalYearEnd === '' || fiscalYearEnd === null || fiscalYearEnd === undefined);
+    const fyEnd = hasFiscalYear ? Number(fiscalYearEnd) : null;
     return projects.filter(project => {
-      if (getProjectFiscalYearEndForModal(project) !== fyEnd) return false;
+      if (hasFiscalYear && getProjectFiscalYearEndForModal(project) !== fyEnd) return false;
       if (filterStage && project.stage !== filterStage) return false;
       if (normalizedFamily && normalizeProductFamily(project.product_family) !== normalizedFamily) return false;
       if (!q) return true;
@@ -418,6 +420,15 @@ function openProjectsModal() {
 
   const assignmentCache = new Map();
   async function getAssignmentsForFiscalYearEnd(fiscalYearEnd) {
+    if (fiscalYearEnd === '' || fiscalYearEnd === null || fiscalYearEnd === undefined) {
+      const byProject = new Map();
+      const allFiscalAssignments = await Promise.all(fiscalYearEnds.map(endYear => getAssignmentsForFiscalYearEnd(endYear)));
+      allFiscalAssignments.flat().forEach(assignment => {
+        const key = [assignment?.project_id, assignment?.employee_id, assignment?.year, assignment?.month, assignment?.week].join('|');
+        if (!byProject.has(key)) byProject.set(key, assignment);
+      });
+      return [...byProject.values()];
+    }
     const fiscalStartYear = Number(fiscalYearEnd) - 1;
     if (fiscalStartYear === Number(S.matrixFiscalYear)) return S.matrixAssignments || [];
     if (fiscalStartYear === Number(S.fiscalYear)) return S.assignments || [];
@@ -473,8 +484,9 @@ function openProjectsModal() {
   }
 
   async function buildFiscalYearSummary(fiscalYearEnd, filterStage = '', searchQ = '', productFamily = '') {
-    const fyEnd = Number(fiscalYearEnd);
-    const fyStart = fyEnd - 1;
+    const isAllFiscalYears = fiscalYearEnd === '' || fiscalYearEnd === null || fiscalYearEnd === undefined;
+    const fyEnd = isAllFiscalYears ? null : Number(fiscalYearEnd);
+    const fyStart = isAllFiscalYears ? null : fyEnd - 1;
     const fiscalProjects = getFilteredProjects(filterStage, searchQ, productFamily, fyEnd);
     const assignments = await getAssignmentsForFiscalYearEnd(fyEnd);
     const assignedProjectIds = new Set(
@@ -484,16 +496,23 @@ function openProjectsModal() {
     const assignedProjects = fiscalProjects.filter(project => assignedProjectIds.has(Number(project.id)));
     const notAssignedProjects = fiscalProjects.filter(project => !assignedProjectIds.has(Number(project.id)));
     const closedWonProjects = fiscalProjects.filter(project => String(project?.stage || '').trim().toLowerCase() === 'closed won');
-    const runningProjects = fiscalProjects.filter(project => (
-      typeof isRunningProjectInMatrixFiscalYear === 'function' && isRunningProjectInMatrixFiscalYear(project, fyStart)
-    ));
-    const delayedProjects = fiscalProjects.filter(project => isDelayedProjectForFiscalYear(project, fyStart));
+    const runningProjects = fiscalProjects.filter(project => {
+      if (typeof isRunningProjectInMatrixFiscalYear !== 'function') return false;
+      const projectFyEnd = getProjectFiscalYearEndForModal(project);
+      const projectFyStart = Number.isInteger(projectFyEnd) ? projectFyEnd - 1 : fyStart;
+      return Number.isInteger(projectFyStart) && isRunningProjectInMatrixFiscalYear(project, projectFyStart);
+    });
+    const delayedProjects = fiscalProjects.filter(project => {
+      const projectFyEnd = getProjectFiscalYearEndForModal(project);
+      const projectFyStart = Number.isInteger(projectFyEnd) ? projectFyEnd - 1 : fyStart;
+      return Number.isInteger(projectFyStart) && isDelayedProjectForFiscalYear(project, projectFyStart);
+    });
     const closedProjects = fiscalProjects.filter(project => Number(project?.progress) >= 100);
 
     return `
       <div class="mx-auto max-w-3xl rounded-xl border border-slate-200 bg-white px-3 py-2">
         <div class="flex items-center justify-between gap-3 px-1 pb-1.5">
-          <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-700">FY ${fyEnd} Project Summary</div>
+          <div class="text-xs font-bold uppercase tracking-[0.12em] text-slate-700">${isAllFiscalYears ? 'All FY' : `FY ${fyEnd}`} Project Summary</div>
           <div class="text-[10px] font-semibold text-slate-400">Filtered portfolio</div>
         </div>
         <table class="w-full text-xs border-0" style="border-collapse:separate;border-spacing:0 3px">
@@ -517,7 +536,7 @@ function openProjectsModal() {
       </div>`;
   }
 
-  const initialFiscalYearEnd = currentFiscalYearEnd;
+  const initialFiscalYearEnd = '';
   const initialRows = buildRows('', '', '', 'closed-won-desc', initialFiscalYearEnd);
 
   openModal(`${mHdr('All Projects', `${S.projects.length} total`)}
@@ -532,7 +551,8 @@ function openProjectsModal() {
         ${productFamilies.map(family => `<option value="${esc(family)}">${esc(family)}</option>`).join('')}
       </select>
       <select id="projModalFiscalYear" aria-label="Select Fiscal Year" title="Select Fiscal Year" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
-        ${fiscalYearEnds.map(fyEnd => `<option value="${fyEnd}"${fyEnd === initialFiscalYearEnd ? ' selected' : ''}>FY ${fyEnd}</option>`).join('')}
+        <option value="" selected>All FY</option>
+        ${fiscalYearEnds.map(fyEnd => `<option value="${fyEnd}">FY ${fyEnd}</option>`).join('')}
       </select>
       <select id="projModalSort" class="w-full min-w-0 px-3 py-2 text-sm border border-gray-200 rounded-lg bg-white text-gray-700 focus:outline-none focus:ring-2 focus:ring-blue-400 focus:border-transparent">
         <option value="closed-won-desc" selected>Closed Won Date (DESC)</option>
@@ -540,7 +560,7 @@ function openProjectsModal() {
       </select>
     </div>
     <div class="px-4 pt-2 pb-2 bg-white border-b border-gray-100" id="projModalFiscalSummary">
-      <div class="text-xs text-gray-400">Loading FY ${initialFiscalYearEnd} summary…</div>
+      <div class="text-xs text-gray-400">Loading All FY summary…</div>
     </div>
     <div class="overflow-y-auto nice-scroll" id="projModalList" style="max-height:44vh">
       ${initialRows.rowsHtml || '<p class="text-sm text-gray-400 text-center py-8">No projects found</p>'}
@@ -557,14 +577,14 @@ function openProjectsModal() {
   let summaryRequestToken = 0;
 
   async function refreshFiscalSummary() {
-    const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
+    const fiscalYearEnd = document.getElementById('projModalFiscalYear')?.value ?? initialFiscalYearEnd;
     const searchQuery = document.getElementById('projModalSearch')?.value || '';
     const productFamily = document.getElementById('projModalProductFamilyFilter')?.value || '';
     const summary = document.getElementById('projModalFiscalSummary');
     if (!summary) return;
 
     const token = ++summaryRequestToken;
-    summary.innerHTML = `<div class="text-xs text-gray-400">Loading FY ${fiscalYearEnd} summary…</div>`;
+    summary.innerHTML = `<div class="text-xs text-gray-400">Loading ${fiscalYearEnd ? `FY ${fiscalYearEnd}` : 'All FY'} summary…</div>`;
     try {
       const html = await buildFiscalYearSummary(fiscalYearEnd, activeStage, searchQuery, productFamily);
       if (token === summaryRequestToken && document.getElementById('projModalFiscalSummary')) summary.innerHTML = html;
@@ -579,7 +599,7 @@ function openProjectsModal() {
     const searchQuery = document.getElementById('projModalSearch')?.value || '';
     const productFamily = document.getElementById('projModalProductFamilyFilter')?.value || '';
     const sortMode = document.getElementById('projModalSort')?.value || 'closed-won-desc';
-    const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
+    const fiscalYearEnd = document.getElementById('projModalFiscalYear')?.value ?? initialFiscalYearEnd;
     const { rowsHtml, count } = buildRows(activeStage, searchQuery, productFamily, sortMode, fiscalYearEnd);
     const list = document.getElementById('projModalList');
     const countEl = document.getElementById('projModalCount');
@@ -597,7 +617,7 @@ function openProjectsModal() {
   });
   document.getElementById('projModalSort')?.addEventListener('change', refresh);
   document.getElementById('projModalFiscalYear')?.addEventListener('change', () => {
-    const fiscalYearEnd = Number(document.getElementById('projModalFiscalYear')?.value || initialFiscalYearEnd);
+    const fiscalYearEnd = document.getElementById('projModalFiscalYear')?.value ?? initialFiscalYearEnd;
     activeStage = '';
     const stagePills = document.getElementById('projStagePills');
     if (stagePills) stagePills.innerHTML = buildStagePills(fiscalYearEnd);
