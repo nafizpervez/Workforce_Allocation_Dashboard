@@ -87,16 +87,21 @@ function assignmentProjectCombo(selectedId) {
 }
 
 function getAssignmentPreSaleProductOptions(selectedName) {
-  const products = [...(S.preSaleProducts || [])].sort((a, b) => {
-    const percentDifference = (Number(b.percent) || 0) - (Number(a.percent) || 0);
-    if (percentDifference) return percentDifference;
-    return String(a.name || '').localeCompare(
-      String(b.name || ''),
-      undefined,
-      { sensitivity: 'base' },
-    );
-  });
   const selectedProduct = getPreSaleProductByName(selectedName);
+  const products = [...(S.preSaleProducts || [])]
+    .filter(product => (
+      (typeof isPreSaleProductActive === 'function' ? isPreSaleProductActive(product) : product?.active !== false) ||
+      (selectedProduct && Number(selectedProduct.id) === Number(product.id))
+    ))
+    .sort((a, b) => {
+      const percentDifference = (Number(b.percent) || 0) - (Number(a.percent) || 0);
+      if (percentDifference) return percentDifference;
+      return String(a.name || '').localeCompare(
+        String(b.name || ''),
+        undefined,
+        { sensitivity: 'base' },
+      );
+    });
   const options = [];
 
   if (selectedName && !selectedProduct) {
@@ -112,7 +117,7 @@ function getAssignmentPreSaleProductOptions(selectedName) {
         value="${esc(product.name)}"
         data-product-amount="${esc(Number(product.amount) || 0)}"
         ${selected ? 'selected' : ''}
-      >${esc(product.name)} — ${esc(formatPreSaleProductAmount(product.amount))}</option>
+      >${esc(product.name)}${product.active === false ? ' (Inactive)' : ''} — ${esc(formatPreSaleProductAmount(product.amount))}</option>
     `);
   }
 

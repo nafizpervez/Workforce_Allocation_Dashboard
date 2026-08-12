@@ -151,6 +151,7 @@ function renderPreSaleProductPlanningBreakdown(productName) {
 function getPreSaleProductDraftTotalAmount() {
   readPreSaleProductDraftRows();
   return preSaleProductDraftRows.reduce((sum, product) => {
+    if (product.active === false) return sum;
     const amount = Number(product.amount);
     return sum + (Number.isFinite(amount) && amount >= 0 ? amount : 0);
   }, 0);
@@ -165,7 +166,9 @@ function updatePreSaleProductTotalAmount() {
   const revenueOutput = document.getElementById('preSaleProductTotalPlannedRevenue');
   if (revenueOutput) {
     const totalRevenue = preSaleProductDraftRows.reduce(
-      (sum, product) => sum + getPreSaleProductPlannedRevenue(product.name),
+      (sum, product) => product.active === false
+        ? sum
+        : sum + getPreSaleProductPlannedRevenue(product.name),
       0,
     );
     revenueOutput.textContent = formatPreSaleProductAmount(totalRevenue);
@@ -187,6 +190,7 @@ function createPreSaleProductDraftRow(product = {}) {
     name: String(product.name || ''),
     amount: Number(product.amount) || 0,
     percent: Number(product.percent) || 0,
+    active: product.active !== false && Number(product.active) !== 0,
   };
 }
 
@@ -230,6 +234,8 @@ function readPreSaleProductDraftRows() {
     draft.name = row.querySelector('[data-presale-product-name]')?.value || '';
     draft.amount = row.querySelector('[data-presale-product-amount]')?.value || '';
     draft.percent = row.querySelector('[data-presale-product-percent]')?.value || '';
+    const activeValue = row.querySelector('[data-presale-product-active]')?.value;
+    if (activeValue !== undefined) draft.active = activeValue !== '0';
   });
 }
 
@@ -257,7 +263,7 @@ function renderPreSaleProductRows() {
 
   root.innerHTML = preSaleProductDraftRows.length
     ? preSaleProductDraftRows.map((product, index) => `
-        <div class="presale-product-row" data-presale-product-row="${esc(product.key)}">
+        <div class="presale-product-row ${product.active === false ? 'is-inactive' : ''}" data-presale-product-row="${esc(product.key)}">
           <div class="presale-product-row__index">${index + 1}</div>
           <div>
             <label class="sr-only" for="presale_name_${index}">Product Name</label>
@@ -302,6 +308,18 @@ function renderPreSaleProductRows() {
               onchange="sortPreSaleProductRowsByPercent()"
             >
             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
+          </div>
+          <div>
+            <label class="sr-only" for="presale_active_${index}">Product Status</label>
+            <select
+              id="presale_active_${index}"
+              class="field-input presale-product-status-select ${product.active === false ? 'is-inactive' : 'is-active'}"
+              data-presale-product-active
+              onchange="refreshPreSaleProductPlanningBreakdowns()"
+            >
+              <option value="1" ${product.active === false ? '' : 'selected'}>Active</option>
+              <option value="0" ${product.active === false ? 'selected' : ''}>Inactive</option>
+            </select>
           </div>
           <div class="presale-product-row__planning">
             ${renderPreSaleProductPlanningBreakdown(product.name)}
@@ -397,6 +415,7 @@ function openPreSaleProductsModal() {
         <span>Product Name</span>
         <span class="text-right">Amount</span>
         <span class="text-right">Percent</span>
+        <span>Status</span>
         <span>Planned Resources · Hours · Revenue</span>
         <span></span>
       </div>
@@ -405,6 +424,7 @@ function openPreSaleProductsModal() {
         <span></span>
         <strong>Total Amount</strong>
         <output id="preSaleProductTotalAmount">${esc(formatPreSaleProductAmount(0))}</output>
+        <span></span>
         <span></span>
         <output id="preSaleProductTotalPlannedRevenue">${esc(formatPreSaleProductAmount(0))}</output>
         <span></span>
@@ -436,6 +456,7 @@ async function savePreSaleProducts() {
     name: String(product.name || '').trim(),
     amount: Number(product.amount),
     percent: Number(product.percent),
+    active: product.active !== false,
   }));
 
   if (

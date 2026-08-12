@@ -158,7 +158,7 @@ async function openRunningProjectMetricModal(metric) {
       openModal(`
         ${mHdr(
           config.title,
-          `${fyLabel} · Professional Services projects classified by realization, secured and accrual revenue`,
+          `${fyLabel} realization/secured · Revenue Accrual across all fiscal years`,
         )}
         <div class="grid grid-cols-1 xl:grid-cols-3 gap-4 p-4 bg-gray-50">
           <section class="bg-white rounded-xl border border-gray-200 overflow-hidden min-w-0">
@@ -207,7 +207,7 @@ async function openRunningProjectMetricModal(metric) {
               <div class="flex items-center justify-between gap-3">
                 <div>
                   <div class="text-sm font-bold text-gray-900">Revenue Accrual</div>
-                  <div class="text-[11px] text-gray-500 mt-0.5">Closed Won Date in ${fyLabel} · Progress &lt; 100%</div>
+                  <div class="text-[11px] text-gray-500 mt-0.5">Closed Won Date across all fiscal years · Progress &gt; 0% and &lt; 100%</div>
                 </div>
                 <div class="text-right flex-shrink-0">
                   <div class="text-sm font-bold text-amber-700">${fmtUsd(result.revenue_accrual_total || 0)}</div>
@@ -218,7 +218,7 @@ async function openRunningProjectMetricModal(metric) {
             <div class="nice-scroll overflow-y-auto" style="max-height:58vh">
               ${accrualProjects.length
                 ? accrualProjects.map(project => professionalServicesRevenueRowHtml(project, 'accrual')).join('')
-                : '<div class="px-5 py-10 text-center text-sm text-gray-400">No Revenue Accrual projects in this fiscal year</div>'}
+                : '<div class="px-5 py-10 text-center text-sm text-gray-400">No Revenue Accrual projects across all fiscal years</div>'}
             </div>
           </section>
         </div>
@@ -234,7 +234,7 @@ async function openRunningProjectMetricModal(metric) {
     const subtitle = metric === 'total'
       ? `${fiscalLabel} · Matches Deal Acquisition Chart → PS Only · Closed Won`
       : metric === 'delayed'
-        ? `${fiscalLabel} · Closed Won PS Only · Project Closing Date is in the past · Progress below 100%`
+        ? `All fiscal years · Closed Won PS Only · Project Closing Date is in the past · Progress below 100%`
         : `${fiscalLabel} · Closed Won Mar 1, 2025 or later · Progress below 100%`;
     openModal(`
       ${mHdr(
@@ -262,12 +262,16 @@ function pipelinePreSaleProductRowHtml(product, classification, index) {
     ? { pill: 'bg-green-100 text-green-700', accent: '#16a34a' }
     : classification === 'weighted'
       ? { pill: 'bg-amber-100 text-amber-700', accent: '#d97706' }
-      : { pill: 'bg-orange-100 text-orange-700', accent: '#ea580c' };
+      : classification === 'best-case'
+        ? { pill: 'bg-yellow-100 text-yellow-700', accent: '#ca8a04' }
+        : { pill: 'bg-orange-100 text-orange-700', accent: '#ea580c' };
   const label = classification === 'converted'
     ? 'Converted'
     : classification === 'weighted'
       ? 'Weighted'
-      : 'Prospect';
+      : classification === 'best-case'
+        ? 'Best Case'
+        : 'Prospect';
   const percent = Number(product?.percent) || 0;
 
   return `
@@ -320,10 +324,10 @@ function openPipelinePreSaleSummaryModal() {
   openModal(`
     ${mHdr(
       'Pipeline Projects',
-      `Total Pre-Sale Product Amount: ${fmtUsd(summary.totalAmount)} · Classification is driven by the saved Pre-Sale Product Percent`,
+      `Total Active Pre-Sale Product Amount: ${fmtUsd(summary.totalAmount)} · Classification is driven by the saved Pre-Sale Product Percent`,
     )}
     <div class="modal-scroll-body nice-scroll p-4">
-      <div class="grid grid-cols-1 gap-4 xl:grid-cols-3">
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         ${pipelinePreSaleSummaryColumnHtml({
           title: 'Converted',
           subtitle: 'Percent = 100%',
@@ -339,6 +343,14 @@ function openPipelinePreSaleSummaryModal() {
           amount: summary.weightedAmount,
           classification: 'weighted',
           tone: { border: 'border-amber-200', header: 'bg-amber-50', amount: 'text-amber-700' },
+        })}
+        ${pipelinePreSaleSummaryColumnHtml({
+          title: 'Best Case',
+          subtitle: `Best Case rule: Percent ≥ ${bestCase}% and < ${secured}%`,
+          rows: summary.bestCase,
+          amount: summary.bestCaseAmount,
+          classification: 'best-case',
+          tone: { border: 'border-yellow-200', header: 'bg-yellow-50', amount: 'text-yellow-700' },
         })}
         ${pipelinePreSaleSummaryColumnHtml({
           title: 'Prospect',

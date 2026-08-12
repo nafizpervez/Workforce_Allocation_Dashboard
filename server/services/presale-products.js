@@ -18,6 +18,7 @@ function ensurePreSaleProductsTable(db) {
       name TEXT NOT NULL COLLATE NOCASE UNIQUE,
       amount REAL NOT NULL DEFAULT 0 CHECK(amount >= 0),
       probability_percent REAL NOT NULL DEFAULT 0 CHECK(probability_percent >= 0 AND probability_percent <= 100),
+      is_active INTEGER NOT NULL DEFAULT 1 CHECK(is_active IN (0, 1)),
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP
     )
@@ -27,6 +28,13 @@ function ensurePreSaleProductsTable(db) {
     db.prepare(`
       ALTER TABLE presale_products
       ADD COLUMN probability_percent REAL NOT NULL DEFAULT 0
+    `).run();
+  }
+
+  if (!hasTableColumn(db, 'presale_products', 'is_active')) {
+    db.prepare(`
+      ALTER TABLE presale_products
+      ADD COLUMN is_active INTEGER NOT NULL DEFAULT 1
     `).run();
   }
 
@@ -55,6 +63,7 @@ function mapPreSaleProductRow(product) {
     ...product,
     amount: Number(product.amount) || 0,
     percent: Number(product.percent) || 0,
+    active: Number(product.active) !== 0,
   };
 }
 
@@ -66,6 +75,7 @@ function listPreSaleProducts(db) {
       name,
       amount,
       probability_percent AS percent,
+      is_active AS active,
       created_at,
       updated_at
     FROM presale_products
@@ -84,6 +94,7 @@ function findPreSaleProductByName(db, name) {
       name,
       amount,
       probability_percent AS percent,
+      is_active AS active,
       created_at,
       updated_at
     FROM presale_products
@@ -116,6 +127,11 @@ function normalizeProductRows(products, existingRows = []) {
       : Number(existingById.get(id)?.percent) || 0;
     const percentSource = product?.percent ?? product?.percentage ?? existingPercent;
     const percent = Number(percentSource);
+    const existingActive = id === null ? true : existingById.get(id)?.active !== false;
+    const activeSource = product?.active ?? product?.isActive ?? product?.is_active ?? existingActive;
+    const active = activeSource === false || Number(activeSource) === 0 || String(activeSource).toLowerCase() === 'false'
+      ? false
+      : true;
 
     if (id !== null && (!Number.isInteger(id) || id <= 0)) {
       const error = new Error(`Product row ${index + 1} has an invalid id.`);
@@ -151,6 +167,7 @@ function normalizeProductRows(products, existingRows = []) {
       name,
       amount: +amount.toFixed(2),
       percent: +percent.toFixed(2),
+      active,
     };
   });
 }
@@ -255,7 +272,7 @@ function savePreSaleProducts(db, products) {
 
   const updateProductToTemporaryName = db.prepare(`
     UPDATE presale_products
-    SET name = ?, amount = ?, probability_percent = ?, updated_at = CURRENT_TIMESTAMP
+    SET name = ?, amount = ?, probability_percent = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `);
   const updateAssignmentsByName = db.prepare(`
@@ -265,12 +282,12 @@ function savePreSaleProducts(db, products) {
   `);
   const deleteProduct = db.prepare('DELETE FROM presale_products WHERE id = ?');
   const insertProduct = db.prepare(`
-    INSERT INTO presale_products(name, amount, probability_percent)
-    VALUES (?, ?, ?)
+    INSERT INTO presale_products(name, amount, probability_percent, is_active)
+    VALUES (?, ?, ?, ?)
   `);
   const updateProductFinal = db.prepare(`
     UPDATE presale_products
-    SET name = ?, amount = ?, probability_percent = ?, updated_at = CURRENT_TIMESTAMP
+    SET name = ?, amount = ?, probability_percent = ?, is_active = ?, updated_at = CURRENT_TIMESTAMP
     WHERE id = ?
   `);
 
@@ -286,6 +303,7 @@ function savePreSaleProducts(db, products) {
         temporaryName,
         existing.amount,
         existing.percent,
+        existing.active === false ? 0 : 1,
         product.id,
       );
     }
@@ -295,12 +313,12 @@ function savePreSaleProducts(db, products) {
     const savedRows = [];
     for (const product of rows) {
       if (product.id === null) {
-        const info = insertProduct.run(product.name, product.amount, product.percent);
+        const info = insertProduct.run(product.name, product.amount, product.percent, product.active ? 1 : 0);
         savedRows.push({ ...product, id: Number(info.lastInsertRowid) });
         continue;
       }
 
-      updateProductFinal.run(product.name, product.amount, product.percent, product.id);
+      updateProductFinal.run(product.name, product.amount, product.percent, product.active ? 1 : 0, product.id);
       updateAssignmentsByName.run(product.name, temporaryNames.get(product.id));
       savedRows.push(product);
     }

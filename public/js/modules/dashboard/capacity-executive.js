@@ -320,6 +320,54 @@ function classifyCapacityProject(project) {
   return key === 'unavailable' ? 'local' : key;
 }
 
+function isCapacityRevenueRealizationProject(project, fiscalYear) {
+  // Keep this qualification exactly aligned with the Revenue Realization KPI:
+  // Product Name must be a PS System Support / PS Project Implementation
+  // variation, Project Closing Date must fall inside the selected Matrix FY,
+  // and Progress must be exactly 100%. Stage is intentionally not required.
+  const compactProductName = String(project?.product_name || '')
+    .trim()
+    .toUpperCase()
+    .replace(/[^A-Z0-9]/g, '');
+  const isPsProduct = compactProductName.includes('PSSYSTEMSUPPORT') || [
+    'PSPROJECTIMPLEMENTATION',
+    'PSPROJECTIMPLEMENT',
+    'PSPROJECTIMPLEMETATION',
+    'PSPROJECTIMPLEMENTAION',
+  ].some(variant => compactProductName.includes(variant));
+  if (!isPsProduct || Number(project?.progress) !== 100) return false;
+
+  const closingDate = typeof parseDateInputLocal === 'function'
+    ? parseDateInputLocal(project?.project_closing_date)
+    : null;
+  if (!closingDate || Number.isNaN(closingDate.getTime())) return false;
+
+  const selectedFiscalYear = normalizeFiscalYearStart(fiscalYear);
+  const closingFiscalYear = (closingDate.getMonth() + 1) >= FISCAL_YEAR_START_MONTH
+    ? closingDate.getFullYear()
+    : closingDate.getFullYear() - 1;
+  return closingFiscalYear === selectedFiscalYear;
+}
+
+function getCapacityRevenueRealizationByCategory(fiscalYear) {
+  const byCategory = Object.fromEntries(
+    ['intrasourcing', 'local', 'training', 'preSale', 'skillDevelopment', 'generalAdmin']
+      .map(key => [key, 0]),
+  );
+
+  for (const project of S.projects || []) {
+    if (!isCapacityRevenueRealizationProject(project, fiscalYear)) continue;
+    // Revenue Realization KPI uses Product Amount specifically; do not fall
+    // back to opportunity/budget amounts here or the two views can diverge.
+    const amount = Number(project?.product_amount) || 0;
+    if (amount <= 0) continue;
+    const key = classifyCapacityProject(project);
+    byCategory[key] = (Number(byCategory[key]) || 0) + amount;
+  }
+
+  return byCategory;
+}
+
 function getCapacityProjectFinancials(fiscalYear) {
   const fiscalYearEnd = getFiscalYearEnd(fiscalYear);
   const byCategory = Object.fromEntries(
@@ -365,7 +413,7 @@ function getCapacityPreSaleProductPipelineSummary() {
   const buckets = { secured: 0, bestCase: 0, prospect: 0 };
   let totalAmount = 0;
 
-  for (const product of S.preSaleProducts || []) {
+  for (const product of (typeof getActivePreSaleProducts === 'function' ? getActivePreSaleProducts() : (S.preSaleProducts || []))) {
     const amount = Number(product?.amount);
     if (!Number.isFinite(amount) || amount < 0) continue;
     const percent = Number(product?.percent);
@@ -678,7 +726,7 @@ function getCapacityAllocationFinancialRows(summary) {
       intra: null,
     },
     {
-      metric: 'Pipeline Capacity',
+      metric: 'Pipeline Gap',
       local: localBacklog - weightedPipelineLocal,
       intra: null,
     },
@@ -826,6 +874,7 @@ function renderRevenueTargetsCard(summary) {
 
 function getCapacityValueRows(summary) {
   const projectData = summary.projects.byCategory;
+  const revenueRealizationByCategory = getCapacityRevenueRealizationByCategory(summary.fiscalYear);
   const targetByKey = {
     intrasourcing: Number(summary.committedTargets.intrasourcing) || 0,
     local: Number(summary.committedTargets.local) || 0,
@@ -838,7 +887,9 @@ function getCapacityValueRows(summary) {
     const share = Number(metric.share) || 0;
     const capacityValue = Number(metric.capacityValue) || 0;
     const target = targetByKey[key];
-    const realized = Number(projectData[key]?.realized) || 0;
+    // Realized revenue must use the exact Revenue Realization KPI rule,
+    // not the broader Closed Won revenue bucket used by project financials.
+    const realized = Number(revenueRealizationByCategory[key]) || 0;
     const backlog = target - realized;
     const goal = target > 0 ? target : capacityValue;
     return {

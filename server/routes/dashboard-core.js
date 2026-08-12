@@ -301,11 +301,17 @@ function getProfessionalServicesRevenueSummary(projects, fiscalYear) {
     String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
     isDateInFiscalYear(project?.end_date, fiscalYear)
   ));
-  const accrualProjects = psProjects.filter(project => (
-    String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
-    Number(project?.progress) !== 100 &&
-    isDateInFiscalYear(project?.end_date, fiscalYear)
-  ));
+  // Revenue Accrual intentionally spans all fiscal years. A qualifying project
+  // must be Closed Won + PS Only, have a valid Closed Won Date, and be actively
+  // in progress: strictly above 0% and below 100%.
+  const accrualProjects = psProjects.filter(project => {
+    const progress = Number(project?.progress);
+    return (
+      String(project?.stage || '').trim().toLowerCase() === 'closed won' &&
+      Number.isFinite(progress) && progress > 0 && progress < 100 &&
+      getFiscalYear(project?.end_date) !== null
+    );
+  });
   const sumProductAmount = rows => +rows.reduce(
     (total, project) => total + (Number(project?.product_amount) || 0),
     0,
@@ -321,13 +327,31 @@ function getProfessionalServicesRevenueSummary(projects, fiscalYear) {
   };
 }
 
+function isDelayedProfessionalServicesProject(project, now = new Date()) {
+  if (String(project?.stage || '').trim().toLowerCase() !== 'closed won') return false;
+  if (!isPSOnlyProject(project)) return false;
+  if (!(Number(project?.progress) < 100)) return false;
+
+  const projectClosingDate = parseProjectDate(project?.project_closing_date);
+  if (!projectClosingDate) return false;
+
+  const today = new Date(Date.UTC(
+    now.getUTCFullYear(),
+    now.getUTCMonth(),
+    now.getUTCDate(),
+  ));
+  return projectClosingDate < today;
+}
+
 function getClosedWonProjectSummary(projects, now = new Date(), fiscalYear = null) {
   const runningProjects = projects.filter(project => (
     isProfessionalServiceRunningProject(project) &&
     isRunningProjectInFiscalYear(project, fiscalYear)
   ));
-  const delayedProjects = runningProjects.filter(project => (
-    getRunningProjectTiming(project, now) === 'delayed'
+  // Delayed Projects are intentionally all-FY. Do not inherit the Running
+  // Projects Matrix-FY filter or the March 1, 2025 Closed Won cutoff.
+  const delayedProjects = projects.filter(project => (
+    isDelayedProfessionalServicesProject(project, now)
   )).length;
   const onTimeProjects = runningProjects.filter(project => (
     getRunningProjectTiming(project, now) === 'on-time'
@@ -830,6 +854,31 @@ router.get('/api/dashboard/running-project-metrics', (req, res) => {
       revenue_accrual_count: accrualProjects.length,
       revenue_accrual_total: summary.accrualRevenue,
       revenue_accrual_projects: accrualProjects,
+    });
+  }
+
+  if (metric === 'delayed') {
+    const projects = metricRows
+      .filter(project => isDelayedProfessionalServicesProject(project, new Date()))
+      .map(project => ({
+        ...enrich(project),
+        timing: 'delayed',
+      }))
+      .sort((a, b) => (
+        String(a.project_closing_date || '9999-12-31')
+          .localeCompare(String(b.project_closing_date || '9999-12-31')) ||
+        Number(a.id) - Number(b.id)
+      ));
+
+    return res.json({
+      metric,
+      scope: 'all_fiscal_years',
+      count: projects.length,
+      total_product_amount: +projects.reduce(
+        (total, project) => total + (Number(project.product_amount) || 0),
+        0,
+      ).toFixed(2),
+      projects,
     });
   }
 
