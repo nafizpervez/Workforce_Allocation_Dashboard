@@ -92,6 +92,17 @@ async function loadMatrixAssignments({ announce = false } = {}) {
   // The top KPI row is part of the Matrix FY scope. renderStats also refreshes
   // the seven capacity-planning cards from the newly loaded matrix assignments.
   renderStats(stats);
+
+  // Planned vs Actual and Work Summary now belong to the global Matrix FY scope.
+  // Keep the Planned vs Actual local FY selector synchronized, and re-filter
+  // uploaded Time Sheet summaries to the newly selected Apr–Mar window.
+  if (typeof syncMonthlyPlannedWorkFiscalYearToMatrix === 'function') {
+    syncMonthlyPlannedWorkFiscalYearToMatrix();
+  }
+  if (typeof refreshWorkSummaryForMatrixFiscalYear === 'function') {
+    refreshWorkSummaryForMatrixFiscalYear();
+  }
+
   renderInsights();
   applyAndRenderRunning();
   applyAndRenderPipeline();

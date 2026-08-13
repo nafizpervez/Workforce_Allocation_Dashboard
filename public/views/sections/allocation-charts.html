@@ -187,10 +187,49 @@
                   <div>
                     <h3 class="font-semibold text-gray-900">Planned vs Actual</h3>
                     <p class="text-xs text-gray-500 mt-0.5">Resource Assignment plan with Work Summary Time Sheet comparison</p>
+                    <div class="monthly-planned-work-view-tabs" role="tablist" aria-label="Planned versus actual view">
+                      <button
+                        id="monthlyPlannedTeamViewTab"
+                        type="button"
+                        class="monthly-planned-work-view-tab is-active"
+                        data-monthly-work-view="team"
+                        role="tab"
+                        aria-selected="true"
+                        onclick="setMonthlyPlannedWorkView('team')"
+                      >
+                        Planned vs Actual (Team Wise)
+                      </button>
+                      <button
+                        id="monthlyPlannedIndividualViewTab"
+                        type="button"
+                        class="monthly-planned-work-view-tab"
+                        data-monthly-work-view="individual"
+                        role="tab"
+                        aria-selected="false"
+                        tabindex="-1"
+                        onclick="setMonthlyPlannedWorkView('individual')"
+                      >
+                        Planned vs Actual (Individual)
+                      </button>
+                    </div>
                   </div>
                 </div>
                 <div class="monthly-planned-work-side-meta">
                   <div class="monthly-planned-work-controls">
+                    <label
+                      id="monthlyPlannedWorkResourceFilterWrap"
+                      class="monthly-planned-work-resource-filter"
+                      for="monthlyPlannedWorkResourceFilter"
+                      hidden
+                    >
+                      <span>Resource</span>
+                      <select
+                        id="monthlyPlannedWorkResourceFilter"
+                        class="field-input"
+                        aria-label="Planned vs Actual resource"
+                        onchange="setMonthlyPlannedWorkResource(this.value)"
+                      ></select>
+                    </label>
                     <label class="monthly-planned-work-fy-filter" for="monthlyPlannedWorkFiscalYearFilter">
                       <span>FY</span>
                       <select

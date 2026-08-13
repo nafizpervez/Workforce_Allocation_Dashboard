@@ -183,8 +183,9 @@ function renderTeamSummaryChart() {
   }
 
   const allRows = S.timesheetRows || [];
-  const rows = getVisibleTimesheetRows();
+  const rows = getWorkSummaryTimesheetRows();
   const info = document.getElementById('teamSummaryInfo');
+  const fiscalYearLabel = fiscalYearDisplayLabel(S.matrixFiscalYear);
 
   if (!allRows.length) {
     setTimesheetEmptyState('team', false);
@@ -194,7 +195,7 @@ function renderTeamSummaryChart() {
 
   if (!rows.length) {
     setTimesheetEmptyState('team', false);
-    if (info) info.textContent = 'No active Time Sheet rows found. Inactive employees are excluded.';
+    if (info) info.textContent = `No Time Sheet rows found for ${fiscalYearLabel}. Inactive employees/managers are excluded.`;
     return;
   }
 
@@ -205,7 +206,7 @@ function renderTeamSummaryChart() {
   const totalHours = rows.reduce((s, r) => s + r.qty, 0);
 
   if (info) {
-    info.textContent = `${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs · inactive employees/managers excluded`;
+    info.textContent = `${fiscalYearLabel} · ${pivot.rowOrder.length} month${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs · inactive employees/managers excluded`;
   }
 
   S.charts.teamSummary = new Chart(canvas.getContext('2d'), {
@@ -286,9 +287,10 @@ function renderIndividualSummaryChart() {
   populateIndividualMonthFilter();
 
   const allRows = S.timesheetRows || [];
-  const visibleRows = getVisibleTimesheetRows();
+  const visibleRows = getWorkSummaryTimesheetRows();
   const rows = getIndividualSummaryRows();
   const info = document.getElementById('individualSummaryInfo');
+  const fiscalYearLabel = fiscalYearDisplayLabel(S.matrixFiscalYear);
 
   if (!allRows.length) {
     setTimesheetEmptyState('individual', false);
@@ -298,7 +300,7 @@ function renderIndividualSummaryChart() {
 
   if (!visibleRows.length) {
     setTimesheetEmptyState('individual', false);
-    if (info) info.textContent = 'No active Time Sheet rows found. Inactive employees are excluded.';
+    if (info) info.textContent = `No Time Sheet rows found for ${fiscalYearLabel}. Inactive employees/managers are excluded.`;
     return;
   }
 
@@ -316,7 +318,7 @@ function renderIndividualSummaryChart() {
   const monthText = S.individualSummaryMonthFilter ? ` · Month: ${S.individualSummaryMonthFilter}` : ' · All months';
 
   if (info) {
-    info.textContent = `${pivot.rowOrder.length} employee${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs${monthText} · inactive employees/managers excluded`;
+    info.textContent = `${fiscalYearLabel} · ${pivot.rowOrder.length} employee${pivot.rowOrder.length === 1 ? '' : 's'} · ${pivot.typeOrder.length} work type${pivot.typeOrder.length === 1 ? '' : 's'} · ${totalHours.toFixed(1)} hrs${monthText} · inactive employees/managers excluded`;
   }
 
   S.charts.individualSummary = new Chart(canvas.getContext('2d'), {
