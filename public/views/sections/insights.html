@@ -10,16 +10,11 @@
               <circle cx="11" cy="13" r="1.4" />
             </svg>
           </div>
-          <div class="grid grid-cols-2 gap-6">
+          <div class="grid grid-cols-2 gap-6 insight-ranking-grid">
             <!-- Highly Allocated -->
-            <div class="dc">
+            <div class="dc insight-ranking-card insight-ranking-card--high" data-card-key="highly-allocated" data-card-title="Highly Allocated">
               <div class="dc-handle">
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 12 12"
-                  fill="currentColor"
-                >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
                   <circle cx="4" cy="3" r="1" />
                   <circle cx="8" cy="3" r="1" />
                   <circle cx="4" cy="6" r="1" />
@@ -28,61 +23,35 @@
                   <circle cx="8" cy="9" r="1" />
                 </svg>
               </div>
-              <div
-                class="bg-white rounded-xl p-6"
-                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
-              >
-                <div class="flex items-center justify-between mb-5">
-                  <div class="flex items-center gap-3 card-title-pad">
-                    <div
-                      class="w-8 h-8 bg-green-100 rounded-xl flex items-center justify-center flex-shrink-0"
-                    >
-                      <svg
-                        class="w-4 h-4 text-green-600"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
+              <div class="insight-ranking-card__surface">
+                <div class="insight-ranking-card__header">
+                  <div class="insight-ranking-card__heading">
+                    <div class="insight-ranking-card__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M16 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2" />
                         <circle cx="12" cy="7" r="4" />
                         <polyline points="16 11 18 13 22 9" />
                       </svg>
                     </div>
-                    <div>
-                      <h3 class="font-semibold text-gray-900">
-                        Highly Allocated
-                      </h3>
-                      <p class="text-xs text-gray-500 mt-0.5">
-                        Top assigned resources
-                      </p>
+                    <div class="min-w-0">
+                      <div class="insight-ranking-card__eyebrow">Allocation insights</div>
+                      <h3 class="insight-ranking-card__title">Highly Allocated</h3>
+                      <p class="insight-ranking-card__subtitle">Highest assigned workload in the selected fiscal year</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-1 mr-10">
-                    <button
-                      onclick="setInsightsPeriod('high','fiscal')"
-                      data-pd="fiscal"
-                      data-card="high"
-                      class="period-btn active"
-                    >
-                      Year
-                    </button>
-                  </div>
+                  <button onclick="setInsightsPeriod('high','fiscal')" data-pd="fiscal" data-card="high" class="period-btn active insight-ranking-card__period">FY View</button>
                 </div>
-                <div id="highWorkloadList" class="space-y-3"></div>
+                <div class="insight-ranking-card__body">
+                  <div class="insight-ranking-card__labels"><span>Resource</span><span>FY allocation</span></div>
+                  <div id="highWorkloadList" class="insight-ranking-list insight-ranking-list--high"></div>
+                </div>
               </div>
             </div>
+
             <!-- Least Allocated -->
-            <div class="dc">
+            <div class="dc insight-ranking-card insight-ranking-card--low" data-card-key="least-allocated" data-card-title="Least Allocated">
               <div class="dc-handle">
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 12 12"
-                  fill="currentColor"
-                >
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor" aria-hidden="true">
                   <circle cx="4" cy="3" r="1" />
                   <circle cx="8" cy="3" r="1" />
                   <circle cx="4" cy="6" r="1" />
@@ -91,51 +60,29 @@
                   <circle cx="8" cy="9" r="1" />
                 </svg>
               </div>
-              <div
-                class="bg-white rounded-xl p-6"
-                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
-              >
-                <div class="flex items-center justify-between mb-5">
-                  <div class="flex items-center gap-3 card-title-pad">
-                    <div
-                      class="w-8 h-8 bg-amber-100 rounded-xl flex items-center justify-center flex-shrink-0"
-                    >
-                      <svg
-                        class="w-4 h-4 text-amber-600"
-                        viewBox="0 0 24 24"
-                        fill="none"
-                        stroke="currentColor"
-                        stroke-width="2"
-                        stroke-linecap="round"
-                        stroke-linejoin="round"
-                      >
+              <div class="insight-ranking-card__surface">
+                <div class="insight-ranking-card__header">
+                  <div class="insight-ranking-card__heading">
+                    <div class="insight-ranking-card__icon" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                         <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" />
                         <circle cx="9" cy="7" r="4" />
                         <path d="M23 21v-2a4 4 0 0 0-3-3.87" />
                         <path d="M16 3.13a4 4 0 0 1 0 7.75" />
                       </svg>
                     </div>
-                    <div>
-                      <h3 class="font-semibold text-gray-900">
-                        Least Allocated
-                      </h3>
-                      <p class="text-xs text-gray-500 mt-0.5">
-                        Low assigned resources
-                      </p>
+                    <div class="min-w-0">
+                      <div class="insight-ranking-card__eyebrow">Allocation insights</div>
+                      <h3 class="insight-ranking-card__title">Least Allocated</h3>
+                      <p class="insight-ranking-card__subtitle">Lowest assigned workload and available capacity</p>
                     </div>
                   </div>
-                  <div class="flex items-center gap-1 mr-10">
-                    <button
-                      onclick="setInsightsPeriod('low','fiscal')"
-                      data-pd="fiscal"
-                      data-card="low"
-                      class="period-btn active"
-                    >
-                      Year
-                    </button>
-                  </div>
+                  <button onclick="setInsightsPeriod('low','fiscal')" data-pd="fiscal" data-card="low" class="period-btn active insight-ranking-card__period">FY View</button>
                 </div>
-                <div id="topAvailableList" class="space-y-3"></div>
+                <div class="insight-ranking-card__body">
+                  <div class="insight-ranking-card__labels"><span>Resource</span><span>FY allocation</span></div>
+                  <div id="topAvailableList" class="insight-ranking-list insight-ranking-list--low"></div>
+                </div>
               </div>
             </div>
           </div>

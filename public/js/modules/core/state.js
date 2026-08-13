@@ -76,6 +76,7 @@ const S = {
   monthlyPlannedWorkMode: 'percent',
   monthlyPlannedWorkView: 'team',
   monthlyPlannedWorkEmployeeId: '',
+  monthlyPlannedWorkMonthKey: '',
   // Planned vs Actual follows the global Matrix FY by default. A user can
   // still choose another FY locally, but changing Matrix FY re-synchronizes it.
   monthlyPlannedWorkFiscalYear: getCurrentFiscalYearStart(),

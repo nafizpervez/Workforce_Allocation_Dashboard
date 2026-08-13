@@ -211,6 +211,18 @@
                       >
                         Planned vs Actual (Individual)
                       </button>
+                      <button
+                        id="monthlyPlannedMonthViewTab"
+                        type="button"
+                        class="monthly-planned-work-view-tab"
+                        data-monthly-work-view="month"
+                        role="tab"
+                        aria-selected="false"
+                        tabindex="-1"
+                        onclick="setMonthlyPlannedWorkView('month')"
+                      >
+                        Planned vs Actual (Month Wise)
+                      </button>
                     </div>
                   </div>
                 </div>
@@ -228,6 +240,20 @@
                         class="field-input"
                         aria-label="Planned vs Actual resource"
                         onchange="setMonthlyPlannedWorkResource(this.value)"
+                      ></select>
+                    </label>
+                    <label
+                      id="monthlyPlannedWorkMonthFilterWrap"
+                      class="monthly-planned-work-resource-filter monthly-planned-work-month-filter"
+                      for="monthlyPlannedWorkMonthFilter"
+                      hidden
+                    >
+                      <span>Month</span>
+                      <select
+                        id="monthlyPlannedWorkMonthFilter"
+                        class="field-input"
+                        aria-label="Planned vs Actual month"
+                        onchange="setMonthlyPlannedWorkMonth(this.value)"
                       ></select>
                     </label>
                     <label class="monthly-planned-work-fy-filter" for="monthlyPlannedWorkFiscalYearFilter">

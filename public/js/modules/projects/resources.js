@@ -179,6 +179,7 @@ async function toggleEmployeeActive(empId) {
     renderMonthlyPlannedWorkChart();
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
+    if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
     renderInsights();
 
     openResourceModal();
@@ -707,6 +708,7 @@ async function saveEmployeeWorkdays(empId, inputId, reopenTarget = 'team') {
     renderMonthlyPlannedWorkChart();
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
+    if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
     renderInsights();
 
     const stats = await api('GET', `/api/dashboard/stats?fiscalYear=${S.matrixFiscalYear}`);

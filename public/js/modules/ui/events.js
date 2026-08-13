@@ -429,7 +429,127 @@ function initEvents() {
 function initColResize() { const root = document.documentElement; let ac = null, sx = 0, sw = 0; const gw = col => parseInt(getComputedStyle(root).getPropertyValue(`--${col}-w`), 10) || (col === 'name' ? 220 : 160); document.getElementById('matrixWrap').addEventListener('mousedown', e => { const h = e.target.closest('.col-resizer'); if (!h) return; e.preventDefault(); ac = h.dataset.col; sx = e.clientX; sw = gw(ac); h.classList.add('active'); document.body.style.cursor = 'col-resize'; document.body.style.userSelect = 'none'; }); document.addEventListener('mousemove', e => { if (!ac) return; root.style.setProperty(`--${ac}-w`, Math.max(100, sw + (e.clientX - sx)) + 'px'); }); document.addEventListener('mouseup', () => { if (!ac) return; document.querySelectorAll('.col-resizer.active').forEach(el => el.classList.remove('active')); ac = null; document.body.style.cursor = ''; document.body.style.userSelect = ''; }); }
 
 /* ── Section drag ─────────────────────────────────────────────── */
-function initSectionDrag() { const canvas = document.getElementById('dashboard-canvas'); let dSrc = null, lTgt = null, lInd = null; let raf = null, py = 0; const EDGE = 130, SPD = 18; function loop() { const vh = window.innerHeight; if (py < EDGE) window.scrollBy(0, -SPD * (1 - py / EDGE)); else if (py > vh - EDGE) window.scrollBy(0, SPD * ((py - (vh - EDGE)) / EDGE)); raf = requestAnimationFrame(loop); } const start = () => { if (!raf) raf = requestAnimationFrame(loop); }; const stop = () => { if (raf) { cancelAnimationFrame(raf); raf = null; } }; document.addEventListener('dragover', e => { if (!dSrc) return; py = e.clientY; start(); }); document.addEventListener('dragend', stop); document.addEventListener('drop', stop); function clrInd() { canvas.querySelectorAll('.ds').forEach(s => s.classList.remove('drop-above', 'drop-below')); } canvas.querySelectorAll('.ds').forEach(sec => { const h = sec.querySelector(':scope > .drag-handle'); if (!h) return; h.addEventListener('mousedown', () => sec.setAttribute('draggable', 'true')); document.addEventListener('mouseup', () => sec.setAttribute('draggable', 'false')); sec.addEventListener('dragstart', e => { dSrc = sec; e.dataTransfer.effectAllowed = 'move'; e.dataTransfer.setData('text/plain', 'section'); requestAnimationFrame(() => sec.classList.add('is-dragging')); }); sec.addEventListener('dragend', () => { sec.classList.remove('is-dragging'); sec.setAttribute('draggable', 'false'); clrInd(); stop(); dSrc = null; lTgt = null; }); sec.addEventListener('dragover', e => { if (!dSrc) return; e.preventDefault(); e.dataTransfer.dropEffect = 'move'; if (dSrc === sec) { clrInd(); return; } const rect = sec.getBoundingClientRect(), above = e.clientY < rect.top + rect.height / 2; if (lTgt !== sec || lInd !== (above ? 'above' : 'below')) { clrInd(); sec.classList.add(above ? 'drop-above' : 'drop-below'); lTgt = sec; lInd = above ? 'above' : 'below'; } }); sec.addEventListener('dragleave', e => { if (!sec.contains(e.relatedTarget)) { sec.classList.remove('drop-above', 'drop-below'); if (lTgt === sec) lTgt = null; } }); sec.addEventListener('drop', e => { e.preventDefault(); if (!dSrc || dSrc === sec) return; const above = e.clientY < sec.getBoundingClientRect().top + sec.getBoundingClientRect().height / 2; if (above) canvas.insertBefore(dSrc, sec); else sec.after(dSrc); clrInd(); }); }); }
+function initSectionDrag() {
+  const canvas = document.getElementById('dashboard-canvas');
+  if (!canvas) return;
+
+  let dSrc = null;
+  let lTgt = null;
+  let lInd = null;
+  let raf = null;
+  let py = 0;
+  const EDGE = 130;
+  const SPD = 18;
+
+  function loop() {
+    const vh = window.innerHeight;
+    if (py < EDGE) window.scrollBy(0, -SPD * (1 - py / EDGE));
+    else if (py > vh - EDGE) window.scrollBy(0, SPD * ((py - (vh - EDGE)) / EDGE));
+    raf = requestAnimationFrame(loop);
+  }
+
+  const start = () => {
+    if (!raf) raf = requestAnimationFrame(loop);
+  };
+  const stop = () => {
+    if (raf) {
+      cancelAnimationFrame(raf);
+      raf = null;
+    }
+  };
+
+  document.addEventListener('dragover', event => {
+    if (!dSrc) return;
+    py = event.clientY;
+    start();
+  });
+  document.addEventListener('dragend', stop);
+  document.addEventListener('drop', stop);
+
+  function clearIndicators() {
+    canvas.querySelectorAll('.ds').forEach(section => section.classList.remove('drop-above', 'drop-below'));
+  }
+
+  canvas.querySelectorAll('.ds').forEach(section => {
+    if (section.hasAttribute('data-section-drag-init')) return;
+
+    const group = section.querySelector(':scope > [data-card-collapse-group]');
+    const useUnifiedSingleCardHandle = section.classList.contains('has-single-card-drag-handle');
+    const cardHandle = useUnifiedSingleCardHandle
+      ? group?.querySelector(':scope > .dc > .card-control-rail > .dc-handle')
+      : null;
+    const handle = cardHandle || section.querySelector(':scope > .drag-handle');
+    if (!handle) return;
+
+    section.setAttribute('data-section-drag-init', '1');
+    if (cardHandle) {
+      const title = section.querySelector(':scope > [data-card-collapse-group] > .dc')?.dataset.cardTitle || 'dashboard card';
+      handle.title = `Drag ${title} row`;
+      handle.setAttribute('aria-label', `Drag ${title} row`);
+      handle.dataset.sectionDragProxy = 'true';
+    }
+
+    handle.addEventListener('mousedown', event => {
+      event.stopPropagation();
+      section.setAttribute('draggable', 'true');
+    });
+    handle.addEventListener('click', event => event.stopPropagation());
+    document.addEventListener('mouseup', () => section.setAttribute('draggable', 'false'));
+
+    section.addEventListener('dragstart', event => {
+      // Card-to-card dragging is handled independently. A section drag starts
+      // only when this section was explicitly marked draggable by its row handle.
+      if (section.getAttribute('draggable') !== 'true') return;
+      dSrc = section;
+      event.dataTransfer.effectAllowed = 'move';
+      event.dataTransfer.setData('text/plain', 'section');
+      requestAnimationFrame(() => section.classList.add('is-dragging'));
+    });
+
+    section.addEventListener('dragend', () => {
+      section.classList.remove('is-dragging');
+      section.setAttribute('draggable', 'false');
+      clearIndicators();
+      stop();
+      dSrc = null;
+      lTgt = null;
+    });
+
+    section.addEventListener('dragover', event => {
+      if (!dSrc) return;
+      event.preventDefault();
+      event.dataTransfer.dropEffect = 'move';
+      if (dSrc === section) {
+        clearIndicators();
+        return;
+      }
+      const rect = section.getBoundingClientRect();
+      const above = event.clientY < rect.top + rect.height / 2;
+      if (lTgt !== section || lInd !== (above ? 'above' : 'below')) {
+        clearIndicators();
+        section.classList.add(above ? 'drop-above' : 'drop-below');
+        lTgt = section;
+        lInd = above ? 'above' : 'below';
+      }
+    });
+
+    section.addEventListener('dragleave', event => {
+      if (!section.contains(event.relatedTarget)) {
+        section.classList.remove('drop-above', 'drop-below');
+        if (lTgt === section) lTgt = null;
+      }
+    });
+
+    section.addEventListener('drop', event => {
+      event.preventDefault();
+      if (!dSrc || dSrc === section) return;
+      const above = event.clientY < section.getBoundingClientRect().top + section.getBoundingClientRect().height / 2;
+      if (above) canvas.insertBefore(dSrc, section);
+      else section.after(dSrc);
+      clearIndicators();
+    });
+  });
+}
 
 /* ── Card drag + dashboard-wide collapse controls ─────────────── */
 let cDragSrc = null;
@@ -447,6 +567,13 @@ const DEFAULT_COLLAPSED_CARD_KEYS = new Set([
 
 const REPORT_SECTION_KEYS = Object.freeze(['capacity-executive', 'capacity-planning']);
 
+const UNIFIED_SINGLE_CARD_DRAG_SECTION_KEYS = new Set([
+  'matrix',
+  'worksummarychart',
+  'teamutilization',
+  'newlogochart',
+]);
+
 const DASHBOARD_CARD_SECTION_META = Object.freeze({
   stats: { rowLabel: 'KPI cards' },
   'capacity-executive': { rowLabel: 'Executive Matrix, Capacity Allocation and Available Capacity Summary' },
@@ -454,6 +581,7 @@ const DASHBOARD_CARD_SECTION_META = Object.freeze({
   matrix: { rowLabel: 'Resource Assignment', singleCardTitle: 'Resource Assignment' },
   charts: { rowLabel: 'Assignment analytics' },
   worksummarychart: { rowLabel: 'Work Summary', singleCardTitle: 'Work Summary' },
+  teamutilization: { rowLabel: 'PS Team Utilization', singleCardTitle: 'PS Team Utilization' },
   newlogochart: { rowLabel: 'Deal Acquisition and Revenue charts', singleCardTitle: 'Deal Acquisition Chart' },
   insights: { rowLabel: 'Allocation insights' },
   pipeline: { rowLabel: 'Project operations' },
@@ -643,6 +771,14 @@ function prepareDashboardCardControls() {
 
     const cards = [...group.querySelectorAll('.dc')];
     group.dataset.cardCount = String(cards.length);
+    // Multi-card rows use the per-card left/right drag handles. Hiding the
+    // legacy section-level handle avoids rendering two drag controls over the
+    // first card while preserving the section handle for single-card rows.
+    section.classList.toggle('has-multiple-card-drag-handles', cards.length > 1);
+    section.classList.toggle(
+      'has-single-card-drag-handle',
+      cards.length === 1 && UNIFIED_SINGLE_CARD_DRAG_SECTION_KEYS.has(sectionKey),
+    );
     cards.forEach((card, index) => {
       const title = getDashboardCardTitle(card, `${meta.rowLabel} ${index + 1}`);
       if (!card.dataset.cardKey) card.dataset.cardKey = collapseSlug(title);
@@ -665,6 +801,11 @@ function initCardDrag() {
     card.setAttribute('data-drag-init', '1');
     const handle = card.querySelector(':scope > .card-control-rail > .dc-handle');
     if (!handle) return;
+
+    const group = card.closest('[data-card-collapse-group]');
+    // A single-card row uses this same visual handle to move the entire row
+    // vertically. initSectionDrag owns the listeners in that case.
+    if (group?.dataset.cardCount === '1') return;
 
     handle.addEventListener('mousedown', event => {
       event.stopPropagation();

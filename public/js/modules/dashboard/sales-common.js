@@ -1,14 +1,27 @@
 /* Workforce Allocation Dashboard — dashboard/sales.js */
 
-function insightRow(e) {
-  const u = e.utilization;
-  const displayU = Math.round(Number(u) || 0);
-  const clr = uc(u), badge = ub(u), label = us(u);
-  return `<div class="flex items-center gap-4 p-3 rounded-xl hover:bg-gray-50 transition-colors cursor-pointer" onclick="openEmployeeDetailModal(${e.id})">
-    <div class="relative flex-shrink-0"><div class="w-10 h-10 avatar-grad rounded-full flex items-center justify-center text-sm">${esc(inits(e.name))}</div><div class="absolute -bottom-0.5 -right-0.5 w-3 h-3 rounded-full border-2 border-white ${u === 0 ? 'bg-emerald-400' : u >= 80 ? 'bg-red-400' : 'bg-amber-400'}"></div></div>
-    <div class="flex-1 min-w-0"><div class="text-sm font-semibold text-gray-900 truncate">${esc(e.name)}</div><div class="text-xs text-gray-500">${esc(e.dept || '—')}</div></div>
-    <div class="flex items-center gap-2 flex-shrink-0"><span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${label}</span><span class="text-sm font-bold ${clr}">${displayU}%</span></div>
-  </div>`;
+function insightRow(e, mode = 'high', rank = 0) {
+  const u = Number(e?.utilization) || 0;
+  const displayU = Math.round(u);
+  const clamped = Math.max(0, Math.min(u, 100));
+  const status = us(u);
+  const tone = u > 100 ? 'over' : u > 85 ? 'high' : u > 50 ? 'balanced' : 'available';
+  const modeClass = mode === 'low' ? 'insight-resource-row--low' : 'insight-resource-row--high';
+  return `<button type="button" class="insight-resource-row ${modeClass}" onclick="openEmployeeDetailModal(${Number(e.id)})" aria-label="Open ${esc(e.name)} workload details">
+    <span class="insight-resource-row__rank">${rank + 1}</span>
+    <span class="insight-resource-row__avatar" aria-hidden="true">${esc(inits(e.name))}</span>
+    <span class="insight-resource-row__identity">
+      <strong title="${esc(e.name)}">${esc(e.name)}</strong>
+      <small>${esc(e.dept || '—')}</small>
+    </span>
+    <span class="insight-resource-row__metric">
+      <span class="insight-resource-row__metric-top">
+        <span class="insight-resource-row__status insight-resource-row__status--${tone}">${esc(status)}</span>
+        <strong class="insight-resource-row__percent insight-resource-row__percent--${tone}">${displayU}%</strong>
+      </span>
+      <span class="insight-resource-row__progress" aria-hidden="true"><span class="insight-resource-row__progress-fill insight-resource-row__progress-fill--${tone}" style="width:${clamped}%"></span></span>
+    </span>
+  </button>`;
 }
 
 /* ── Deal status badge ────────────────────────────────────────── */
