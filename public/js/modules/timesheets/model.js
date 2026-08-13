@@ -17,12 +17,12 @@ const TIMESHEET_WORK_TYPE_ORDER = [
 const TIMESHEET_WORK_TYPE_STACK_ORDER = [...TIMESHEET_WORK_TYPE_ORDER].reverse();
 
 const TIMESHEET_WORK_TYPE_COLORS = {
-  'Training Delivery': '#449328',
-  'Skill Development': '#F6C6AD',
-  'Service Delivery - Local PS': '#D9F2D0',
-  'Service Delivery - Intrasourcing': '#F2CFEE',
-  'Pre - Sales': '#96DCF8',
-  'General Admin': '#D1D1D1',
+  'Training Delivery': '#2F7D1F',
+  'Skill Development': '#F2A47E',
+  'Service Delivery - Local PS': '#B7E7A5',
+  'Service Delivery - Intrasourcing': '#E79ADE',
+  'Pre - Sales': '#55C4EE',
+  'General Admin': '#AEB5BD',
 };
 
 function normalizeTimesheetWorkType(value) {
@@ -290,8 +290,59 @@ function getVisibleTimesheetRows() {
   });
 }
 
+function isTimesheetRowInFiscalYear(row, fiscalYear = S.matrixFiscalYear) {
+  const normalizedFiscalYear = normalizeFiscalYearStart(fiscalYear, S.matrixFiscalYear);
+  const parsedMonth = typeof parseMonthlyWorkMonth === 'function'
+    ? parseMonthlyWorkMonth(
+      row?.month ?? row?.Month ?? row?.month_label ?? row?.monthLabel,
+    )
+    : null;
+
+  if (!parsedMonth) return false;
+
+  return (
+    (Number(parsedMonth.year) === normalizedFiscalYear && Number(parsedMonth.month) >= FISCAL_YEAR_START_MONTH) ||
+    (Number(parsedMonth.year) === normalizedFiscalYear + 1 && Number(parsedMonth.month) < FISCAL_YEAR_START_MONTH)
+  );
+}
+
+function getWorkSummaryTimesheetRows(fiscalYear = S.matrixFiscalYear) {
+  return getVisibleTimesheetRows().filter(row => {
+    if (!isTimesheetRowInFiscalYear(row, fiscalYear)) return false;
+
+    const parsedMonth = typeof parseMonthlyWorkMonth === 'function'
+      ? parseMonthlyWorkMonth(
+        row?.month ?? row?.Month ?? row?.month_label ?? row?.monthLabel,
+      )
+      : null;
+    if (!parsedMonth) return false;
+
+    // Work Summary follows the same Matrix FY availability data as the global
+    // selector, rather than the dashboard's fixed historical assignment set.
+    return !isTimesheetWorkerUnavailableForMonth(
+      row.worker,
+      parsedMonth.year,
+      parsedMonth.month,
+      S.matrixAssignments,
+    );
+  });
+}
+
+function refreshWorkSummaryForMatrixFiscalYear() {
+  // Month choices and both Work Summary views are scoped to the global Matrix FY.
+  // Reset a prior month selection if it belongs to another fiscal year.
+  const validMonths = new Set(getWorkSummaryTimesheetRows().map(row => row.month));
+  if (S.individualSummaryMonthFilter && !validMonths.has(S.individualSummaryMonthFilter)) {
+    S.individualSummaryMonthFilter = '';
+  }
+
+  populateIndividualMonthFilter();
+  renderTeamSummaryChart();
+  renderIndividualSummaryChart();
+}
+
 function getTimesheetMonthOptions() {
-  return [...new Set(getVisibleTimesheetRows().map(r => r.month).filter(Boolean))]
+  return [...new Set(getWorkSummaryTimesheetRows().map(r => r.month).filter(Boolean))]
     .sort((a, b) => monthSortKey(a) - monthSortKey(b));
 }
 
@@ -366,7 +417,7 @@ async function loadSavedTimesheetFromDb() {
 }
 
 function getIndividualSummaryRows() {
-  const rows = getVisibleTimesheetRows();
+  const rows = getWorkSummaryTimesheetRows();
   const month = S.individualSummaryMonthFilter;
   return month ? rows.filter(r => r.month === month) : rows;
 }

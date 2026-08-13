@@ -25,6 +25,70 @@
   gap: 0.65rem;
 }
 
+
+.monthly-planned-work-view-tabs {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.25rem;
+  margin-top: 0.65rem;
+  padding: 0.2rem;
+  border: 1px solid #dbe3ef;
+  border-radius: 0.7rem;
+  background: #f8fafc;
+}
+
+.monthly-planned-work-view-tab {
+  min-height: 1.9rem;
+  padding: 0.38rem 0.72rem;
+  border: 0;
+  border-radius: 0.5rem;
+  background: transparent;
+  color: #64748b;
+  font-size: 0.7rem;
+  font-weight: 700;
+  line-height: 1.1;
+  cursor: pointer;
+  transition: background-color 150ms ease, color 150ms ease, box-shadow 150ms ease;
+}
+
+.monthly-planned-work-view-tab:hover {
+  color: #1d4ed8;
+}
+
+.monthly-planned-work-view-tab:focus-visible {
+  outline: 2px solid #93c5fd;
+  outline-offset: 2px;
+}
+
+.monthly-planned-work-view-tab.is-active {
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.12);
+}
+
+.monthly-planned-work-resource-filter {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.4rem;
+  color: #64748b;
+  font-size: 0.72rem;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.monthly-planned-work-resource-filter[hidden] {
+  display: none !important;
+}
+
+.monthly-planned-work-resource-filter select {
+  width: 15rem;
+  height: 2.25rem;
+  padding: 0.35rem 1.9rem 0.35rem 0.65rem;
+  color: #334155;
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
 .monthly-planned-work-fy-filter {
   display: inline-flex;
   align-items: center;
@@ -154,6 +218,14 @@
     justify-content: flex-start;
     flex-wrap: wrap;
     width: 100%;
+  }
+
+  .monthly-planned-work-view-tabs {
+    flex-wrap: wrap;
+  }
+
+  .monthly-planned-work-resource-filter select {
+    width: min(15rem, 58vw);
   }
 
   .monthly-planned-work-meta {

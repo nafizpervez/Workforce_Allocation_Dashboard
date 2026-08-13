@@ -74,9 +74,11 @@ const S = {
   workSummaryTab: 'team',
   resourceMatrixTab: 'matrix',
   monthlyPlannedWorkMode: 'percent',
-  // Blank means the card's default "All" option, which preserves the
-  // established FY27 view. A numeric value is a fiscal-year start year.
-  monthlyPlannedWorkFiscalYear: '',
+  monthlyPlannedWorkView: 'team',
+  monthlyPlannedWorkEmployeeId: '',
+  // Planned vs Actual follows the global Matrix FY by default. A user can
+  // still choose another FY locally, but changing Matrix FY re-synchronizes it.
+  monthlyPlannedWorkFiscalYear: getCurrentFiscalYearStart(),
 };
 
 

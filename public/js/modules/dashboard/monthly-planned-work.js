@@ -5,37 +5,37 @@ const MONTHLY_PLANNED_WORK_CATEGORIES = Object.freeze([
   Object.freeze({
     key: 'trainingDelivery',
     label: 'Training Delivery',
-    color: '#449328',
+    color: '#2F7D1F',
     textColor: '#FFFFFF',
   }),
   Object.freeze({
     key: 'skillDevelopment',
     label: 'Skill Development',
-    color: '#F6C6AD',
+    color: '#F2A47E',
     textColor: '#334155',
   }),
   Object.freeze({
     key: 'serviceDeliveryLocalPs',
     label: 'Service Delivery - Local PS',
-    color: '#D9F2D0',
+    color: '#B7E7A5',
     textColor: '#334155',
   }),
   Object.freeze({
     key: 'serviceDeliveryIntrasourcing',
     label: 'Service Delivery - Intrasourcing',
-    color: '#F2CFEE',
+    color: '#E79ADE',
     textColor: '#334155',
   }),
   Object.freeze({
     key: 'preSales',
     label: 'Pre - Sales',
-    color: '#96DCF8',
+    color: '#55C4EE',
     textColor: '#334155',
   }),
   Object.freeze({
     key: 'generalAdmin',
     label: 'General Admin',
-    color: '#D1D1D1',
+    color: '#AEB5BD',
     textColor: '#334155',
   }),
 ]);
@@ -120,6 +120,84 @@ function getMonthlyPlannedActiveEmployeeIds() {
   return new Set(
     getMonthlyPlannedActiveEmployees().map(employee => Number(employee.id)),
   );
+}
+
+
+function getMonthlyPlannedWorkView() {
+  return S.monthlyPlannedWorkView === 'individual' ? 'individual' : 'team';
+}
+
+function getMonthlyPlannedWorkEmployees() {
+  return [...getMonthlyPlannedActiveEmployees()].sort((a, b) =>
+    String(a?.name || '').localeCompare(String(b?.name || ''), undefined, { sensitivity: 'base' }),
+  );
+}
+
+function getSelectedMonthlyPlannedWorkEmployee() {
+  if (getMonthlyPlannedWorkView() !== 'individual') return null;
+
+  const employees = getMonthlyPlannedWorkEmployees();
+  const selectedId = Number(S.monthlyPlannedWorkEmployeeId);
+  const selected = employees.find(employee => Number(employee.id) === selectedId) || employees[0] || null;
+
+  if (selected && String(S.monthlyPlannedWorkEmployeeId) !== String(selected.id)) {
+    S.monthlyPlannedWorkEmployeeId = String(selected.id);
+  }
+
+  return selected;
+}
+
+function populateMonthlyPlannedWorkResourceFilter() {
+  const wrap = document.getElementById('monthlyPlannedWorkResourceFilterWrap');
+  const select = document.getElementById('monthlyPlannedWorkResourceFilter');
+  if (!wrap || !select) return;
+
+  const isIndividual = getMonthlyPlannedWorkView() === 'individual';
+  wrap.hidden = !isIndividual;
+  if (!isIndividual) return;
+
+  const employees = getMonthlyPlannedWorkEmployees();
+  const selected = getSelectedMonthlyPlannedWorkEmployee();
+
+  select.innerHTML = employees.length
+    ? employees.map(employee => {
+        const designation = String(employee.designation || '').trim();
+        const suffix = designation ? ` · ${designation}` : '';
+        return `<option value="${esc(employee.id)}">${esc(`${employee.name}${suffix}`)}</option>`;
+      }).join('')
+    : '<option value="">No active resources</option>';
+
+  select.value = selected ? String(selected.id) : '';
+  select.disabled = employees.length === 0;
+}
+
+function updateMonthlyPlannedWorkViewTabs() {
+  const view = getMonthlyPlannedWorkView();
+  document.querySelectorAll('[data-monthly-work-view]').forEach(button => {
+    const isActive = button.dataset.monthlyWorkView === view;
+    button.classList.toggle('is-active', isActive);
+    button.setAttribute('aria-selected', String(isActive));
+    button.tabIndex = isActive ? 0 : -1;
+  });
+
+  populateMonthlyPlannedWorkResourceFilter();
+}
+
+function setMonthlyPlannedWorkView(view) {
+  const normalized = view === 'individual' ? 'individual' : 'team';
+  if (S.monthlyPlannedWorkView === normalized) return;
+
+  S.monthlyPlannedWorkView = normalized;
+  if (normalized === 'individual') getSelectedMonthlyPlannedWorkEmployee();
+  renderMonthlyPlannedWorkChart();
+}
+
+function setMonthlyPlannedWorkResource(value) {
+  const employeeId = Number(value);
+  S.monthlyPlannedWorkEmployeeId = Number.isFinite(employeeId) && employeeId > 0
+    ? String(employeeId)
+    : '';
+  renderMonthlyPlannedWorkChart();
 }
 
 function normalizeMonthlyWorkPerson(value) {
@@ -330,6 +408,15 @@ function setMonthlyPlannedWorkFiscalYear(value) {
   renderMonthlyPlannedWorkChart();
 }
 
+function syncMonthlyPlannedWorkFiscalYearToMatrix() {
+  S.monthlyPlannedWorkFiscalYear = normalizeFiscalYearStart(
+    S.matrixFiscalYear,
+    S.fiscalYear,
+  );
+  populateMonthlyPlannedWorkFiscalYearFilter();
+  renderMonthlyPlannedWorkChart();
+}
+
 function classifyMonthlyPlannedWorkType(projectName) {
   if (isUnavailableProjectName(projectName)) return null;
 
@@ -452,13 +539,16 @@ function finalizeMonthlyWorkSource(source) {
   source.hasData = source.totalHours > 0;
 }
 
-function getMonthlyPlannedWorkSeries(fiscalYear, assignments) {
+function getMonthlyPlannedWorkSeries(fiscalYear, assignments, selectedEmployee = null) {
   const months = fiscalMonths(fiscalYear);
   const monthIndex = new Map(
     months.map((month, index) => [`${month.y}-${month.m}`, index]),
   );
   const employeeLookup = createMonthlyWorkEmployeeLookup();
-  const activeEmployeeIds = new Set(employeeLookup.byId.keys());
+  const selectedEmployeeId = selectedEmployee ? Number(selectedEmployee.id) : null;
+  const activeEmployeeIds = selectedEmployeeId !== null
+    ? new Set([selectedEmployeeId])
+    : new Set(employeeLookup.byId.keys());
 
   const rows = months.map(month => ({
     ...month,
@@ -549,6 +639,9 @@ function getMonthlyPlannedWorkSeries(fiscalYear, assignments) {
     }
 
     const employee = findMonthlyWorkEmployeeByName(worker, employeeLookup);
+    if (selectedEmployeeId !== null && Number(employee?.id) !== selectedEmployeeId) {
+      continue;
+    }
 
     source.hours[categoryKey] += hours;
     if (worker) source.resourceNames.add(String(worker).trim());
@@ -599,6 +692,8 @@ function getMonthlyPlannedWorkSeries(fiscalYear, assignments) {
     ).toFixed(2),
     actualMonthCount: rows.filter(row => row.actual.hasData).length,
     resourceCount: activeEmployeeIds.size,
+    selectedEmployeeId,
+    selectedEmployeeName: selectedEmployee?.name || '',
   };
 }
 
@@ -788,6 +883,11 @@ function updateMonthlyPlannedWorkMeta(series, mode) {
   const meta = document.getElementById('monthlyPlannedWorkMeta');
   if (!meta) return;
 
+  const isIndividual = getMonthlyPlannedWorkView() === 'individual';
+  const scopeText = isIndividual && series.selectedEmployeeName
+    ? series.selectedEmployeeName
+    : `${series.resourceCount} active resources`;
+
   if (mode === 'revenue') {
     const unpricedHours = series.plannedUnpricedRevenueHours +
       series.actualUnpricedRevenueHours;
@@ -796,7 +896,7 @@ function updateMonthlyPlannedWorkMeta(series, mode) {
       : '';
 
     meta.textContent =
-      `FY${series.fiscalYear + 1} · ` +
+      `FY${series.fiscalYear + 1} · ${scopeText} · ` +
       `${formatMonthlyRevenue(series.totalPlannedRevenue, { compact: true })} planned revenue · ` +
       `${formatMonthlyRevenue(series.totalActualRevenue, { compact: true })} actual revenue` +
       unpricedText;
@@ -808,7 +908,7 @@ function updateMonthlyPlannedWorkMeta(series, mode) {
     : 'No matching Time Sheet months';
 
   meta.textContent =
-    `FY${series.fiscalYear + 1} · ${series.resourceCount} active resources · ` +
+    `FY${series.fiscalYear + 1} · ${scopeText} · ` +
     `${formatMonthlyPlannedHours(series.totalPlannedHours)} planned · ${actualText}`;
 }
 
@@ -816,8 +916,17 @@ function updateMonthlyPlannedWorkNote(mode) {
   const note = document.getElementById('monthlyPlannedWorkNote');
   if (!note) return;
 
-  note.textContent = mode === 'revenue'
-    ? 'Revenue uses each resource’s saved designation rates: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre-Sale / Training rate. Skill Development and General Admin are non-revenue.'
+  const isIndividual = getMonthlyPlannedWorkView() === 'individual';
+
+  if (mode === 'revenue') {
+    note.textContent = isIndividual
+      ? 'For the selected resource, planned revenue comes from Resource Assignment tasks and actual revenue comes from matching Work Summary Time Sheet entries. Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre-Sale / Training rate. Skill Development and General Admin are non-revenue.'
+      : 'Revenue uses each resource’s saved designation rates: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre-Sale / Training rate. Skill Development and General Admin are non-revenue.';
+    return;
+  }
+
+  note.textContent = isIndividual
+    ? 'Each month compares the selected resource’s planned Resource Assignment tasks with that resource’s actual Work Summary Time Sheet entries. Planned is the left stacked bar and Actual is the right stacked bar, using the same six work types, sequence and colors.'
     : 'Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.';
 }
 
@@ -968,8 +1077,10 @@ function renderMonthlyPlannedWorkChart() {
   if (!canvas) return;
 
   populateMonthlyPlannedWorkFiscalYearFilter();
+  updateMonthlyPlannedWorkViewTabs();
 
   const fiscalYear = getSelectedMonthlyPlannedWorkFiscalYear();
+  const selectedEmployee = getSelectedMonthlyPlannedWorkEmployee();
   const assignments = getMonthlyPlannedWorkAssignments(fiscalYear);
 
   if (assignments === null) {
@@ -1002,7 +1113,7 @@ function renderMonthlyPlannedWorkChart() {
   }
 
   const mode = getMonthlyPlannedWorkMode();
-  const series = getMonthlyPlannedWorkSeries(fiscalYear, assignments);
+  const series = getMonthlyPlannedWorkSeries(fiscalYear, assignments, selectedEmployee);
   updateMonthlyPlannedWorkTabs();
   updateMonthlyPlannedWorkMeta(series, mode);
   updateMonthlyPlannedWorkNote(mode);
@@ -1025,6 +1136,7 @@ function renderMonthlyPlannedWorkChart() {
         ),
         rawHours: series.rows.map(row => row[workSource].hours[categoryKey]),
         backgroundColor: category.color,
+        hoverBackgroundColor: category.color,
         borderColor: category.color,
         borderWidth: 0,
         borderSkipped: false,
