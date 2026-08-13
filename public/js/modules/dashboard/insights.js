@@ -84,14 +84,14 @@ function setInsightsPeriod(card, period) {
   document.querySelectorAll(`[data-card="${card}"][data-pd]`).forEach(b => b.classList.toggle('active', b.dataset.pd === period));
   const util = calcLocalUtil(period);
   const empty = '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
-  if (card === 'high') document.getElementById('highWorkloadList').innerHTML = util.high_workload.map(insightRow).join('') || empty;
-  else document.getElementById('topAvailableList').innerHTML = util.top_available.map(insightRow).join('') || empty;
+  if (card === 'high') document.getElementById('highWorkloadList').innerHTML = util.high_workload.map((row, index) => insightRow(row, 'high', index)).join('') || empty;
+  else document.getElementById('topAvailableList').innerHTML = util.top_available.map((row, index) => insightRow(row, 'low', index)).join('') || empty;
 }
 
 function renderInsights() {
   const empty = '<p class="text-sm text-gray-400 text-center py-4">No data</p>';
-  document.getElementById('highWorkloadList').innerHTML = calcLocalUtil(S.insightsPeriodHigh).high_workload.map(insightRow).join('') || empty;
-  document.getElementById('topAvailableList').innerHTML = calcLocalUtil(S.insightsPeriodLow).top_available.map(insightRow).join('') || empty;
+  document.getElementById('highWorkloadList').innerHTML = calcLocalUtil(S.insightsPeriodHigh).high_workload.map((row, index) => insightRow(row, 'high', index)).join('') || empty;
+  document.getElementById('topAvailableList').innerHTML = calcLocalUtil(S.insightsPeriodLow).top_available.map((row, index) => insightRow(row, 'low', index)).join('') || empty;
 }
 
 function openEmployeeDetailModal(empId) {

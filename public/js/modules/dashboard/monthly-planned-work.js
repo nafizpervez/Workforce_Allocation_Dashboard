@@ -124,7 +124,9 @@ function getMonthlyPlannedActiveEmployeeIds() {
 
 
 function getMonthlyPlannedWorkView() {
-  return S.monthlyPlannedWorkView === 'individual' ? 'individual' : 'team';
+  return ['team', 'individual', 'month'].includes(S.monthlyPlannedWorkView)
+    ? S.monthlyPlannedWorkView
+    : 'team';
 }
 
 function getMonthlyPlannedWorkEmployees() {
@@ -171,6 +173,77 @@ function populateMonthlyPlannedWorkResourceFilter() {
   select.disabled = employees.length === 0;
 }
 
+function monthlyPlannedWorkMonthKey(year, month) {
+  return `${Number(year)}-${String(Number(month)).padStart(2, '0')}`;
+}
+
+function getMonthlyPlannedWorkActualMonthKeys(fiscalYear) {
+  const validKeys = new Set(
+    fiscalMonths(fiscalYear).map(month => monthlyPlannedWorkMonthKey(month.y, month.m)),
+  );
+  const actualKeys = new Set();
+
+  for (const row of S.timesheetRows || []) {
+    if (typeof isInactiveTimesheetWorker === 'function' && isInactiveTimesheetWorker(row.worker)) {
+      continue;
+    }
+
+    const parsed = parseMonthlyWorkMonth(
+      row.month ?? row.Month ?? row.month_label ?? row.monthLabel,
+    );
+    if (!parsed) continue;
+
+    const key = monthlyPlannedWorkMonthKey(parsed.year, parsed.month);
+    if (validKeys.has(key)) actualKeys.add(key);
+  }
+
+  return actualKeys;
+}
+
+function getSelectedMonthlyPlannedWorkMonth(fiscalYear = getSelectedMonthlyPlannedWorkFiscalYear()) {
+  const months = fiscalMonths(fiscalYear);
+  const selectedKey = String(S.monthlyPlannedWorkMonthKey || '').trim();
+  const selected = months.find(month => monthlyPlannedWorkMonthKey(month.y, month.m) === selectedKey);
+  if (selected) return selected;
+
+  const actualKeys = getMonthlyPlannedWorkActualMonthKeys(fiscalYear);
+  const latestActual = [...months].reverse().find(month =>
+    actualKeys.has(monthlyPlannedWorkMonthKey(month.y, month.m)),
+  );
+  const fallback = latestActual || months[0] || null;
+
+  if (fallback) {
+    S.monthlyPlannedWorkMonthKey = monthlyPlannedWorkMonthKey(fallback.y, fallback.m);
+  }
+  return fallback;
+}
+
+function populateMonthlyPlannedWorkMonthFilter() {
+  const wrap = document.getElementById('monthlyPlannedWorkMonthFilterWrap');
+  const select = document.getElementById('monthlyPlannedWorkMonthFilter');
+  if (!wrap || !select) return;
+
+  const isMonthView = getMonthlyPlannedWorkView() === 'month';
+  wrap.hidden = !isMonthView;
+  if (!isMonthView) return;
+
+  const fiscalYear = getSelectedMonthlyPlannedWorkFiscalYear();
+  const months = fiscalMonths(fiscalYear);
+  const actualKeys = getMonthlyPlannedWorkActualMonthKeys(fiscalYear);
+  const selected = getSelectedMonthlyPlannedWorkMonth(fiscalYear);
+
+  select.innerHTML = months.map(month => {
+    const key = monthlyPlannedWorkMonthKey(month.y, month.m);
+    const suffix = actualKeys.has(key) ? ' · Actual' : '';
+    return `<option value="${esc(key)}">${esc(`${month.label}${suffix}`)}</option>`;
+  }).join('');
+
+  select.value = selected
+    ? monthlyPlannedWorkMonthKey(selected.y, selected.m)
+    : '';
+  select.disabled = months.length === 0;
+}
+
 function updateMonthlyPlannedWorkViewTabs() {
   const view = getMonthlyPlannedWorkView();
   document.querySelectorAll('[data-monthly-work-view]').forEach(button => {
@@ -181,14 +254,16 @@ function updateMonthlyPlannedWorkViewTabs() {
   });
 
   populateMonthlyPlannedWorkResourceFilter();
+  populateMonthlyPlannedWorkMonthFilter();
 }
 
 function setMonthlyPlannedWorkView(view) {
-  const normalized = view === 'individual' ? 'individual' : 'team';
+  const normalized = ['team', 'individual', 'month'].includes(view) ? view : 'team';
   if (S.monthlyPlannedWorkView === normalized) return;
 
   S.monthlyPlannedWorkView = normalized;
   if (normalized === 'individual') getSelectedMonthlyPlannedWorkEmployee();
+  if (normalized === 'month') getSelectedMonthlyPlannedWorkMonth();
   renderMonthlyPlannedWorkChart();
 }
 
@@ -197,6 +272,11 @@ function setMonthlyPlannedWorkResource(value) {
   S.monthlyPlannedWorkEmployeeId = Number.isFinite(employeeId) && employeeId > 0
     ? String(employeeId)
     : '';
+  renderMonthlyPlannedWorkChart();
+}
+
+function setMonthlyPlannedWorkMonth(value) {
+  S.monthlyPlannedWorkMonthKey = String(value || '').trim();
   renderMonthlyPlannedWorkChart();
 }
 
@@ -697,6 +777,150 @@ function getMonthlyPlannedWorkSeries(fiscalYear, assignments, selectedEmployee =
   };
 }
 
+function getMonthlyPlannedWorkResourceSeries(fiscalYear, assignments, selectedMonth) {
+  const employees = getMonthlyPlannedWorkEmployees();
+  const employeeLookup = createMonthlyWorkEmployeeLookup();
+  const monthYear = Number(selectedMonth?.y);
+  const monthNumber = Number(selectedMonth?.m);
+  const monthLabel = selectedMonth?.label || '';
+
+  const rows = employees.map(employee => ({
+    label: String(employee.name || `Resource ${employee.id}`),
+    designation: String(employee.designation || '').trim(),
+    employeeId: Number(employee.id),
+    planned: createMonthlyWorkSource(),
+    actual: createMonthlyWorkSource(),
+  }));
+  const rowByEmployeeId = new Map(rows.map(row => [row.employeeId, row]));
+
+  for (const assignment of getEffectiveFiscalAssignments(fiscalYear, assignments)) {
+    if (Number(assignment.year) !== monthYear || Number(assignment.month) !== monthNumber) continue;
+
+    const employeeId = Number(assignment.employee_id);
+    const row = rowByEmployeeId.get(employeeId);
+    if (!row) continue;
+
+    const percentage = Number(assignment.percentage);
+    if (!Number.isFinite(percentage) || percentage <= 0) continue;
+
+    const categoryKey = classifyMonthlyPlannedWorkType(
+      getSummaryAssignmentProjectName(assignment),
+    );
+    if (!categoryKey) continue;
+
+    const plannedHours = WORK_HOURS_PER_WEEK * (percentage / 100);
+    const source = row.planned;
+    const employee = employeeLookup.byId.get(employeeId) || null;
+
+    source.hours[categoryKey] += plannedHours;
+    source.resourceIds.add(employeeId);
+    if (assignment.project_id !== null && assignment.project_id !== undefined) {
+      source.projectIds.add(Number(assignment.project_id));
+    }
+    source.rowCount += 1;
+
+    addMonthlyWorkRevenue(
+      source,
+      categoryKey,
+      plannedHours,
+      employee,
+      employee?.name || '',
+      getRevenueRateDateForAssignment(assignment),
+    );
+  }
+
+  const actualRows = (S.timesheetRows || []).filter(row => (
+    typeof isInactiveTimesheetWorker !== 'function' ||
+    !isInactiveTimesheetWorker(row.worker)
+  ));
+
+  for (const timesheetRow of actualRows) {
+    const parsedMonth = parseMonthlyWorkMonth(
+      timesheetRow.month ??
+      timesheetRow.Month ??
+      timesheetRow.month_label ??
+      timesheetRow.monthLabel,
+    );
+    if (!parsedMonth || parsedMonth.year !== monthYear || parsedMonth.month !== monthNumber) {
+      continue;
+    }
+
+    const hours = Number(
+      timesheetRow.qty ??
+      timesheetRow.hours ??
+      timesheetRow.quantity,
+    );
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+
+    const categoryKey = classifyMonthlyActualWorkType(
+      timesheetRow.workType ??
+      timesheetRow.work_type ??
+      timesheetRow['Work Type'],
+    );
+    if (!categoryKey) continue;
+
+    const worker = timesheetRow.worker ?? timesheetRow.employee ?? timesheetRow.resource;
+    if (isTimesheetWorkerUnavailableForMonth(worker, monthYear, monthNumber, assignments)) {
+      continue;
+    }
+
+    const employee = findMonthlyWorkEmployeeByName(worker, employeeLookup);
+    const row = rowByEmployeeId.get(Number(employee?.id));
+    if (!row) continue;
+
+    const source = row.actual;
+    const projectName = timesheetRow.projectName ?? timesheetRow.project_name ?? timesheetRow.project;
+    source.hours[categoryKey] += hours;
+    source.resourceIds.add(Number(employee.id));
+    if (worker) source.resourceNames.add(String(worker).trim());
+    if (projectName) source.projectNames.add(String(projectName).trim());
+    source.rowCount += 1;
+
+    addMonthlyWorkRevenue(
+      source,
+      categoryKey,
+      hours,
+      employee,
+      worker || '',
+      getRevenueRateDateForTimesheetRow(timesheetRow, monthYear, monthNumber),
+    );
+  }
+
+  rows.forEach(row => {
+    finalizeMonthlyWorkSource(row.planned);
+    finalizeMonthlyWorkSource(row.actual);
+  });
+
+  const chartRows = rows;
+
+  return {
+    fiscalYear,
+    rows: chartRows,
+    month: selectedMonth,
+    monthLabel,
+    totalPlannedHours: +chartRows.reduce((sum, row) => sum + row.planned.totalHours, 0).toFixed(2),
+    totalActualHours: +chartRows.reduce((sum, row) => sum + row.actual.totalHours, 0).toFixed(2),
+    totalPlannedRevenue: +chartRows.reduce((sum, row) => sum + row.planned.totalRevenue, 0).toFixed(2),
+    totalActualRevenue: +chartRows.reduce((sum, row) => sum + row.actual.totalRevenue, 0).toFixed(2),
+    plannedUnpricedRevenueHours: +chartRows.reduce((sum, row) => sum + row.planned.unpricedRevenueHours, 0).toFixed(2),
+    actualUnpricedRevenueHours: +chartRows.reduce((sum, row) => sum + row.actual.unpricedRevenueHours, 0).toFixed(2),
+    actualMonthCount: chartRows.some(row => row.actual.hasData) ? 1 : 0,
+    actualResourceCount: chartRows.filter(row => row.actual.hasData).length,
+    resourceCount: chartRows.length,
+    selectedEmployeeId: null,
+    selectedEmployeeName: '',
+  };
+}
+
+function formatMonthlyPlannedWorkResourceAxisLabel(value) {
+  const text = String(value || '').trim();
+  if (!text) return '';
+  const words = text.split(/\s+/);
+  if (words.length <= 2) return text;
+  const midpoint = Math.ceil(words.length / 2);
+  return [words.slice(0, midpoint).join(' '), words.slice(midpoint).join(' ')];
+}
+
 function formatMonthlyPlannedHours(value) {
   const hours = Number(value) || 0;
   return `${hours.toLocaleString('en-US', {
@@ -883,10 +1107,14 @@ function updateMonthlyPlannedWorkMeta(series, mode) {
   const meta = document.getElementById('monthlyPlannedWorkMeta');
   if (!meta) return;
 
-  const isIndividual = getMonthlyPlannedWorkView() === 'individual';
+  const view = getMonthlyPlannedWorkView();
+  const isIndividual = view === 'individual';
+  const isMonthView = view === 'month';
   const scopeText = isIndividual && series.selectedEmployeeName
     ? series.selectedEmployeeName
-    : `${series.resourceCount} active resources`;
+    : isMonthView
+      ? `${series.monthLabel || 'Selected month'} · ${series.resourceCount} resources`
+      : `${series.resourceCount} active resources`;
 
   if (mode === 'revenue') {
     const unpricedHours = series.plannedUnpricedRevenueHours +
@@ -903,9 +1131,13 @@ function updateMonthlyPlannedWorkMeta(series, mode) {
     return;
   }
 
-  const actualText = series.actualMonthCount
-    ? `${formatMonthlyPlannedHours(series.totalActualHours)} actual · ${series.actualMonthCount} Time Sheet month${series.actualMonthCount === 1 ? '' : 's'}`
-    : 'No matching Time Sheet months';
+  const actualText = isMonthView
+    ? (series.actualResourceCount
+        ? `${formatMonthlyPlannedHours(series.totalActualHours)} actual · ${series.actualResourceCount} resources with Time Sheet data`
+        : 'No matching Time Sheet data')
+    : (series.actualMonthCount
+        ? `${formatMonthlyPlannedHours(series.totalActualHours)} actual · ${series.actualMonthCount} Time Sheet month${series.actualMonthCount === 1 ? '' : 's'}`
+        : 'No matching Time Sheet months');
 
   meta.textContent =
     `FY${series.fiscalYear + 1} · ${scopeText} · ` +
@@ -916,18 +1148,24 @@ function updateMonthlyPlannedWorkNote(mode) {
   const note = document.getElementById('monthlyPlannedWorkNote');
   if (!note) return;
 
-  const isIndividual = getMonthlyPlannedWorkView() === 'individual';
+  const view = getMonthlyPlannedWorkView();
+  const isIndividual = view === 'individual';
+  const isMonthView = view === 'month';
 
   if (mode === 'revenue') {
     note.textContent = isIndividual
       ? 'For the selected resource, planned revenue comes from Resource Assignment tasks and actual revenue comes from matching Work Summary Time Sheet entries. Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre-Sale / Training rate. Skill Development and General Admin are non-revenue.'
-      : 'Revenue uses each resource’s saved designation rates: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre-Sale / Training rate. Skill Development and General Admin are non-revenue.';
+      : isMonthView
+        ? 'For the selected month, each resource has a planned bar and an actual bar. Revenue uses the same saved designation rates as the other Planned vs Actual views; Skill Development and General Admin remain non-revenue.'
+        : 'Revenue uses each resource’s saved designation rates: Service Delivery - Intrasourcing uses the Intrasourcing rate; Service Delivery - Local PS, Pre - Sales and Training Delivery use the shared Local / Pre-Sale / Training rate. Skill Development and General Admin are non-revenue.';
     return;
   }
 
   note.textContent = isIndividual
     ? 'Each month compares the selected resource’s planned Resource Assignment tasks with that resource’s actual Work Summary Time Sheet entries. Planned is the left stacked bar and Actual is the right stacked bar, using the same six work types, sequence and colors.'
-    : 'Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.';
+    : isMonthView
+      ? 'The selected month compares every resource side by side. Each resource has a Planned stacked bar on the left and an Actual Time Sheet stacked bar on the right, using the same six work types, sequence and colors.'
+      : 'Each month shows the Resource Assignment plan and, when Work Summary Time Sheet data exists for that month, a second execution bar beside it. Both use the same six work types, sequence and colors. Future months continue to show the complete planned bar.';
 }
 
 function setMonthlyWorkCategoryVisibility(chart, categoryKey, visible) {
@@ -1080,7 +1318,9 @@ function renderMonthlyPlannedWorkChart() {
   updateMonthlyPlannedWorkViewTabs();
 
   const fiscalYear = getSelectedMonthlyPlannedWorkFiscalYear();
-  const selectedEmployee = getSelectedMonthlyPlannedWorkEmployee();
+  const view = getMonthlyPlannedWorkView();
+  const selectedEmployee = view === 'individual' ? getSelectedMonthlyPlannedWorkEmployee() : null;
+  const selectedMonth = view === 'month' ? getSelectedMonthlyPlannedWorkMonth(fiscalYear) : null;
   const assignments = getMonthlyPlannedWorkAssignments(fiscalYear);
 
   if (assignments === null) {
@@ -1113,10 +1353,15 @@ function renderMonthlyPlannedWorkChart() {
   }
 
   const mode = getMonthlyPlannedWorkMode();
-  const series = getMonthlyPlannedWorkSeries(fiscalYear, assignments, selectedEmployee);
+  const series = view === 'month'
+    ? getMonthlyPlannedWorkResourceSeries(fiscalYear, assignments, selectedMonth)
+    : getMonthlyPlannedWorkSeries(fiscalYear, assignments, selectedEmployee);
   updateMonthlyPlannedWorkTabs();
   updateMonthlyPlannedWorkMeta(series, mode);
   updateMonthlyPlannedWorkNote(mode);
+
+  const chartWrap = canvas.closest('.monthly-planned-work-chart');
+  if (chartWrap) chartWrap.classList.toggle('is-month-view', view === 'month');
 
   const datasets = [];
 
@@ -1151,7 +1396,9 @@ function renderMonthlyPlannedWorkChart() {
   const chart = new Chart(canvas.getContext('2d'), {
     type: 'bar',
     data: {
-      labels: series.rows.map(row => row.label),
+      labels: series.rows.map(row => view === 'month'
+        ? formatMonthlyPlannedWorkResourceAxisLabel(row.label)
+        : row.label),
       datasets,
     },
     plugins: [monthlyPlannedWorkDataLabelPlugin],
@@ -1222,9 +1469,10 @@ function renderMonthlyPlannedWorkChart() {
           grid: { display: false },
           ticks: {
             color: '#475569',
-            font: { size: 11 },
-            maxRotation: 0,
-            minRotation: 0,
+            font: { size: view === 'month' ? 9 : 11 },
+            maxRotation: view === 'month' ? 35 : 0,
+            minRotation: view === 'month' ? 0 : 0,
+            autoSkip: view !== 'month',
           },
         },
         y: mode === 'revenue'

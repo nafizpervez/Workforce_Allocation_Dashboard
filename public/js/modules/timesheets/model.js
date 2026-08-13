@@ -339,6 +339,7 @@ function refreshWorkSummaryForMatrixFiscalYear() {
   populateIndividualMonthFilter();
   renderTeamSummaryChart();
   renderIndividualSummaryChart();
+  if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
 }
 
 function getTimesheetMonthOptions() {
@@ -400,6 +401,7 @@ async function loadSavedTimesheetFromDb() {
 
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
+    if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
     renderBurndownChart();
     renderBurnupChart();
     renderMonthlyPlannedWorkChart();
@@ -408,6 +410,7 @@ async function loadSavedTimesheetFromDb() {
   } catch (e) {
     console.error(e);
     toast('Failed to load saved Time Sheet data from DB', 'error');
+    if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
     renderBurndownChart();
     renderBurnupChart();
     renderMonthlyPlannedWorkChart();

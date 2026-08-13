@@ -728,6 +728,21 @@
   display: none !important;
 }
 
+
+/* Multi-card rows use their individual left/right card drag handles.
+   Keep the section-level handle only for single-card rows so users never see
+   two drag buttons stacked over the first card. */
+.ds.has-multiple-card-drag-handles > .drag-handle {
+  display: none !important;
+}
+
+/* Single-card rows use the same in-card drag control as every other card.
+   The control moves the whole row vertically, so the legacy floating row
+   handle is hidden to avoid a second, inconsistent drag affordance. */
+.ds.has-single-card-drag-handle > .drag-handle {
+  display: none !important;
+}
+
 /* Section-row drag control stays away from every card's top-right button. */
 .ds > .drag-handle {
   top: -11px;
@@ -772,6 +787,11 @@
 [data-card-collapse-group][data-card-count="1"] .card-control-rail > .dc-handle {
   visibility: hidden;
   pointer-events: none;
+}
+
+.ds.has-single-card-drag-handle [data-card-collapse-group][data-card-count="1"] .card-control-rail > .dc-handle {
+  visibility: visible;
+  pointer-events: auto;
 }
 
 .card-control-rail {

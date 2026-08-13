@@ -818,4 +818,7 @@ function renderMatrix({ refreshCapacity = true } = {}) {
   if (refreshCapacity && typeof renderCapacityExecutiveCards === 'function') {
     renderCapacityExecutiveCards();
   }
+  if (refreshCapacity && typeof renderTeamUtilizationSummary === 'function') {
+    renderTeamUtilizationSummary();
+  }
 }

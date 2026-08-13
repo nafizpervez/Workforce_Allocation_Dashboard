@@ -89,6 +89,10 @@
   font-weight: 600;
 }
 
+.monthly-planned-work-month-filter select {
+  width: 10rem;
+}
+
 .monthly-planned-work-fy-filter {
   display: inline-flex;
   align-items: center;
@@ -195,6 +199,10 @@
 .monthly-planned-work-chart {
   height: 380px;
   margin-top: 1rem;
+}
+
+.monthly-planned-work-chart.is-month-view {
+  height: 430px;
 }
 
 .monthly-planned-work-note {

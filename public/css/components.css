@@ -1787,3 +1787,321 @@ button.committed-target-breakdown__item:focus-visible {
 .assigned-project-breakdown__item--converted .assigned-project-breakdown__value {
   border-color: #86efac;
 }
+
+
+/* ================================================================
+   Allocation insight ranking cards — Highly / Least Allocated
+   ================================================================ */
+.insight-ranking-grid {
+  align-items: stretch;
+}
+
+.insight-ranking-card {
+  min-width: 0;
+}
+
+.insight-ranking-card__surface {
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid #dbe3ef;
+  border-radius: 15px;
+  background: #ffffff;
+  box-shadow: 0 6px 18px rgba(15, 23, 42, 0.055);
+}
+
+.insight-ranking-card--high .insight-ranking-card__surface {
+  border-top: 3px solid #6366f1;
+}
+
+.insight-ranking-card--low .insight-ranking-card__surface {
+  border-top: 3px solid #10b981;
+}
+
+.insight-ranking-card__header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 18px 20px 15px;
+  border-bottom: 1px solid #edf2f7;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.insight-ranking-card__heading {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+}
+
+.insight-ranking-card__icon {
+  width: 38px;
+  height: 38px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border-radius: 12px;
+}
+
+.insight-ranking-card__icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.insight-ranking-card--high .insight-ranking-card__icon {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.insight-ranking-card--low .insight-ranking-card__icon {
+  background: #ecfdf5;
+  color: #059669;
+}
+
+.insight-ranking-card__eyebrow {
+  margin-bottom: 2px;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.11em;
+  line-height: 1.2;
+  text-transform: uppercase;
+}
+
+.insight-ranking-card__title {
+  margin: 0;
+  color: #0f172a;
+  font-size: 15px;
+  font-weight: 750;
+  line-height: 1.25;
+}
+
+.insight-ranking-card__subtitle {
+  margin: 3px 0 0;
+  color: #64748b;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.insight-ranking-card__period {
+  flex: 0 0 auto;
+  padding: 5px 9px;
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.insight-ranking-card__body {
+  padding: 10px 14px 14px;
+}
+
+.insight-ranking-card__labels {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 196px;
+  gap: 12px;
+  padding: 0 10px 7px 42px;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+
+.insight-ranking-card__labels span:last-child {
+  text-align: right;
+}
+
+.insight-ranking-list {
+  display: grid;
+  gap: 7px;
+}
+
+.insight-resource-row {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 28px 38px minmax(0, 1fr) minmax(155px, 196px);
+  align-items: center;
+  gap: 10px;
+  padding: 10px 11px;
+  border: 1px solid #e8edf4;
+  border-radius: 11px;
+  background: #ffffff;
+  color: inherit;
+  text-align: left;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, transform 0.15s ease, background 0.15s ease;
+}
+
+.insight-resource-row:hover {
+  border-color: #cbd5e1;
+  background: #fbfdff;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+  transform: translateY(-1px);
+}
+
+.insight-resource-row:focus-visible {
+  outline: 2px solid #60a5fa;
+  outline-offset: 2px;
+}
+
+.insight-resource-row__rank {
+  display: grid;
+  width: 26px;
+  height: 26px;
+  place-items: center;
+  border-radius: 8px;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.insight-resource-row--high .insight-resource-row__rank {
+  background: #eef2ff;
+  color: #4f46e5;
+}
+
+.insight-resource-row--low .insight-resource-row__rank {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.insight-resource-row__avatar {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  border-radius: 11px;
+  background: linear-gradient(145deg, #4f6ff7, #7655e8);
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 0.01em;
+  box-shadow: inset 0 0 0 1px rgba(255, 255, 255, 0.22);
+}
+
+.insight-resource-row__identity {
+  min-width: 0;
+  display: grid;
+  gap: 2px;
+}
+
+.insight-resource-row__identity strong {
+  overflow: hidden;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-resource-row__identity small {
+  overflow: hidden;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.insight-resource-row__metric {
+  min-width: 0;
+  display: grid;
+  gap: 6px;
+}
+
+.insight-resource-row__metric-top {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.insight-resource-row__status {
+  display: inline-flex;
+  align-items: center;
+  min-height: 22px;
+  padding: 3px 8px;
+  border-radius: 999px;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.insight-resource-row__status--over {
+  background: #fef2f2;
+  color: #b91c1c;
+}
+.insight-resource-row__status--high {
+  background: #fff7ed;
+  color: #c2410c;
+}
+.insight-resource-row__status--balanced {
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+.insight-resource-row__status--available {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.insight-resource-row__percent {
+  min-width: 42px;
+  color: #0f172a;
+  font-size: 13px;
+  font-variant-numeric: tabular-nums;
+  font-weight: 800;
+  text-align: right;
+}
+.insight-resource-row__percent--over { color: #b91c1c; }
+.insight-resource-row__percent--high { color: #c2410c; }
+.insight-resource-row__percent--balanced { color: #1d4ed8; }
+.insight-resource-row__percent--available { color: #047857; }
+
+.insight-resource-row__progress {
+  height: 5px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: #eef2f7;
+}
+
+.insight-resource-row__progress-fill {
+  display: block;
+  height: 100%;
+  border-radius: inherit;
+}
+.insight-resource-row__progress-fill--over { background: #ef4444; }
+.insight-resource-row__progress-fill--high { background: #f97316; }
+.insight-resource-row__progress-fill--balanced { background: #3b82f6; }
+.insight-resource-row__progress-fill--available { background: #10b981; }
+
+@media (max-width: 1100px) {
+  .insight-ranking-grid {
+    grid-template-columns: minmax(0, 1fr) !important;
+  }
+}
+
+@media (max-width: 640px) {
+  .insight-ranking-card__header {
+    align-items: flex-start;
+    padding: 16px;
+  }
+  .insight-ranking-card__subtitle,
+  .insight-ranking-card__labels {
+    display: none;
+  }
+  .insight-ranking-card__body {
+    padding: 8px 10px 12px;
+  }
+  .insight-resource-row {
+    grid-template-columns: 24px 34px minmax(0, 1fr) 92px;
+    gap: 8px;
+    padding: 9px;
+  }
+  .insight-resource-row__avatar {
+    width: 32px;
+    height: 32px;
+  }
+  .insight-resource-row__status {
+    display: none;
+  }
+}
