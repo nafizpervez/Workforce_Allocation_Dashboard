@@ -68,8 +68,10 @@ function teamUtilizationMemberBasis(members, monthRows, ytdRows) {
     const month = monthHours.get(worker) || { local: 0, intra: 0 };
     const ytd = ytdHours.get(worker) || { local: 0, intra: 0 };
     const usedMonth = (month.local || 0) > 0 || (month.intra || 0) > 0;
+    const employee = teamUtilizationEmployeeByWorker(worker);
     return {
       worker,
+      designation: employee?.designation || '',
       localHours: usedMonth ? month.local : ytd.local,
       intraHours: usedMonth ? month.intra : ytd.intra,
       basis: usedMonth ? 'Reporting month' : 'YTD fallback',
@@ -97,16 +99,33 @@ function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
     `<tr><th>Monthly team capacity</th><td>${capacityTotal} days<small>(${defaultAnnualWorkdays.toLocaleString('en-US')} ÷ 12) × ${stats.staffCount}</small></td></tr>`,
   ];
 
-  const staffRows = stats.memberBasis.map(item => `
+  const staffRows = stats.memberBasis.map((item, index) => `
     <tr>
-      <th>${esc(item.worker)}<small>${esc(item.basis)}</small></th>
-      <td>Local ${teamUtilizationFormatHours(item.localHours)}<br>Intra ${teamUtilizationFormatHours(item.intraHours)}</td>
+      <td>${index + 1}</td>
+      <th>${esc(item.worker)}</th>
+      <td>${esc(item.designation || '—')}</td>
+      <td>${esc(item.basis)}</td>
+      <td>${teamUtilizationFormatHours(item.localHours)}</td>
+      <td>${teamUtilizationFormatHours(item.intraHours)}</td>
     </tr>`);
+  const teamLabel = tone === 'local' ? 'Local PS Team' : 'Intra-Sourcing PS Team';
   TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:staff`, `
-    ${teamUtilizationTooltipTitle('Total Staff', `${monthLabel} · ${stats.staffCount} resources`)}
-    <div class="team-utilization-tooltip__note">Team membership is based on each resource's dominant Local PS vs Intra-Sourcing delivery hours for the reporting month; YTD is used when the month has no Local/Intra delivery hours.</div>
-    ${teamUtilizationTooltipRows(staffRows)}
-    <div class="team-utilization-tooltip__formula">Count of listed resources = <strong>${stats.staffCount}</strong></div>`);
+    ${teamUtilizationTooltipTitle('Total Staff — Resource List', `${monthLabel} · ${stats.staffCount} resources · ${teamLabel}`)}
+    <div class="team-utilization-tooltip__note">Every row below is included in the displayed Total Staff count. Team membership is based on dominant Local PS vs Intra-Sourcing delivery hours for the reporting month; YTD is used when the selected month has no Local/Intra delivery hours.</div>
+    <table class="team-utilization-tooltip__table team-utilization-tooltip__table--staff">
+      <thead>
+        <tr>
+          <th>#</th>
+          <th>Resource</th>
+          <th>Designation</th>
+          <th>Basis</th>
+          <th>Local PS</th>
+          <th>Intra-Sourcing</th>
+        </tr>
+      </thead>
+      <tbody>${staffRows.join('')}</tbody>
+    </table>
+    <div class="team-utilization-tooltip__formula">Count of resource rows = <strong>${stats.staffCount}</strong> = Total Staff</div>`);
 
   const billableTypeRows = [
     ['Service Delivery - Local PS', stats.monthTypeBreakdown['Service Delivery - Local PS']],
@@ -265,7 +284,8 @@ function positionTeamUtilizationTooltip(tooltip, trigger) {
   const rect = trigger.getBoundingClientRect();
   const gap = 6;
   const padding = 10;
-  const width = Math.min(440, window.innerWidth - padding * 2);
+  const isStaffList = String(trigger?.dataset?.teamUtilizationTooltip || '').endsWith(':staff');
+  const width = Math.min(isStaffList ? 760 : 440, window.innerWidth - padding * 2);
   tooltip.style.maxWidth = `${width}px`;
   tooltip.style.left = `${padding}px`;
   tooltip.style.top = `${padding}px`;
@@ -715,7 +735,7 @@ function buildTeamUtilizationSection(title, tone, stats, reportMonth, nextMonth)
       </div>
 
       <div class="team-utilization-basis">
-        <div><span>Total Staff</span><strong>${stats.staffCount}</strong></div>
+        <div class="team-utilization-basis-item team-utilization-staff-trigger" data-team-utilization-tooltip="${tone}:staff" tabindex="0" role="button" aria-label="Show ${esc(title)} resource list used for Total Staff"><span>Total Staff</span><strong>${stats.staffCount}</strong><em>View resources</em></div>
         <div><span>Total Billable Days</span><strong>${teamUtilizationFormatDays(billableDays)}</strong></div>
         <div><span>Total Project Days</span><strong>${teamUtilizationFormatDays(projectDays)}</strong></div>
         <div class="team-utilization-formula">
