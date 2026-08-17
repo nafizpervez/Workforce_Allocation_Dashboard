@@ -3,7 +3,7 @@
 @import url("./matrix.css?v=assignment-table-tooltip-v1");
 @import url("./matrix-summary.css?v=not-local-revenue-columns-v1");
 @import url("./matrix-assignments.css?v=assignment-multiselect-v1");
-@import url("./components.css?v=insight-cards-v1");
+@import url("./components.css?v=presale-weighted-value-v1");
 @import url("./capacity-executive.css?v=capacity-allocation-summary-compact-v2");
 @import url("./drag-drop.css?v=unified-single-card-drag-v2");
 @import url("./sales-charts.css");
@@ -51,6 +51,19 @@
   line-height: 1.3;
   font-weight: 700;
   color: #111827;
+}
+.team-utilization-title[data-team-utilization-tooltip] {
+  width: fit-content;
+  cursor: help;
+  outline: none;
+  text-decoration: underline dotted transparent;
+  text-underline-offset: 4px;
+  transition: color 0.15s ease, text-decoration-color 0.15s ease;
+}
+.team-utilization-title[data-team-utilization-tooltip]:hover,
+.team-utilization-title[data-team-utilization-tooltip]:focus-visible {
+  color: #1d4ed8;
+  text-decoration-color: #93c5fd;
 }
 .team-utilization-subtitle {
   margin-top: 3px;
@@ -361,6 +374,16 @@
   font-family: "JetBrains Mono", monospace;
   font-weight: 600;
 }
+.team-utilization-tooltip__table--basis th {
+  width: 155px;
+  white-space: nowrap;
+}
+.team-utilization-tooltip__table--basis td {
+  text-align: left;
+  font-family: Inter, sans-serif;
+  font-weight: 500;
+  line-height: 1.45;
+}
 .team-utilization-tooltip__table small {
   display: block;
   margin-top: 2px;
@@ -669,4 +692,285 @@
   .team-resources-table {
     min-width: 1215px;
   }
+}
+
+/* FY Assigned To planner */
+.team-utilization-assignment-planner-btn {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  height: 30px;
+  padding: 0 10px;
+  border: 1px solid #bfdbfe;
+  border-radius: 9px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 750;
+  white-space: nowrap;
+  cursor: pointer;
+  transition: background-color .15s ease, border-color .15s ease, box-shadow .15s ease;
+}
+.team-utilization-assignment-planner-btn:hover {
+  background: #dbeafe;
+  border-color: #93c5fd;
+  box-shadow: 0 2px 7px rgba(37, 99, 235, .12);
+}
+.team-utilization-assignment-planner-btn svg {
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+}
+
+.ps-team-fy-planner-panel {
+  width: calc(100vw - 24px) !important;
+  max-width: 1760px !important;
+  height: min(88vh, 920px);
+  display: flex;
+  flex-direction: column;
+}
+.ps-team-fy-planner-toolbar {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  justify-content: space-between;
+  padding: 12px 18px;
+  border-bottom: 1px solid #e2e8f0;
+  background: #f8fafc;
+}
+.ps-team-fy-planner-note {
+  max-width: 1050px;
+  color: #475569;
+  font-size: 11px;
+  line-height: 1.5;
+}
+.ps-team-fy-planner-search {
+  position: relative;
+  flex: 0 0 310px;
+}
+.ps-team-fy-planner-search svg {
+  position: absolute;
+  left: 10px;
+  top: 50%;
+  width: 14px;
+  height: 14px;
+  transform: translateY(-50%);
+  color: #94a3b8;
+  pointer-events: none;
+}
+.ps-team-fy-planner-search input {
+  width: 100%;
+  height: 36px;
+  padding: 0 10px 0 32px;
+  border: 1px solid #cbd5e1;
+  border-radius: 9px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 12px;
+  outline: none;
+}
+.ps-team-fy-planner-search input:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59, 130, 246, .10);
+}
+.ps-team-fy-planner-scroll {
+  flex: 1 1 auto;
+  min-height: 0;
+  overflow: auto;
+  background: #fff;
+}
+.ps-team-fy-planner-table {
+  width: max-content;
+  min-width: 100%;
+  border-collapse: separate;
+  border-spacing: 0;
+  table-layout: fixed;
+}
+.ps-team-fy-planner-table th,
+.ps-team-fy-planner-table td {
+  border-right: 1px solid #e2e8f0;
+  border-bottom: 1px solid #e2e8f0;
+  background: #fff;
+}
+.ps-team-fy-planner-table thead th {
+  position: sticky;
+  top: 0;
+  z-index: 6;
+  height: 52px;
+  padding: 7px 8px;
+  background: #eff6ff;
+  color: #1e3a8a;
+  font-size: 10px;
+  font-weight: 800;
+  text-align: center;
+  text-transform: uppercase;
+  letter-spacing: .025em;
+}
+.ps-team-fy-planner-table thead th span,
+.ps-team-fy-planner-table thead th small {
+  display: block;
+}
+.ps-team-fy-planner-table thead th small {
+  margin-top: 2px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 650;
+  text-transform: none;
+}
+.ps-team-fy-planner-resource {
+  position: sticky;
+  left: 0;
+  z-index: 4;
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+  padding: 8px 10px;
+  background: #fff !important;
+  text-align: left !important;
+}
+.ps-team-fy-planner-table thead .ps-team-fy-planner-resource {
+  z-index: 8;
+  background: #dbeafe !important;
+}
+.ps-team-fy-planner-designation {
+  width: 145px;
+  min-width: 145px;
+  max-width: 145px;
+  padding: 8px 10px;
+  color: #64748b;
+  font-size: 10px;
+  text-align: left !important;
+}
+.ps-team-fy-planner-person {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+.ps-team-fy-planner-person > span:last-child {
+  min-width: 0;
+}
+.ps-team-fy-planner-person strong,
+.ps-team-fy-planner-person small {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.ps-team-fy-planner-person strong {
+  color: #0f172a;
+  font-size: 11px;
+  font-weight: 750;
+}
+.ps-team-fy-planner-person small {
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 9px;
+  font-weight: 500;
+}
+.ps-team-fy-planner-avatar {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+  border-radius: 999px;
+  background: linear-gradient(135deg, #2563eb, #7c3aed);
+  color: #fff;
+  font-size: 9px;
+  font-weight: 800;
+}
+.ps-team-fy-planner-month-cell {
+  width: 142px;
+  min-width: 142px;
+  max-width: 142px;
+  padding: 6px;
+  vertical-align: top;
+}
+.ps-team-fy-assignment-select {
+  width: 130px;
+  height: 33px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 0 24px 0 7px;
+  outline: none;
+}
+.ps-team-fy-assignment-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 2px rgba(59, 130, 246, .11);
+}
+.ps-team-fy-assignment-source {
+  display: block;
+  width: 130px;
+  margin-top: 3px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #94a3b8;
+  font-size: 8px;
+  line-height: 1.2;
+}
+.ps-team-fy-planner-table tr.is-inactive > * {
+  opacity: .48;
+}
+.ps-team-fy-planner-table tbody tr:hover > * {
+  background-color: #f8fafc;
+}
+.ps-team-fy-planner-table tbody tr:hover > .ps-team-fy-planner-resource {
+  background-color: #f8fafc !important;
+}
+.ps-team-fy-planner-empty {
+  padding: 40px;
+  color: #94a3b8;
+  font-size: 12px;
+  text-align: center;
+}
+.ps-team-fy-planner-footer {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 18px;
+  border-top: 1px solid #e2e8f0;
+  border-radius: 0 0 16px 16px;
+  background: #f8fafc;
+  color: #64748b;
+  font-size: 11px;
+}
+
+/* Expanded Assigned To choices need a little more horizontal room. */
+.team-resources-col-assigned { width: 250px; }
+.ps-team-assignment-header,
+.ps-team-assignment-cell {
+  width: 250px;
+  min-width: 250px;
+}
+.ps-team-assignment-select,
+.ps-team-assignment-source {
+  width: 226px;
+  min-width: 226px;
+}
+.team-resources-table {
+  min-width: 1245px;
+}
+
+@media (max-width: 900px) {
+  .team-utilization-assignment-planner-btn span { display: none; }
+  .team-utilization-assignment-planner-btn { width: 30px; padding: 0; justify-content: center; }
+  .ps-team-fy-planner-toolbar { align-items: stretch; flex-direction: column; }
+  .ps-team-fy-planner-search { flex-basis: auto; width: 100%; }
+}
+.ps-team-fy-planner-body {
+  display: flex;
+  flex: 1 1 auto;
+  min-height: 0;
+  flex-direction: column;
+  overflow: hidden !important;
 }

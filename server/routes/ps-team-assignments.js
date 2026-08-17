@@ -3,6 +3,7 @@ const { getAppDb } = require('../database');
 const {
   buildFiscalAssignmentCalendar,
   saveManualAssignment,
+  saveManualAssignments,
 } = require('../services/ps-team-assignments');
 
 const router = express.Router();
@@ -30,6 +31,17 @@ router.patch('/api/ps-team-assignments/:employeeId', (req, res) => {
       String(req.body?.effectiveMonth || '').trim(),
     );
     res.json(updated);
+  } catch (error) {
+    const status = /not found/i.test(error.message) ? 404 : 400;
+    res.status(status).json({ error: error.message });
+  }
+});
+
+router.post('/api/ps-team-assignments/bulk', (req, res) => {
+  try {
+    const updates = Array.isArray(req.body?.assignments) ? req.body.assignments : [];
+    const saved = saveManualAssignments(db, updates);
+    res.json({ success: true, count: saved.length, assignments: saved });
   } catch (error) {
     const status = /not found/i.test(error.message) ? 404 : 400;
     res.status(status).json({ error: error.message });

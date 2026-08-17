@@ -35,11 +35,14 @@
                     </svg>
                   </div>
                   <div>
-                    <h2 class="team-utilization-title">PS Team Utilization</h2>
-                    <p class="team-utilization-subtitle">Time Sheet-only Local PS and Intra-Sourcing utilization analysis</p>
+                    <h2 class="team-utilization-title" data-team-utilization-tooltip="calculation-basis" tabindex="0" aria-label="PS Team Utilization. Hover or focus to view calculation basis.">PS Team Utilization</h2>
                   </div>
                 </div>
                 <div class="team-utilization-header-meta">
+                  <button type="button" class="team-utilization-assignment-planner-btn" onclick="openPsTeamFyAssignmentPlanner()" title="Set Assigned To by resource and fiscal month">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><path d="M4 5h16v14H4z"/><path d="M8 3v4M16 3v4M4 9h16"/><path d="M8 13h2M14 13h2M8 17h2M14 17h2"/></svg>
+                    <span>FY Assignments</span>
+                  </button>
                   <span id="teamUtilizationFyBadge" class="team-utilization-fy-badge">FY</span>
                   <label class="team-utilization-month-control" for="teamUtilizationMonthSelect">
                     <span>Month</span>

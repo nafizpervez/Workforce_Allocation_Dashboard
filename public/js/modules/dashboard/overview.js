@@ -1117,7 +1117,7 @@ function renderStats(s) {
       action: 'view-pipeline-presale-summary',
       bg: 'bg-orange-100',
       fg: 'text-orange-600',
-      formula: `Total Pipeline Amount includes Active Pre-Sale Products only. Converted = Percent exactly 100%. Weighted = Percent at or above the configured Secured threshold (${preSalePipelineSummary.securedMinPercent}%) but below 100%. Best Case = Percent from the configured Best Case threshold (${preSalePipelineSummary.bestCaseMinPercent}%) up to below Secured. Prospect = Percent below Best Case.`,
+      formula: `Total Pipeline Amount includes Active Pre-Sale Products only. Converted = Probability exactly 100%. Weighted = Probability at or above the configured Secured threshold (${preSalePipelineSummary.securedMinPercent}%) but below 100%, and Weighted Pipeline value is Value × Probability. Best Case = Probability from the configured Best Case threshold (${preSalePipelineSummary.bestCaseMinPercent}%) up to below Secured. Prospect = Probability below Best Case.`,
       icon: '<path d="M3 4h18l-7 8v6l-4 2v-8L3 4z"/>',
       detailType: 'pipeline-breakdown',
     },

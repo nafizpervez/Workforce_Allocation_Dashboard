@@ -375,6 +375,11 @@ async function loadSavedTimesheetFromDb() {
       ...row,
       worker: canonicalPersonName(row.worker),
     }));
+    S.timesheetBillableRows = (data.billable_rows || []).map(row => ({
+      ...row,
+      worker: canonicalPersonName(row.worker),
+      qty: Number(row.qty) || 0,
+    }));
     S.timesheetFileName = data.last_source_file || '';
     S.timesheetSheetName = data.last_sheet_name || '';
     S.individualSummaryMonthFilter = '';

@@ -1,5 +1,24 @@
 /* Workforce Allocation Dashboard — projects/resources.js */
 
+const PS_ASSIGNED_TO_OPTIONS = Object.freeze([
+  'Local PS',
+  'Intra-Sourcing',
+  'Pre-Sale',
+  'Training Delivery',
+  'Skill Development',
+  'General Admin',
+]);
+
+function psAssignedToOptionsHtml(selectedValue = '') {
+  const selected = String(selectedValue || '');
+  return [
+    `<option value="" ${selected ? '' : 'selected'}>—</option>`,
+    ...PS_ASSIGNED_TO_OPTIONS.map(value => (
+      `<option value="${esc(value)}" ${selected === value ? 'selected' : ''}>${esc(value)}</option>`
+    )),
+  ].join('');
+}
+
 function openResourceModal() {
   const activeEmps = S.employees.filter(e => e.active !== 0);
   const inactiveEmps = S.employees.filter(e => e.active === 0);
@@ -51,9 +70,7 @@ function openResourceModal() {
           aria-label="Assigned To for ${esc(e.name)}"
           onchange="saveEmployeePsTeamAssignment(${e.id}, this.value, this)"
         >
-          <option value="" ${assignedTo ? '' : 'selected'}>—</option>
-          <option value="Local PS" ${assignedTo === 'Local PS' ? 'selected' : ''}>Local PS</option>
-          <option value="Intra-Sourcing" ${assignedTo === 'Intra-Sourcing' ? 'selected' : ''}>Intra-Sourcing</option>
+          ${psAssignedToOptionsHtml(assignedTo)}
         </select>
         <div class="ps-team-assignment-source" title="${esc(assignmentSource)}">${esc(assignmentSource)}</div>
       </td>
@@ -772,12 +789,11 @@ function currentPsTeamAssignmentMonthKey(date = new Date()) {
   const d = date instanceof Date ? new Date(date.getTime()) : new Date(date);
   if (Number.isNaN(d.getTime())) return '';
 
-  // Team assignment is recorded for the most recently completed calendar
-  // month. Example: while the application is running in August 2026, the
-  // Team Resources Assigned To control edits July 2026. This keeps manual
-  // team membership aligned with the latest completed Time Sheet period.
-  d.setDate(1);
-  d.setMonth(d.getMonth() - 1);
+  // Team Resources always represents the effective assignment for the
+  // current calendar month. The FY planner writes to the same monthly
+  // effective-dated history, so an August value saved in the planner is the
+  // same August value shown here. If August has no explicit event, the API
+  // resolves the latest prior saved value via carry-forward.
   return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
 }
 
@@ -816,10 +832,198 @@ async function loadPsTeamAssignmentsForFiscalYear(fiscalYear = S.matrixFiscalYea
   return data;
 }
 
+
+function getPsTeamAssignmentForMonth(employeeId, monthKey) {
+  return (S.psTeamAssignments?.months?.[String(monthKey)]?.assignments || []).find(row => (
+    Number(row.employeeId) === Number(employeeId)
+  )) || null;
+}
+
+function psTeamPlannerCellSource(entry) {
+  if (!entry) return 'Not assigned';
+  const monthLabel = psTeamAssignmentMonthLabel(entry.effectiveMonth || entry.monthKey || '');
+  if (!entry.assignedTo) {
+    if (entry.source === 'manual-unassigned') return `Unassigned · ${monthLabel}`;
+    if (entry.source === 'carried-forward-unassigned') return `Unassigned since ${monthLabel}`;
+    return 'Not assigned';
+  }
+  if (entry.source === 'carried-forward') return `Carried from ${monthLabel}`;
+  return `Manual · ${monthLabel}`;
+}
+
+async function openPsTeamFyAssignmentPlanner() {
+  const fy = normalizeFiscalYearStart(S.matrixFiscalYear, S.matrixFiscalYear);
+  try {
+    if (Number(S.psTeamAssignments?.fiscalYear) !== fy) {
+      await loadPsTeamAssignmentsForFiscalYear(fy);
+    }
+  } catch (error) {
+    toast(error?.message || 'Failed to load FY assignments', 'error');
+    return;
+  }
+
+  const months = fiscalMonths(fy);
+  // FY planning is only applicable to resources that are currently active.
+  // Inactive resources remain in Team Resources for status/history management,
+  // but are intentionally excluded from monthly Assigned To planning.
+  const employees = [...(S.employees || [])]
+    .filter(employee => Number(employee.active) !== 0)
+    .sort((a, b) => String(a.name || '').localeCompare(String(b.name || '')));
+
+  const headerMonths = months.map(item => (
+    `<th><span>${esc(MN[item.m - 1])}</span><small>${item.y}</small></th>`
+  )).join('');
+
+  const rows = employees.map(employee => {
+    const search = [employee.name, employee.employee_code, employee.email, employee.designation, employee.dept]
+      .filter(Boolean).join(' ').toLowerCase();
+    const monthCells = months.map(item => {
+      const key = `${item.y}-${String(item.m).padStart(2, '0')}`;
+      const entry = getPsTeamAssignmentForMonth(employee.id, key);
+      const value = entry?.assignedTo || '';
+      const isExplicit = entry?.source === 'manual' || entry?.source === 'manual-unassigned';
+      const source = psTeamPlannerCellSource(entry);
+      return `<td class="ps-team-fy-planner-month-cell" data-planner-cell>
+        <select
+          class="ps-team-fy-assignment-select"
+          aria-label="${esc(employee.name)} Assigned To for ${esc(MN[item.m - 1])} ${item.y}"
+          data-employee-id="${Number(employee.id)}"
+          data-month-key="${esc(key)}"
+          data-initial-value="${esc(value)}"
+          data-original-explicit="${isExplicit ? '1' : '0'}"
+          data-explicit="${isExplicit ? '1' : '0'}"
+          data-dirty="0"
+          title="${esc(source)}"
+          onchange="handlePsTeamFyPlannerChange(this)"
+        >${psAssignedToOptionsHtml(value)}</select>
+        <span class="ps-team-fy-assignment-source">${esc(source)}</span>
+      </td>`;
+    }).join('');
+
+    return `<tr data-ps-team-fy-planner-row data-search="${esc(search)}">
+      <th class="ps-team-fy-planner-resource" scope="row">
+        <div class="ps-team-fy-planner-person">
+          <span class="ps-team-fy-planner-avatar">${esc(inits(employee.name))}</span>
+          <span><strong>${esc(employee.name)}</strong><small>${esc(employee.employee_code || employee.email || '')}</small></span>
+        </div>
+      </th>
+      <td class="ps-team-fy-planner-designation">${esc(employee.designation || '—')}</td>
+      ${monthCells}
+    </tr>`;
+  }).join('');
+
+  openModal(`
+    ${mHdr('FY Resource Assignment Planner', `${fiscalYearDisplayLabel(fy)} · ${fiscalYearRangeLabel(fy)} · monthly Assigned To planning`)}
+    <div class="modal-scroll-body ps-team-fy-planner-body">
+    <div class="ps-team-fy-planner-toolbar">
+      <div class="ps-team-fy-planner-note">
+        Set each resource's effective Assigned To by fiscal month. A saved value carries forward until the next saved month. Selecting <strong>—</strong> explicitly makes the resource unassigned from that month onward. Local PS and Intra-Sourcing are the only classifications included in the two PS Team Utilization panels.
+      </div>
+      <label class="ps-team-fy-planner-search">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+        <input type="search" id="psTeamFyPlannerSearch" placeholder="Search resource, code or designation..." oninput="filterPsTeamFyAssignmentPlanner(this.value)">
+      </label>
+    </div>
+    <div class="ps-team-fy-planner-scroll nice-scroll">
+      <table class="ps-team-fy-planner-table">
+        <thead><tr><th class="ps-team-fy-planner-resource">Resource</th><th class="ps-team-fy-planner-designation">Designation</th>${headerMonths}</tr></thead>
+        <tbody>${rows || '<tr><td colspan="14" class="ps-team-fy-planner-empty">No resources available.</td></tr>'}</tbody>
+      </table>
+    </div>
+    </div>
+    <div class="modal-footer ps-team-fy-planner-footer">
+      <div><span id="psTeamFyPlannerChangeCount">No unsaved changes</span></div>
+      <div class="flex gap-3">
+        <button type="button" onclick="closeModal()" class="btn-gray">Cancel</button>
+        <button type="button" id="psTeamFyPlannerSaveBtn" onclick="savePsTeamFyAssignmentPlanner()" class="btn-blue">Save Changes</button>
+      </div>
+    </div>
+  `, 'ps-team-fy-planner-panel');
+
+  setTimeout(() => document.getElementById('psTeamFyPlannerSearch')?.focus(), 0);
+}
+
+function filterPsTeamFyAssignmentPlanner(value = '') {
+  const query = String(value || '').trim().toLowerCase();
+  document.querySelectorAll('[data-ps-team-fy-planner-row]').forEach(row => {
+    row.style.display = !query || String(row.dataset.search || '').includes(query) ? '' : 'none';
+  });
+}
+
+function updatePsTeamFyPlannerChangeCount() {
+  const dirty = document.querySelectorAll('.ps-team-fy-assignment-select[data-dirty="1"]').length;
+  const label = document.getElementById('psTeamFyPlannerChangeCount');
+  if (label) label.textContent = dirty ? `${dirty} unsaved monthly change${dirty === 1 ? '' : 's'}` : 'No unsaved changes';
+}
+
+function updatePsTeamFyPlannerCellSource(select, text) {
+  const source = select?.closest('[data-planner-cell]')?.querySelector('.ps-team-fy-assignment-source');
+  if (source) source.textContent = text;
+}
+
+function handlePsTeamFyPlannerChange(select) {
+  if (!select) return;
+  select.dataset.dirty = '1';
+  select.dataset.explicit = '1';
+  updatePsTeamFyPlannerCellSource(select, 'Pending manual change');
+
+  // Preview effective-date carry-forward across later months in the same row.
+  // Stop when a later month already has its own explicit saved/user-edited event.
+  const row = select.closest('[data-ps-team-fy-planner-row]');
+  const selects = [...(row?.querySelectorAll('.ps-team-fy-assignment-select') || [])];
+  const index = selects.indexOf(select);
+  for (let i = index + 1; i < selects.length; i += 1) {
+    const next = selects[i];
+    if (next.dataset.explicit === '1') break;
+    next.value = select.value;
+    updatePsTeamFyPlannerCellSource(next, `Carries from ${psTeamAssignmentMonthLabel(select.dataset.monthKey)}`);
+  }
+  updatePsTeamFyPlannerChangeCount();
+}
+
+async function savePsTeamFyAssignmentPlanner() {
+  const dirtySelects = [...document.querySelectorAll('.ps-team-fy-assignment-select[data-dirty="1"]')];
+  if (!dirtySelects.length) {
+    toast('No FY assignment changes to save.', 'info');
+    return;
+  }
+
+  const assignments = dirtySelects.map(select => ({
+    employeeId: Number(select.dataset.employeeId),
+    effectiveMonth: String(select.dataset.monthKey || ''),
+    assignedTo: String(select.value || ''),
+  }));
+  const saveButton = document.getElementById('psTeamFyPlannerSaveBtn');
+  if (saveButton) {
+    saveButton.disabled = true;
+    saveButton.textContent = 'Saving...';
+  }
+
+  try {
+    await api('POST', '/api/ps-team-assignments/bulk', { assignments });
+    await loadPsTeamAssignmentsForFiscalYear(S.matrixFiscalYear);
+    if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
+    closeModal();
+    toast(`${assignments.length} FY resource assignment${assignments.length === 1 ? '' : 's'} saved.`);
+  } catch (error) {
+    toast(error?.message || 'Failed to save FY assignments', 'error');
+    if (saveButton) {
+      saveButton.disabled = false;
+      saveButton.textContent = 'Save Changes';
+    }
+  }
+}
+
+window.openPsTeamFyAssignmentPlanner = openPsTeamFyAssignmentPlanner;
+window.filterPsTeamFyAssignmentPlanner = filterPsTeamFyAssignmentPlanner;
+window.handlePsTeamFyPlannerChange = handlePsTeamFyPlannerChange;
+window.savePsTeamFyAssignmentPlanner = savePsTeamFyAssignmentPlanner;
+
 async function saveEmployeePsTeamAssignment(employeeId, assignedTo, selectEl = null) {
-  // Team Resources writes an effective-dated assignment for the most
-  // recently completed calendar month. That value carries forward into later
-  // months until a new manual assignment (or explicit unassignment) is saved.
+  // Team Resources writes to the current calendar month's effective-dated
+  // assignment. The FY planner uses the same history, so both editors always
+  // resolve the same value for the same month. The value then carries forward
+  // until a later manual assignment (or explicit unassignment) is saved.
   const currentMonth = String(
     S.psTeamAssignments?.current?.monthKey || currentPsTeamAssignmentMonthKey(),
   ).trim();
@@ -827,7 +1031,7 @@ async function saveEmployeePsTeamAssignment(employeeId, assignedTo, selectEl = n
     toast('Unable to determine the current assignment month.', 'error');
     return;
   }
-  if (!['', 'Local PS', 'Intra-Sourcing'].includes(assignedTo)) return;
+  if (!['', ...PS_ASSIGNED_TO_OPTIONS].includes(assignedTo)) return;
 
   if (selectEl) selectEl.disabled = true;
   try {
@@ -836,13 +1040,9 @@ async function saveEmployeePsTeamAssignment(employeeId, assignedTo, selectEl = n
       effectiveMonth: currentMonth,
     });
     await loadPsTeamAssignmentsForFiscalYear(S.matrixFiscalYear);
-    // The Team Resources dropdown edits the most recently completed month.
-    // Keep PS Team Utilization on that same reporting month after a change so
-    // the user immediately sees the Time Sheet calculations that were just
-    // affected, rather than a future/current month with no actual entries.
-    if (typeof selectTeamUtilizationReportingMonth === 'function') {
-      selectTeamUtilizationReportingMonth(currentMonth);
-    }
+    // Re-render all Assigned To consumers from the shared effective-dated
+    // state. Do not force the utilization month selector: changing August
+    // membership must not silently move a user who is reviewing July.
     if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
     openResourceModal();
     const employee = (S.employees || []).find(e => Number(e.id) === Number(employeeId));

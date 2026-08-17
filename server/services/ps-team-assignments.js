@@ -2,7 +2,21 @@ const { canonicalPersonName } = require('./person-identity');
 
 const PS_TEAM_LOCAL = 'Local PS';
 const PS_TEAM_INTRA = 'Intra-Sourcing';
-const VALID_PS_TEAMS = new Set([PS_TEAM_LOCAL, PS_TEAM_INTRA]);
+const PS_TEAM_PRESALE = 'Pre-Sale';
+const PS_TEAM_TRAINING = 'Training Delivery';
+const PS_TEAM_SKILL = 'Skill Development';
+const PS_TEAM_ADMIN = 'General Admin';
+const PS_TEAM_UNASSIGNED = 'Unassigned';
+
+const VALID_PS_TEAMS = new Set([
+  PS_TEAM_LOCAL,
+  PS_TEAM_INTRA,
+  PS_TEAM_PRESALE,
+  PS_TEAM_TRAINING,
+  PS_TEAM_SKILL,
+  PS_TEAM_ADMIN,
+]);
+const STORED_PS_TEAM_VALUES = [...VALID_PS_TEAMS, PS_TEAM_UNASSIGNED];
 
 function createPsTeamAssignmentsTable(db) {
   db.prepare(`
@@ -10,7 +24,15 @@ function createPsTeamAssignmentsTable(db) {
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       employee_id INTEGER NOT NULL,
       effective_month TEXT NOT NULL,
-      assigned_to TEXT NOT NULL CHECK (assigned_to IN ('Local PS', 'Intra-Sourcing', 'Unassigned')),
+      assigned_to TEXT NOT NULL CHECK (assigned_to IN (
+        'Local PS',
+        'Intra-Sourcing',
+        'Pre-Sale',
+        'Training Delivery',
+        'Skill Development',
+        'General Admin',
+        'Unassigned'
+      )),
       created_at TEXT DEFAULT CURRENT_TIMESTAMP,
       updated_at TEXT DEFAULT CURRENT_TIMESTAMP,
       UNIQUE(employee_id, effective_month),
@@ -28,22 +50,25 @@ function ensurePsTeamAssignmentsTable(db) {
 
   if (!existing) {
     createPsTeamAssignmentsTable(db);
-  } else if (!/Unassigned/.test(String(existing.sql || ''))) {
-    // Older builds allowed only Local PS / Intra-Sourcing.  Carry-forward
-    // semantics require an explicit unassigned event so a resource can be
-    // removed from a previously inherited team without rewriting history.
-    db.transaction(() => {
-      db.exec('ALTER TABLE employee_ps_team_assignments RENAME TO employee_ps_team_assignments_legacy');
-      createPsTeamAssignmentsTable(db);
-      db.exec(`
-        INSERT INTO employee_ps_team_assignments(
-          id, employee_id, effective_month, assigned_to, created_at, updated_at
-        )
-        SELECT id, employee_id, effective_month, assigned_to, created_at, updated_at
-        FROM employee_ps_team_assignments_legacy
-      `);
-      db.exec('DROP TABLE employee_ps_team_assignments_legacy');
-    })();
+  } else {
+    const sql = String(existing.sql || '');
+    const supportsAllValues = STORED_PS_TEAM_VALUES.every(value => sql.includes(`'${value}'`));
+    if (!supportsAllValues) {
+      // Rebuild the table when an older CHECK constraint does not include the
+      // full Assigned To classification set. Existing rows are preserved.
+      db.transaction(() => {
+        db.exec('ALTER TABLE employee_ps_team_assignments RENAME TO employee_ps_team_assignments_legacy');
+        createPsTeamAssignmentsTable(db);
+        db.exec(`
+          INSERT INTO employee_ps_team_assignments(
+            id, employee_id, effective_month, assigned_to, created_at, updated_at
+          )
+          SELECT id, employee_id, effective_month, assigned_to, created_at, updated_at
+          FROM employee_ps_team_assignments_legacy
+        `);
+        db.exec('DROP TABLE employee_ps_team_assignments_legacy');
+      })();
+    }
   }
 
   db.prepare(`
@@ -111,7 +136,7 @@ function effectiveMonthKey(value) {
 
 function buildAssignmentForEmployee({ employee, target, assignments }) {
   const manual = assignmentEffectiveForMonth(assignments, employee.id, target.start);
-  const explicitUnassigned = manual?.assigned_to === 'Unassigned';
+  const explicitUnassigned = manual?.assigned_to === PS_TEAM_UNASSIGNED;
   const assignedTo = explicitUnassigned ? null : (manual?.assigned_to || null);
   const originMonth = effectiveMonthKey(manual?.effective_month);
   const exactMonth = Boolean(manual && String(manual.effective_month || '') === target.start);
@@ -181,6 +206,14 @@ function buildFiscalAssignmentCalendar(db, fiscalYear, now = new Date()) {
   };
 }
 
+function normalizeAssignedTo(value) {
+  const normalizedTeam = String(value || '').trim();
+  if (normalizedTeam && !VALID_PS_TEAMS.has(normalizedTeam)) {
+    throw new Error('Assigned To must be blank, Local PS, Intra-Sourcing, Pre-Sale, Training Delivery, Skill Development or General Admin.');
+  }
+  return normalizedTeam;
+}
+
 function saveManualAssignment(db, employeeId, assignedTo, effectiveMonth) {
   ensurePsTeamAssignmentsTable(db);
   const employee = db.prepare('SELECT id, name FROM employees WHERE id = ?').get(Number(employeeId));
@@ -188,15 +221,12 @@ function saveManualAssignment(db, employeeId, assignedTo, effectiveMonth) {
   const target = normalizeMonth(effectiveMonth);
   if (!target) throw new Error('A valid effective month is required.');
 
-  const normalizedTeam = String(assignedTo || '').trim();
-  if (normalizedTeam && !VALID_PS_TEAMS.has(normalizedTeam)) {
-    throw new Error('Assigned To must be blank, Local PS or Intra-Sourcing.');
-  }
+  const normalizedTeam = normalizeAssignedTo(assignedTo);
 
-  // Blank is an explicit effective-dated unassignment.  Storing it as an
-  // event (instead of deleting the row) stops any earlier team assignment
-  // from carrying forward past this month.
-  const storedTeam = normalizedTeam || 'Unassigned';
+  // Blank is an explicit effective-dated unassignment. Storing it as an
+  // event (instead of deleting the row) stops any earlier assignment from
+  // carrying forward past this month.
+  const storedTeam = normalizedTeam || PS_TEAM_UNASSIGNED;
   db.prepare(`
     INSERT INTO employee_ps_team_assignments(employee_id, effective_month, assigned_to, created_at, updated_at)
     VALUES (?, ?, ?, CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
@@ -213,14 +243,32 @@ function saveManualAssignment(db, employeeId, assignedTo, effectiveMonth) {
   };
 }
 
+function saveManualAssignments(db, updates = []) {
+  if (!Array.isArray(updates)) throw new Error('Assignments must be an array.');
+  if (updates.length > 5000) throw new Error('Too many assignment updates in one request.');
+  const transaction = db.transaction(items => items.map(item => saveManualAssignment(
+    db,
+    Number(item?.employeeId),
+    item?.assignedTo,
+    item?.effectiveMonth,
+  )));
+  return transaction(updates);
+}
+
 module.exports = {
+  PS_TEAM_ADMIN,
   PS_TEAM_INTRA,
   PS_TEAM_LOCAL,
+  PS_TEAM_PRESALE,
+  PS_TEAM_SKILL,
+  PS_TEAM_TRAINING,
   VALID_PS_TEAMS,
   buildAssignmentSnapshot,
   buildFiscalAssignmentCalendar,
   ensurePsTeamAssignmentsTable,
+  fiscalMonths,
   monthKey,
   normalizeMonth,
   saveManualAssignment,
+  saveManualAssignments,
 };

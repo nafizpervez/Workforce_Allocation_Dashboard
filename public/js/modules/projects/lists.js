@@ -273,6 +273,9 @@ function pipelinePreSaleProductRowHtml(product, classification, index) {
         ? 'Best Case'
         : 'Prospect';
   const percent = Number(product?.percent) || 0;
+  const displayAmount = classification === 'weighted'
+    ? (Number(product?.weightedValue) || 0)
+    : (Number(product?.amount) || 0);
 
   return `
     <div class="relative border-b border-gray-100 px-4 py-4 last:border-b-0">
@@ -283,12 +286,12 @@ function pipelinePreSaleProductRowHtml(product, classification, index) {
             <span class="text-[11px] font-semibold text-gray-400">#${index + 1}</span>
             <span class="rounded-full px-2 py-0.5 text-[11px] font-semibold ${tone.pill}">${esc(label)}</span>
           </div>
-          <span class="mono flex-shrink-0 text-sm font-bold text-gray-800">${esc(fmtUsd(product?.amount || 0))}</span>
+          <span class="mono flex-shrink-0 text-sm font-bold text-gray-800">${esc(fmtUsd(displayAmount))}</span>
         </div>
         <div class="text-sm font-semibold leading-snug text-gray-900">${esc(product?.name || 'Unnamed Pre-Sale Product')}</div>
         <div class="mt-1 text-xs text-gray-500">Pre-Sale Product</div>
         <div class="mt-2 flex items-center justify-between gap-3 text-xs">
-          <span class="text-gray-500">Percent</span>
+          <span class="text-gray-500">Probability</span>
           <strong class="text-gray-800">${esc(percent.toLocaleString('en-US', { maximumFractionDigits: 2 }))}%</strong>
         </div>
       </div>
@@ -324,13 +327,13 @@ function openPipelinePreSaleSummaryModal() {
   openModal(`
     ${mHdr(
       'Pipeline Projects',
-      `Total Active Pre-Sale Product Amount: ${fmtUsd(summary.totalAmount)} · Classification is driven by the saved Pre-Sale Product Percent`,
+      `Total Active Pre-Sale Product Value: ${fmtUsd(summary.totalAmount)} · Classification is driven by the saved Pre-Sale Product Probability`,
     )}
     <div class="modal-scroll-body nice-scroll p-4">
       <div class="grid grid-cols-1 gap-4 lg:grid-cols-2 2xl:grid-cols-4">
         ${pipelinePreSaleSummaryColumnHtml({
           title: 'Converted',
-          subtitle: 'Percent = 100%',
+          subtitle: 'Probability = 100%',
           rows: summary.converted,
           amount: summary.convertedAmount,
           classification: 'converted',
@@ -338,7 +341,7 @@ function openPipelinePreSaleSummaryModal() {
         })}
         ${pipelinePreSaleSummaryColumnHtml({
           title: 'Weighted',
-          subtitle: `Secured rule: Percent ≥ ${secured}% and < 100%`,
+          subtitle: `Secured rule: Probability ≥ ${secured}% and < 100% · amount shown is weighted Value`,
           rows: summary.weighted,
           amount: summary.weightedAmount,
           classification: 'weighted',
@@ -346,7 +349,7 @@ function openPipelinePreSaleSummaryModal() {
         })}
         ${pipelinePreSaleSummaryColumnHtml({
           title: 'Best Case',
-          subtitle: `Best Case rule: Percent ≥ ${bestCase}% and < ${secured}%`,
+          subtitle: `Best Case rule: Probability ≥ ${bestCase}% and < ${secured}%`,
           rows: summary.bestCase,
           amount: summary.bestCaseAmount,
           classification: 'best-case',
@@ -354,7 +357,7 @@ function openPipelinePreSaleSummaryModal() {
         })}
         ${pipelinePreSaleSummaryColumnHtml({
           title: 'Prospect',
-          subtitle: `Prospect rule: Percent < ${bestCase}%`,
+          subtitle: `Prospect rule: Probability < ${bestCase}%`,
           rows: summary.prospect,
           amount: summary.prospectAmount,
           classification: 'prospect',
