@@ -75,16 +75,16 @@ function teamUtilizationBuildCalculationBasisTooltip() {
   const defaultAnnualWorkdays = Number(getDefaultAnnualWorkdays()) || 0;
   return `
     ${teamUtilizationTooltipTitle('PS Team Utilization — Calculation Basis', fiscalYearDisplayLabel(S.matrixFiscalYear))}
-    <div class="team-utilization-tooltip__note">Select any April–March month in the chosen Matrix FY. Assigned To history can be Local PS, Intra-Sourcing, Pre-Sale, Training Delivery, Skill Development, General Admin, or unassigned (—). The most recent saved assignment on or before a reporting month carries forward until another assignment is saved; an explicit — stops the previous assignment from carrying forward.</div>
+    <div class="team-utilization-tooltip__note">Assigned To carries forward until changed; — makes the resource unassigned.</div>
     <table class="team-utilization-tooltip__table team-utilization-tooltip__table--basis">
-      <tr><th>Team membership</th><td>Only resources whose effective Assigned To is Local PS or Intra-Sourcing are included in the corresponding PS Team Utilization panel.</td></tr>
-      <tr><th>Billable work</th><td>Any Time Sheet row whose source Excel <strong>Billable?</strong> column is <strong>Yes</strong>. This can include Local PS, Intra-Sourcing, Training Delivery, Pre-Sale, or any other work type marked Yes.</td></tr>
+      <tr><th>Team membership</th><td>Assigned To = Local PS or Intra-Sourcing.</td></tr>
+      <tr><th>Billable work</th><td>Time Sheet rows where <strong>Billable? = Yes</strong>.</td></tr>
       <tr><th>Project work</th><td>Local PS + Intra-Sourcing + Pre-Sales + Training Delivery Time Sheet hours.</td></tr>
       <tr><th>Monthly capacity</th><td>(${defaultAnnualWorkdays.toLocaleString('en-US')} ÷ 12) × Total Staff</td></tr>
       <tr><th>Billable Utilization</th><td>Total Billable Days ÷ Monthly Team Capacity × 100</td></tr>
       <tr><th>Project Utilization</th><td>Total Project Days ÷ Monthly Team Capacity × 100</td></tr>
-      <tr><th>YTD</th><td>Each fiscal month resolves its own effective Assigned To membership and Time Sheet actuals before YTD values are accumulated.</td></tr>
-      <tr><th>Next month</th><td>Uses next-month Time Sheet actuals only for resources whose effective Assigned To places them in that team; if no next-month Time Sheet exists, the value is NA.</td></tr>
+      <tr><th>YTD</th><td>Sum monthly actuals using each month’s effective Assigned To.</td></tr>
+      <tr><th>Next month</th><td>Next-month Time Sheet actuals; no data = NA.</td></tr>
       <tr><th>FY Target</th><td>Project Utilization target = ${TEAM_UTILIZATION_FY_PROJECT_TARGET}%.</td></tr>
     </table>
     <div class="team-utilization-tooltip__formula">DEFAULT_ANNUAL_WORKDAYS = <strong>${defaultAnnualWorkdays.toLocaleString('en-US')}</strong> from root config.js</div>`;
