@@ -2,6 +2,7 @@ const { DEFAULT_ANNUAL_WORKDAYS } = require('../../config');
 const { ensureRevenueRatesTable } = require('../services/revenue-rates');
 const { ensureCommittedTargetsTable } = require('../services/committed-targets');
 const { ensurePreSaleProductsTable } = require('../services/presale-products');
+const { ensurePsTeamAssignmentsTable } = require('../services/ps-team-assignments');
 const { getFiscalPeriodFromDate } = require('../services/fiscal');
 const {
   PERSON_IDENTITY_ALIASES,
@@ -306,6 +307,8 @@ function runMigrations(db) {
   catch (error) { console.error('Committed target table migration failed:', error); }
   try { ensurePreSaleProductsTable(db); }
   catch (error) { console.error('PreSale Product table migration failed:', error); }
+  try { ensurePsTeamAssignmentsTable(db); }
+  catch (error) { console.error('PS team assignment table migration failed:', error); }
   try { canonicalizeKnownPeople(db); }
   catch (error) { console.error('Person identity canonicalization migration failed:', error); }
 }
