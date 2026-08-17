@@ -592,3 +592,81 @@
     min-height: 190px;
   }
 }
+
+.team-resources-modal-panel {
+  width: min(1500px, calc(100vw - 32px)) !important;
+  max-width: min(1500px, calc(100vw - 32px)) !important;
+}
+
+.team-resources-table-scroll {
+  width: 100%;
+  max-width: 100%;
+  overflow-x: auto;
+  overflow-y: hidden;
+}
+
+.team-resources-table {
+  width: 100%;
+  min-width: 1215px;
+  table-layout: fixed;
+}
+.team-resources-table th,
+.team-resources-table td {
+  padding-left: 12px !important;
+  padding-right: 12px !important;
+  vertical-align: middle;
+}
+.team-resources-col-code { width: 105px; }
+.team-resources-col-name { width: 245px; }
+.team-resources-col-dept { width: 135px; }
+.team-resources-col-designation { width: 125px; }
+.team-resources-col-assigned { width: 220px; }
+.team-resources-col-workdays { width: 145px; }
+.team-resources-col-util { width: 70px; }
+.team-resources-col-status { width: 100px; }
+.team-resources-col-edit { width: 70px; }
+
+.ps-team-assignment-header,
+.ps-team-assignment-cell {
+  width: 220px;
+  min-width: 220px;
+}
+.ps-team-assignment-select {
+  width: 196px;
+  min-width: 196px;
+  border: 1px solid #cbd5e1;
+  border-radius: 8px;
+  background: #fff;
+  color: #0f172a;
+  font-size: 12px;
+  font-weight: 650;
+  line-height: 1.2;
+  padding: 7px 28px 7px 9px;
+  outline: none;
+  transition: border-color .15s ease, box-shadow .15s ease;
+}
+.ps-team-assignment-select:focus {
+  border-color: #3b82f6;
+  box-shadow: 0 0 0 3px rgba(59,130,246,.12);
+}
+.ps-team-assignment-select:disabled { opacity: .6; cursor: wait; }
+.ps-team-assignment-source {
+  width: 196px;
+  margin-top: 4px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  color: #94a3b8;
+  font-size: 9px;
+  line-height: 1.2;
+}
+
+@media (max-width: 1280px) {
+  .team-resources-modal-panel {
+    width: calc(100vw - 16px) !important;
+    max-width: calc(100vw - 16px) !important;
+  }
+  .team-resources-table {
+    min-width: 1215px;
+  }
+}

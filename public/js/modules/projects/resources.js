@@ -8,12 +8,27 @@ function openResourceModal() {
     const isActive = e.active !== 0;
     const util = S.employeeUtil ? (S.employeeUtil.get(e.id) || 0) : 0;
     const clr = uc(util), badge = ub(util);
+    const teamAssignment = getCurrentPsTeamAssignment(e.id);
+    const assignedTo = teamAssignment?.assignedTo || '';
+    const assignmentMonthLabel = psTeamAssignmentMonthLabel(teamAssignment?.monthKey || S.psTeamAssignments?.current?.monthKey || currentPsTeamAssignmentMonthKey());
+    const effectiveMonthLabel = psTeamAssignmentMonthLabel(teamAssignment?.effectiveMonth || '');
+    let assignmentSource = `— · never assigned`;
+    if (assignedTo) {
+      assignmentSource = teamAssignment?.source === 'carried-forward'
+        ? `Carried forward from ${effectiveMonthLabel || assignmentMonthLabel || 'earlier month'}`
+        : `Manual · ${effectiveMonthLabel || assignmentMonthLabel || 'selected month'}`;
+    } else if (teamAssignment?.source === 'manual-unassigned') {
+      assignmentSource = `Unassigned manually · ${effectiveMonthLabel || assignmentMonthLabel || 'selected month'}`;
+    } else if (teamAssignment?.source === 'carried-forward-unassigned') {
+      assignmentSource = `Unassigned since ${effectiveMonthLabel || assignmentMonthLabel || 'earlier month'}`;
+    }
     const searchText = [
       e.employee_code,
       e.name,
       e.email,
       e.dept,
       e.designation,
+      assignedTo,
       isActive ? 'active' : 'inactive',
     ].filter(Boolean).join(' ').toLowerCase();
 
@@ -30,6 +45,18 @@ function openResourceModal() {
       </td>
       <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.dept || '—')}</td>
       <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.designation || '—')}</td>
+      <td class="py-2.5 px-4 ps-team-assignment-cell">
+        <select
+          class="ps-team-assignment-select"
+          aria-label="Assigned To for ${esc(e.name)}"
+          onchange="saveEmployeePsTeamAssignment(${e.id}, this.value, this)"
+        >
+          <option value="" ${assignedTo ? '' : 'selected'}>—</option>
+          <option value="Local PS" ${assignedTo === 'Local PS' ? 'selected' : ''}>Local PS</option>
+          <option value="Intra-Sourcing" ${assignedTo === 'Intra-Sourcing' ? 'selected' : ''}>Intra-Sourcing</option>
+        </select>
+        <div class="ps-team-assignment-source" title="${esc(assignmentSource)}">${esc(assignmentSource)}</div>
+      </td>
       <td class="py-2.5 px-4">
         <div class="workdays-inline-editor">
           <input id="teamWorkdays-${e.id}" type="number" min="0" step="1" value="${esc(String(Number(e.workdays) || 0))}" aria-label="Workdays for ${esc(e.name)}">
@@ -61,30 +88,47 @@ function openResourceModal() {
   };
 
   const tableHtml = (emps) => emps.length
-    ? `<table class="w-full text-left border-collapse">
+    ? `<div class="team-resources-table-scroll nice-scroll"><table class="team-resources-table w-full text-left border-collapse">
+        <colgroup>
+          <col class="team-resources-col-code">
+          <col class="team-resources-col-name">
+          <col class="team-resources-col-dept">
+          <col class="team-resources-col-designation">
+          <col class="team-resources-col-assigned">
+          <col class="team-resources-col-workdays">
+          <col class="team-resources-col-util">
+          <col class="team-resources-col-status">
+          <col class="team-resources-col-edit">
+        </colgroup>
         <thead><tr class="border-b border-gray-200">
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Code</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Name</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Dept</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Designation</th>
+          <th class="py-2 px-4 text-xs font-semibold text-gray-500 ps-team-assignment-header">Assigned To</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Workdays</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Util</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Status</th>
           <th class="py-2 px-4 text-xs font-semibold text-gray-500">Edit</th>
         </tr></thead>
         <tbody>${emps.map(empRow).join('')}</tbody>
-      </table>`
+      </table></div>`
     : '<p class="text-sm text-gray-400 py-4 px-4">None</p>';
 
+  const currentTeamMonth = S.psTeamAssignments?.current?.monthKey || currentPsTeamAssignmentMonthKey();
+  const assignedToContext = currentTeamMonth
+    ? ` · Assigned To for ${psTeamAssignmentMonthLabel(currentTeamMonth)} · carries forward until changed`
+    : '';
+
   openModal(
-    mHdr('Team Resources', `${activeEmps.length} active · ${inactiveEmps.length} inactive · productivity calculated on active only`)
+    mHdr('Team Resources', `${activeEmps.length} active · ${inactiveEmps.length} inactive · productivity calculated on active only${assignedToContext}`)
     + `<div class="modal-scroll-body nice-scroll">
         <div class="sticky top-0 z-10 px-4 py-3 border-b border-gray-200 bg-white">
           <label for="teamResourcesSearch" class="sr-only">Search team resources</label>
           <div class="relative">
             <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input id="teamResourcesSearch" type="search" autocomplete="off"
-              placeholder="Search by name, code, email, department, designation or status..."
+              placeholder="Search by name, code, email, department, designation, Assigned To or status..."
               oninput="filterTeamResources(this.value)"
               class="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
           </div>
@@ -110,7 +154,7 @@ function openResourceModal() {
       <div class="modal-footer px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
         <button onclick="closeModal()" class="btn-gray">Close</button>
       </div>`,
-    'max-w-7xl'
+    'max-w-[1500px] team-resources-modal-panel'
   );
 
   filterTeamResources('');
@@ -723,3 +767,92 @@ async function saveEmployeeWorkdays(empId, inputId, reopenTarget = 'team') {
     toast(error?.message || 'Failed to update Workdays', 'error');
   }
 }
+
+function currentPsTeamAssignmentMonthKey(date = new Date()) {
+  const d = date instanceof Date ? new Date(date.getTime()) : new Date(date);
+  if (Number.isNaN(d.getTime())) return '';
+
+  // Team assignment is recorded for the most recently completed calendar
+  // month. Example: while the application is running in August 2026, the
+  // Team Resources Assigned To control edits July 2026. This keeps manual
+  // team membership aligned with the latest completed Time Sheet period.
+  d.setDate(1);
+  d.setMonth(d.getMonth() - 1);
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function psTeamAssignmentMonthLabel(monthKey) {
+  const match = String(monthKey || '').match(/^(\d{4})-(\d{2})$/);
+  if (!match) return String(monthKey || '');
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  return `${MN[month - 1] || ''} ${year}`.trim();
+}
+
+function psTeamAssignmentDateLabel(isoDate) {
+  const match = String(isoDate || '').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!match) return String(isoDate || '');
+  const year = Number(match[1]);
+  const month = Number(match[2]);
+  const day = Number(match[3]);
+  return `${day} ${MN[month - 1] || ''} ${year}`;
+}
+
+function getCurrentPsTeamAssignment(employeeId) {
+  return (S.psTeamAssignments?.current?.assignments || []).find(row => (
+    Number(row.employeeId) === Number(employeeId)
+  )) || null;
+}
+
+async function loadPsTeamAssignmentsForFiscalYear(fiscalYear = S.matrixFiscalYear) {
+  const fy = normalizeFiscalYearStart(fiscalYear, S.matrixFiscalYear);
+  const assignmentMonthKey = currentPsTeamAssignmentMonthKey();
+  const assignmentMonthMatch = assignmentMonthKey.match(/^(\d{4})-(\d{2})$/);
+  const assignmentYear = assignmentMonthMatch ? Number(assignmentMonthMatch[1]) : new Date().getFullYear();
+  const assignmentMonth = assignmentMonthMatch ? Number(assignmentMonthMatch[2]) : new Date().getMonth() + 1;
+  const data = await api('GET', `/api/ps-team-assignments?fiscalYear=${fy}&currentYear=${assignmentYear}&currentMonth=${assignmentMonth}`);
+  if (fy !== S.matrixFiscalYear) return data;
+  S.psTeamAssignments = data || { fiscalYear: fy, months: {}, current: { monthKey: '', assignments: [] } };
+  return data;
+}
+
+async function saveEmployeePsTeamAssignment(employeeId, assignedTo, selectEl = null) {
+  // Team Resources writes an effective-dated assignment for the most
+  // recently completed calendar month. That value carries forward into later
+  // months until a new manual assignment (or explicit unassignment) is saved.
+  const currentMonth = String(
+    S.psTeamAssignments?.current?.monthKey || currentPsTeamAssignmentMonthKey(),
+  ).trim();
+  if (!currentMonth) {
+    toast('Unable to determine the current assignment month.', 'error');
+    return;
+  }
+  if (!['', 'Local PS', 'Intra-Sourcing'].includes(assignedTo)) return;
+
+  if (selectEl) selectEl.disabled = true;
+  try {
+    await api('PATCH', `/api/ps-team-assignments/${Number(employeeId)}`, {
+      assignedTo,
+      effectiveMonth: currentMonth,
+    });
+    await loadPsTeamAssignmentsForFiscalYear(S.matrixFiscalYear);
+    // The Team Resources dropdown edits the most recently completed month.
+    // Keep PS Team Utilization on that same reporting month after a change so
+    // the user immediately sees the Time Sheet calculations that were just
+    // affected, rather than a future/current month with no actual entries.
+    if (typeof selectTeamUtilizationReportingMonth === 'function') {
+      selectTeamUtilizationReportingMonth(currentMonth);
+    }
+    if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
+    openResourceModal();
+    const employee = (S.employees || []).find(e => Number(e.id) === Number(employeeId));
+    toast(assignedTo
+      ? `${employee?.name || 'Resource'} assigned to ${assignedTo} from ${psTeamAssignmentMonthLabel(currentMonth)} onward`
+      : `${employee?.name || 'Resource'} is unassigned from ${psTeamAssignmentMonthLabel(currentMonth)} onward`);
+  } catch (error) {
+    toast(error.message || 'Failed to update Assigned To', 'error');
+    if (selectEl) selectEl.disabled = false;
+  }
+}
+
+window.saveEmployeePsTeamAssignment = saveEmployeePsTeamAssignment;

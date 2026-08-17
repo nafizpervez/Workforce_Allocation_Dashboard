@@ -44,13 +44,9 @@ The supporting rows in these cards are interactive and open detailed resource, p
 
 - Add, edit, activate, deactivate, and delete employee records.
 - Maintain designation and annual Workdays.
-- Existing employee Workdays default to `220`.
-- Supported revenue-rate designations:
-  - Team Lead
-  - Senior Consultant
-  - Consultant
-  - Junior Consultant
-  - Analyst
+- Default annual Workdays are controlled by `DEFAULT_ANNUAL_WORKDAYS` in the root `config.js` (initially `220`).
+- Supported resource designations include Head of Department, Senior Manager, Technical Lead, Senior Consultant, Consultant, Jr. Consultant, and Analyst.
+- Resource Revenue uses shared rate groups for equivalent delivery positions while preserving effective-dated rate history.
 - Team-composition shortcuts open designation-filtered employee lists.
 - Selecting an employee opens the existing Edit Resource modal.
 

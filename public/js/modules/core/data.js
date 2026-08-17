@@ -99,6 +99,10 @@ async function loadMatrixAssignments({ announce = false } = {}) {
   if (typeof syncMonthlyPlannedWorkFiscalYearToMatrix === 'function') {
     syncMonthlyPlannedWorkFiscalYearToMatrix();
   }
+  if (typeof loadPsTeamAssignmentsForFiscalYear === 'function') {
+    try { await loadPsTeamAssignmentsForFiscalYear(fiscalYear); }
+    catch (error) { console.error('Failed to load PS team assignments for selected FY:', error); }
+  }
   if (typeof refreshWorkSummaryForMatrixFiscalYear === 'function') {
     refreshWorkSummaryForMatrixFiscalYear();
   }
@@ -224,6 +228,18 @@ async function loadAll() {
     populateMatrixFilter();
     populatePipelineStageFilter();
     populateProductFamilyDropdowns();
+
+    // Load manual monthly Local PS / Intra-Sourcing membership during initial
+    // application startup. PS Team Utilization and Team Resources both depend
+    // on this state; previously it was loaded only after a Matrix FY change,
+    // which left the current assignment month empty on a fresh page load.
+    if (typeof loadPsTeamAssignmentsForFiscalYear === 'function') {
+      try {
+        await loadPsTeamAssignmentsForFiscalYear(matrixFy);
+      } catch (error) {
+        console.error('Failed to load initial PS team assignments:', error);
+      }
+    }
 
     await loadSavedTimesheetFromDb();
 
