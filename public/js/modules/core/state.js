@@ -69,6 +69,8 @@ const S = {
   lastRunningData: [],
   /* uploaded Time Sheet Excel summary */
   timesheetRows: [],
+  // Aggregated from Time Sheet detail rows where the source Excel `Billable?` column is Yes.
+  timesheetBillableRows: [],
   timesheetFileName: '',
   timesheetSheetName: '',
   individualSummaryMonthFilter: '',
@@ -108,10 +110,12 @@ function getPreSalePipelineKpiSummary(products = S.preSaleProducts, thresholds =
   for (const product of getActivePreSaleProducts(products)) {
     const amount = Math.max(0, Number(product?.amount) || 0);
     const percent = Number(product?.percent);
+    const normalizedPercent = Number.isFinite(percent) ? percent : 0;
     const normalizedProduct = {
       ...product,
       amount,
-      percent: Number.isFinite(percent) ? percent : 0,
+      percent: normalizedPercent,
+      weightedValue: +(amount * (normalizedPercent / 100)).toFixed(2),
       active: true,
     };
 
@@ -131,12 +135,17 @@ function getPreSalePipelineKpiSummary(products = S.preSaleProducts, thresholds =
   const amountOf = rows => +rows.reduce((total, product) => (
     total + (Number(product?.amount) || 0)
   ), 0).toFixed(2);
+  const weightedValueOf = rows => +rows.reduce((total, product) => (
+    total + (Number(product?.weightedValue) || 0)
+  ), 0).toFixed(2);
 
   return {
     ...summary,
     totalAmount: +summary.totalAmount.toFixed(2),
     convertedAmount: amountOf(summary.converted),
-    weightedAmount: amountOf(summary.weighted),
+    // Weighted Pipeline is probability-adjusted Value, not the raw Value.
+    // Example: USD 2,000 at 90% probability contributes USD 1,800.
+    weightedAmount: weightedValueOf(summary.weighted),
     bestCaseAmount: amountOf(summary.bestCase),
     prospectAmount: amountOf(summary.prospect),
     securedMinPercent: securedThreshold,

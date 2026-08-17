@@ -65,6 +65,22 @@ router.get('/api/timesheet-summary', (_, res) => {
     worker: canonicalPersonName(row.worker),
   }));
 
+  const billableRows = db.prepare(`
+    SELECT
+      month,
+      worker,
+      work_type AS workType,
+      SUM(qty) AS qty
+    FROM timesheet_detail_entries
+    WHERE LOWER(TRIM(COALESCE(billable, ''))) = 'yes'
+    GROUP BY month, worker, work_type
+    ORDER BY month, worker, work_type
+  `).all().map(row => ({
+    ...row,
+    worker: canonicalPersonName(row.worker),
+    qty: +safeNum(row.qty, 0).toFixed(4),
+  }));
+
   const meta = db.prepare(`
     SELECT source_file, sheet_name, updated_at
     FROM timesheet_entries
@@ -82,6 +98,7 @@ router.get('/api/timesheet-summary', (_, res) => {
 
   res.json({
     rows,
+    billable_rows: billableRows,
     months,
     total_hours: +totalHours.toFixed(2),
     last_source_file: meta?.source_file || '',

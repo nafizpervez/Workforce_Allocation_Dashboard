@@ -8,11 +8,6 @@ const TEAM_UTILIZATION_PROJECT_TYPES = new Set([
   'Service Delivery - Intrasourcing',
   'Pre - Sales',
 ]);
-const TEAM_UTILIZATION_BILLABLE_TYPES = new Set([
-  'Service Delivery - Local PS',
-  'Service Delivery - Intrasourcing',
-]);
-
 const TEAM_UTILIZATION_TOOLTIP_DATA = new Map();
 let teamUtilizationTooltipListenersReady = false;
 let teamUtilizationTooltipHideTimer = null;
@@ -76,6 +71,25 @@ function teamUtilizationTooltipTitle(title, subtitle = '') {
   return `<div class="team-utilization-tooltip__title">${esc(title)}</div>${subtitle ? `<div class="team-utilization-tooltip__subtitle">${esc(subtitle)}</div>` : ''}`;
 }
 
+function teamUtilizationBuildCalculationBasisTooltip() {
+  const defaultAnnualWorkdays = Number(getDefaultAnnualWorkdays()) || 0;
+  return `
+    ${teamUtilizationTooltipTitle('PS Team Utilization — Calculation Basis', fiscalYearDisplayLabel(S.matrixFiscalYear))}
+    <div class="team-utilization-tooltip__note">Assigned To carries forward until changed; — makes the resource unassigned.</div>
+    <table class="team-utilization-tooltip__table team-utilization-tooltip__table--basis">
+      <tr><th>Team membership</th><td>Assigned To = Local PS or Intra-Sourcing.</td></tr>
+      <tr><th>Billable work</th><td>Time Sheet rows where <strong>Billable? = Yes</strong>.</td></tr>
+      <tr><th>Project work</th><td>Local PS + Intra-Sourcing + Pre-Sales + Training Delivery Time Sheet hours.</td></tr>
+      <tr><th>Monthly capacity</th><td>(${defaultAnnualWorkdays.toLocaleString('en-US')} ÷ 12) × Total Staff</td></tr>
+      <tr><th>Billable Utilization</th><td>Total Billable Days ÷ Monthly Team Capacity × 100</td></tr>
+      <tr><th>Project Utilization</th><td>Total Project Days ÷ Monthly Team Capacity × 100</td></tr>
+      <tr><th>YTD</th><td>Sum monthly actuals using each month’s effective Assigned To.</td></tr>
+      <tr><th>Next month</th><td>Next-month Time Sheet actuals; no data = NA.</td></tr>
+      <tr><th>FY Target</th><td>Project Utilization target = ${TEAM_UTILIZATION_FY_PROJECT_TARGET}%.</td></tr>
+    </table>
+    <div class="team-utilization-tooltip__formula">DEFAULT_ANNUAL_WORKDAYS = <strong>${defaultAnnualWorkdays.toLocaleString('en-US')}</strong> from root config.js</div>`;
+}
+
 function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
   const monthLabel = `${teamUtilizationMonthLabel(reportMonth.year, reportMonth.month, true)} ${reportMonth.year}`;
   const defaultAnnualWorkdays = Number(getDefaultAnnualWorkdays()) || 0;
@@ -116,16 +130,16 @@ function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
     </table>
     <div class="team-utilization-tooltip__formula">Count of resource rows = <strong>${stats.staffCount}</strong> = Total Staff</div>`);
 
-  const billableTypeRows = [
-    ['Service Delivery - Local PS', stats.monthTypeBreakdown['Service Delivery - Local PS']],
-    ['Service Delivery - Intrasourcing', stats.monthTypeBreakdown['Service Delivery - Intrasourcing']],
-  ].map(([label, hours]) => `
-    <tr><th>${esc(label)}</th><td>${teamUtilizationFormatHours(hours)}<small>${teamUtilizationFormatHours(hours)} ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY}h/day = ${(hours / TEAM_UTILIZATION_HOURS_PER_DAY).toLocaleString('en-US', { maximumFractionDigits: 1 })} days</small></td></tr>`);
+  const billableTypeRows = Object.entries(stats.monthBillableTypeBreakdown || {})
+    .filter(([, hours]) => Number(hours) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]) || String(a[0]).localeCompare(String(b[0])))
+    .map(([label, hours]) => `
+      <tr><th>${esc(label)}</th><td>${teamUtilizationFormatHours(hours)}<small>${teamUtilizationFormatHours(hours)} ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY}h/day = ${(hours / TEAM_UTILIZATION_HOURS_PER_DAY).toLocaleString('en-US', { maximumFractionDigits: 1 })} days</small></td></tr>`);
   const billableDays = stats.monthBillableHours / TEAM_UTILIZATION_HOURS_PER_DAY;
   TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:billable-days`, `
     ${teamUtilizationTooltipTitle('Total Billable Days', monthLabel)}
-    <div class="team-utilization-tooltip__note">Billable work includes Local PS and Intra-Sourcing Time Sheet hours only.</div>
-    ${teamUtilizationTooltipRows(billableTypeRows)}
+    <div class="team-utilization-tooltip__note">Billable work is taken directly from the uploaded Time Sheet: every source row where <strong>Billable? = Yes</strong> counts, regardless of work type.</div>
+    ${billableTypeRows.length ? teamUtilizationTooltipRows(billableTypeRows) : '<div class="team-utilization-tooltip__note">No Billable? = Yes Time Sheet hours were found for this team and month.</div>'}
     <div class="team-utilization-tooltip__formula">(${teamUtilizationFormatHours(stats.monthBillableHours)}) ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY} hours/day = <strong>${teamUtilizationFormatDays(billableDays)} billable days</strong></div>`);
 
   const projectTypeRows = [
@@ -146,8 +160,11 @@ function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
 
   TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:billable-utilization`, `
     ${teamUtilizationTooltipTitle('Billable Utilization', monthLabel)}
+    <div class="team-utilization-tooltip__note">Numerator: uploaded Time Sheet rows for this team where <strong>Billable? = Yes</strong>.</div>
+    ${billableTypeRows.length ? teamUtilizationTooltipRows(billableTypeRows) : '<div class="team-utilization-tooltip__note">No Billable? = Yes Time Sheet hours were found for this team and month.</div>'}
     ${teamUtilizationTooltipRows(capacityRows)}
     <div class="team-utilization-tooltip__formula">Monthly team capacity = (${defaultAnnualWorkdays.toLocaleString('en-US')} ÷ 12) × ${stats.staffCount} = <strong>${capacityTotal} days</strong></div>
+    <div class="team-utilization-tooltip__formula">Billable days = ${teamUtilizationFormatHours(stats.monthBillableHours)} ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY} = <strong>${billableDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days</strong></div>
     <div class="team-utilization-tooltip__formula">${billableDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} billable days ÷ ${capacityTotal} days × 100 = <strong>${teamUtilizationFormatPercent(stats.monthBillablePercent)}</strong></div>`);
 
   TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:project-utilization`, `
@@ -171,11 +188,11 @@ function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
   ];
   const ytdBillableDays = stats.ytdBillableHours / TEAM_UTILIZATION_HOURS_PER_DAY;
   const ytdProjectDays = stats.ytdProjectHours / TEAM_UTILIZATION_HOURS_PER_DAY;
-  const ytdBillableRows = [
-    ['Service Delivery - Local PS', stats.ytdTypeBreakdown['Service Delivery - Local PS']],
-    ['Service Delivery - Intrasourcing', stats.ytdTypeBreakdown['Service Delivery - Intrasourcing']],
-  ].map(([label, hours]) => `
-    <tr><th>${esc(label)}</th><td>${teamUtilizationFormatHours(hours)}<small>${(hours / TEAM_UTILIZATION_HOURS_PER_DAY).toLocaleString('en-US', { maximumFractionDigits: 1 })} days</small></td></tr>`);
+  const ytdBillableRows = Object.entries(stats.ytdBillableTypeBreakdown || {})
+    .filter(([, hours]) => Number(hours) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]) || String(a[0]).localeCompare(String(b[0])))
+    .map(([label, hours]) => `
+      <tr><th>${esc(label)}</th><td>${teamUtilizationFormatHours(hours)}<small>${(hours / TEAM_UTILIZATION_HOURS_PER_DAY).toLocaleString('en-US', { maximumFractionDigits: 1 })} days</small></td></tr>`);
   const ytdProjectRows = [
     'Service Delivery - Local PS',
     'Service Delivery - Intrasourcing',
@@ -188,8 +205,8 @@ function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
 
   TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:ytd-billable-utilization`, `
     ${teamUtilizationTooltipTitle('Billable Utilization — YTD', ytdPeriodLabel)}
-    <div class="team-utilization-tooltip__note">YTD billable work includes Local PS and Intra-Sourcing Time Sheet hours from the fiscal-year start through the reporting month.</div>
-    ${teamUtilizationTooltipRows(ytdBillableRows)}
+    <div class="team-utilization-tooltip__note">YTD billable work is the sum of uploaded Time Sheet rows where <strong>Billable? = Yes</strong> from the fiscal-year start through the reporting month, regardless of work type.</div>
+    ${ytdBillableRows.length ? teamUtilizationTooltipRows(ytdBillableRows) : '<div class="team-utilization-tooltip__note">No Billable? = Yes Time Sheet hours were found in this YTD period.</div>'}
     <div class="team-utilization-tooltip__note">Available capacity by month using each month's manual Assigned To team:</div>
     ${teamUtilizationTooltipRows(ytdCapacityRows)}
     <div class="team-utilization-tooltip__formula">Billable days = ${teamUtilizationFormatHours(stats.ytdBillableHours)} ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY} = <strong>${ytdBillableDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days</strong></div>
@@ -275,8 +292,11 @@ function positionTeamUtilizationTooltip(tooltip, trigger) {
   const rect = trigger.getBoundingClientRect();
   const gap = 6;
   const padding = 10;
-  const isStaffList = String(trigger?.dataset?.teamUtilizationTooltip || '').endsWith(':staff');
-  const width = Math.min(isStaffList ? 760 : 440, window.innerWidth - padding * 2);
+  const tooltipKey = String(trigger?.dataset?.teamUtilizationTooltip || '');
+  const isStaffList = tooltipKey.endsWith(':staff');
+  const isCalculationBasis = tooltipKey === 'calculation-basis';
+  const preferredWidth = isStaffList ? 760 : (isCalculationBasis ? 720 : 440);
+  const width = Math.min(preferredWidth, window.innerWidth - padding * 2);
   tooltip.style.maxWidth = `${width}px`;
   tooltip.style.left = `${padding}px`;
   tooltip.style.top = `${padding}px`;
@@ -379,31 +399,27 @@ function teamUtilizationFiscalMonthIndex(year, month, fiscalYear = S.matrixFisca
 }
 
 function teamUtilizationDefaultReportMonth(rowsOverride = null) {
-  const fiscalYear = S.matrixFiscalYear;
+  const fiscalYear = Number(S.matrixFiscalYear);
   const months = fiscalMonths(fiscalYear);
-  const rows = Array.isArray(rowsOverride)
-    ? rowsOverride
-    : (typeof getWorkSummaryTimesheetRows === 'function'
-      ? getWorkSummaryTimesheetRows(fiscalYear)
-      : []);
-
-  const actualMonths = rows
-    .map(row => typeof parseMonthlyWorkMonth === 'function' ? parseMonthlyWorkMonth(row.month) : null)
-    .filter(Boolean)
-    .filter(item => teamUtilizationFiscalMonthIndex(item.year, item.month, fiscalYear) >= 0)
-    .sort((a, b) => (
-      teamUtilizationFiscalMonthIndex(a.year, a.month, fiscalYear) -
-      teamUtilizationFiscalMonthIndex(b.year, b.month, fiscalYear)
-    ));
-
-  if (actualMonths.length) return actualMonths[actualMonths.length - 1];
-
   const now = new Date();
-  const current = { year: now.getFullYear(), month: now.getMonth() + 1 };
-  if (teamUtilizationFiscalMonthIndex(current.year, current.month, fiscalYear) >= 0) return current;
 
-  const currentFy = getCurrentFiscalYearStart(now);
-  if (fiscalYear < currentFy) {
+  // PS Team Utilization is a completed-month report. By default it always opens
+  // on the previous calendar month (for example: February -> January,
+  // April -> March, August -> July) rather than the current/open month.
+  const previousMonthDate = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+  const previous = {
+    year: previousMonthDate.getFullYear(),
+    month: previousMonthDate.getMonth() + 1,
+  };
+
+  if (teamUtilizationFiscalMonthIndex(previous.year, previous.month, fiscalYear) >= 0) {
+    return previous;
+  }
+
+  // If the user has selected another Matrix FY, keep the reporting month inside
+  // that FY: completed historical FYs open on March; future FYs open on April.
+  const previousFiscalYear = Number(getCurrentFiscalYearStart(previousMonthDate));
+  if (fiscalYear < previousFiscalYear) {
     const last = months[months.length - 1];
     return { year: last.y, month: last.m };
   }
@@ -564,7 +580,6 @@ function teamUtilizationWorkerHours(rows) {
         worker,
         local: 0,
         intra: 0,
-        billable: 0,
         project: 0,
         total: 0,
       });
@@ -575,22 +590,52 @@ function teamUtilizationWorkerHours(rows) {
     record.total += hours;
     if (workType === 'Service Delivery - Local PS') record.local += hours;
     if (workType === 'Service Delivery - Intrasourcing') record.intra += hours;
-    if (TEAM_UTILIZATION_BILLABLE_TYPES.has(workType)) record.billable += hours;
     if (TEAM_UTILIZATION_PROJECT_TYPES.has(workType)) record.project += hours;
   }
   return byWorker;
 }
 
-function teamUtilizationAggregateActual(rows, members) {
+function teamUtilizationBillableRowsForMonth(year, month) {
+  return teamUtilizationRowsForMonth(S.timesheetBillableRows || [], year, month);
+}
+
+function teamUtilizationBillableTypeBreakdown(rows, members) {
   const memberKeys = new Set((members || []).map(personIdentityKey));
-  let billableHours = 0;
+  const result = {};
+  for (const row of rows || []) {
+    if (!memberKeys.has(personIdentityKey(row.worker))) continue;
+    const label = normalizeTimesheetWorkType(row.workType) || String(row.workType || 'Billable Work').trim() || 'Billable Work';
+    result[label] = (Number(result[label]) || 0) + (Number(row.qty) || 0);
+  }
+  return result;
+}
+
+function teamUtilizationBillableHours(rows, members) {
+  const memberKeys = new Set((members || []).map(personIdentityKey));
+  let total = 0;
+  for (const row of rows || []) {
+    if (!memberKeys.has(personIdentityKey(row.worker))) continue;
+    total += Number(row.qty) || 0;
+  }
+  return total;
+}
+
+function teamUtilizationMergeBreakdown(target, source) {
+  for (const [key, value] of Object.entries(source || {})) {
+    target[key] = (Number(target[key]) || 0) + (Number(value) || 0);
+  }
+  return target;
+}
+
+function teamUtilizationAggregateActual(rows, members, billableRows = []) {
+  const memberKeys = new Set((members || []).map(personIdentityKey));
+  const billableHours = teamUtilizationBillableHours(billableRows, members);
   let projectHours = 0;
 
   for (const row of rows || []) {
     if (!memberKeys.has(personIdentityKey(row.worker))) continue;
     const type = normalizeTimesheetWorkType(row.workType) || row.workType;
     const hours = Number(row.qty) || 0;
-    if (TEAM_UTILIZATION_BILLABLE_TYPES.has(type)) billableHours += hours;
     if (TEAM_UTILIZATION_PROJECT_TYPES.has(type)) projectHours += hours;
   }
 
@@ -740,8 +785,10 @@ function teamUtilizationBuildStats(tone, allRows, reportMonth, ytdMonths, nextMo
   const members = teamUtilizationAssignedMembers(reportMonth.year, reportMonth.month, tone);
   const monthRows = teamUtilizationRowsForMonth(allRows, reportMonth.year, reportMonth.month);
   const memberBasis = teamUtilizationAssignedMemberBasis(reportMonth.year, reportMonth.month, tone, monthRows);
-  const monthlyActual = teamUtilizationAggregateActual(monthRows, members);
+  const monthBillableRows = teamUtilizationBillableRowsForMonth(reportMonth.year, reportMonth.month);
+  const monthlyActual = teamUtilizationAggregateActual(monthRows, members, monthBillableRows);
   const monthTypeBreakdown = teamUtilizationActualTypeBreakdown(monthRows, members);
+  const monthBillableTypeBreakdown = teamUtilizationBillableTypeBreakdown(monthBillableRows, members);
   const monthCapacityDays = teamUtilizationMonthlyTeamCapacity(members.length);
   const monthBillableDays = monthlyActual.billableHours / TEAM_UTILIZATION_HOURS_PER_DAY;
   const monthProjectDays = monthlyActual.projectHours / TEAM_UTILIZATION_HOURS_PER_DAY;
@@ -753,6 +800,7 @@ function teamUtilizationBuildStats(tone, allRows, reportMonth, ytdMonths, nextMo
     'Training Delivery',
   ].map(label => [label, 0]));
   let ytdBillableHours = 0;
+  const ytdBillableTypeBreakdown = {};
   let ytdProjectHours = 0;
   let ytdCapacityDays = 0;
   const ytdCapacityBreakdown = [];
@@ -760,10 +808,13 @@ function teamUtilizationBuildStats(tone, allRows, reportMonth, ytdMonths, nextMo
   for (const item of ytdMonths || []) {
     const monthMembers = teamUtilizationAssignedMembers(item.y, item.m, tone);
     const rows = teamUtilizationRowsForMonth(allRows, item.y, item.m);
-    const actual = teamUtilizationAggregateActual(rows, monthMembers);
+    const billableRows = teamUtilizationBillableRowsForMonth(item.y, item.m);
+    const actual = teamUtilizationAggregateActual(rows, monthMembers, billableRows);
     const breakdown = teamUtilizationActualTypeBreakdown(rows, monthMembers);
+    const billableBreakdown = teamUtilizationBillableTypeBreakdown(billableRows, monthMembers);
     const capacityDays = teamUtilizationMonthlyTeamCapacity(monthMembers.length);
     ytdBillableHours += actual.billableHours;
+    teamUtilizationMergeBreakdown(ytdBillableTypeBreakdown, billableBreakdown);
     ytdProjectHours += actual.projectHours;
     ytdCapacityDays += capacityDays;
     teamUtilizationAddBreakdown(ytdTypeBreakdown, breakdown);
@@ -802,7 +853,9 @@ function teamUtilizationBuildStats(tone, allRows, reportMonth, ytdMonths, nextMo
     members: [...members],
     memberBasis,
     monthTypeBreakdown,
+    monthBillableTypeBreakdown,
     ytdTypeBreakdown,
+    ytdBillableTypeBreakdown,
     ytdMonths: [...(ytdMonths || [])],
     ytdCapacityBreakdown,
     monthBillableHours: monthlyActual.billableHours,
@@ -836,7 +889,8 @@ function teamUtilizationBuildFiscalChartSeries(allRows, tone) {
   for (const month of months) {
     const monthRows = teamUtilizationRowsForMonth(allRows, month.y, month.m);
     const members = teamUtilizationAssignedMembers(month.y, month.m, tone);
-    const actual = teamUtilizationAggregateActual(monthRows, members);
+    const monthBillableRows = teamUtilizationBillableRowsForMonth(month.y, month.m);
+    const actual = teamUtilizationAggregateActual(monthRows, members, monthBillableRows);
     const capacityDays = teamUtilizationMonthlyTeamCapacity(members.length);
     const billableDays = actual.billableHours / TEAM_UTILIZATION_HOURS_PER_DAY;
     const projectDays = actual.projectHours / TEAM_UTILIZATION_HOURS_PER_DAY;
@@ -986,6 +1040,7 @@ function teamUtilizationRenderCharts(allRows) {
 
 function renderTeamUtilizationSummary() {
   TEAM_UTILIZATION_TOOLTIP_DATA.clear();
+  TEAM_UTILIZATION_TOOLTIP_DATA.set('calculation-basis', teamUtilizationBuildCalculationBasisTooltip());
   initTeamUtilizationCalculationTooltips();
   const content = document.getElementById('teamUtilizationContent');
   if (!content) return;
@@ -1030,9 +1085,6 @@ function renderTeamUtilizationSummary() {
   );
 
   content.innerHTML = `
-    <div class="team-utilization-note">
-      <strong>Calculation basis:</strong> Select any April–March month in the chosen Matrix FY. Team membership comes only from manually saved Assigned To history in Team Resources: Local PS, Intra-Sourcing, or unassigned (—). The most recent saved assignment on or before a reporting month carries forward until another assignment is saved; an explicit — stops the previous assignment from carrying forward. Resources that have never been assigned, or are currently unassigned, are excluded from both teams and all PS Team Utilization calculations. Actual Billable Utilization = Total Billable Days ÷ ((DEFAULT_ANNUAL_WORKDAYS ÷ 12) × Total Staff) × 100, where DEFAULT_ANNUAL_WORKDAYS comes from root config.js. Actual Project Utilization uses the same denominator with Total Project Days. Billable work = Local PS + Intra-Sourcing Time Sheet hours; Project work additionally includes Pre-Sales and Training Delivery. YTD capacity resolves each fiscal month's effective Assigned To membership separately. Next-month Project Utilization uses next-month Time Sheet actuals only for resources whose effective Assigned To value places them in that team; when no next-month Time Sheet exists it is shown as NA. Project Utilization FY Target = ${TEAM_UTILIZATION_FY_PROJECT_TARGET}%.
-    </div>
     <div class="team-utilization-grid">
       ${buildTeamUtilizationSection('Utilization – Local PS Team', 'local', localStats, reportMonth, nextMonth)}
       ${buildTeamUtilizationSection('Utilization – Intra-Sourcing PS Team', 'intra', intraStats, reportMonth, nextMonth)}

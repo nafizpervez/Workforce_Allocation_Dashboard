@@ -14,6 +14,12 @@ function formatPreSaleProductAmount(value) {
   })}`;
 }
 
+function getPreSaleProductWeightedValue(value, probability) {
+  const numericValue = Math.max(0, Number(value) || 0);
+  const numericProbability = Math.min(100, Math.max(0, Number(probability) || 0));
+  return +(numericValue * (numericProbability / 100)).toFixed(2);
+}
+
 function formatPreSaleProductPlannedHours(value) {
   return `${(Number(value) || 0).toLocaleString('en-US', {
     minimumFractionDigits: 1,
@@ -158,6 +164,17 @@ function getPreSaleProductDraftTotalAmount() {
 }
 
 function updatePreSaleProductTotalAmount() {
+  readPreSaleProductDraftRows();
+
+  document.querySelectorAll('[data-presale-product-row]').forEach(row => {
+    const draft = preSaleProductDraftRows.find(item => item.key === row.dataset.presaleProductRow);
+    if (!draft) return;
+    const weightedValue = getPreSaleProductWeightedValue(draft.amount, draft.percent);
+    const weightedOutput = row.querySelector('[data-presale-product-weighted-value]');
+    if (weightedOutput) weightedOutput.textContent = formatPreSaleProductAmount(weightedValue);
+    row.classList.toggle('is-converted', Number(draft.percent) === 100);
+  });
+
   const output = document.getElementById('preSaleProductTotalAmount');
   if (output) {
     output.textContent = formatPreSaleProductAmount(getPreSaleProductDraftTotalAmount());
@@ -263,7 +280,7 @@ function renderPreSaleProductRows() {
 
   root.innerHTML = preSaleProductDraftRows.length
     ? preSaleProductDraftRows.map((product, index) => `
-        <div class="presale-product-row ${product.active === false ? 'is-inactive' : ''}" data-presale-product-row="${esc(product.key)}">
+        <div class="presale-product-row ${product.active === false ? 'is-inactive' : ''} ${Number(product.percent) === 100 ? 'is-converted' : ''}" data-presale-product-row="${esc(product.key)}">
           <div class="presale-product-row__index">${index + 1}</div>
           <div>
             <label class="sr-only" for="presale_name_${index}">Product Name</label>
@@ -280,7 +297,7 @@ function renderPreSaleProductRows() {
           </div>
           <div class="relative">
             <span class="absolute left-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">$</span>
-            <label class="sr-only" for="presale_amount_${index}">Amount</label>
+            <label class="sr-only" for="presale_amount_${index}">Value</label>
             <input
               id="presale_amount_${index}"
               type="number"
@@ -294,7 +311,7 @@ function renderPreSaleProductRows() {
             >
           </div>
           <div class="relative">
-            <label class="sr-only" for="presale_percent_${index}">Percent</label>
+            <label class="sr-only" for="presale_percent_${index}">Probability</label>
             <input
               id="presale_percent_${index}"
               type="number"
@@ -305,10 +322,16 @@ function renderPreSaleProductRows() {
               data-presale-product-percent
               value="${esc(Number(product.percent) || 0)}"
               placeholder="0"
+              oninput="updatePreSaleProductTotalAmount()"
               onchange="sortPreSaleProductRowsByPercent()"
             >
             <span class="absolute right-3 top-1/2 -translate-y-1/2 text-sm text-gray-400">%</span>
           </div>
+          <output
+            class="presale-product-weighted-value"
+            data-presale-product-weighted-value
+            title="Weighted Value = Value × Probability"
+          >${esc(formatPreSaleProductAmount(getPreSaleProductWeightedValue(product.amount, product.percent)))}</output>
           <div>
             <label class="sr-only" for="presale_active_${index}">Product Status</label>
             <select
@@ -365,13 +388,13 @@ function openPreSaleProductsModal() {
   openModal(`
     ${mHdr(
       'Pre-Sale Product',
-      'Maintain Product Names, reference amounts and confidence percentages, and review planned resource hours and revenue calculated from Resource Revenue rates.',
+      'Maintain Product Names, Values and Probability, review probability-weighted Values, and review planned resource hours and revenue calculated from Resource Revenue rates.',
     )}
     <div class="modal-scroll-body nice-scroll presale-products-modal__body">
       <section class="presale-product-thresholds" aria-labelledby="presaleThresholdHeading">
         <div class="presale-product-thresholds__copy">
           <strong id="presaleThresholdHeading">Classification thresholds</strong>
-          <span>Percent values are classified automatically throughout the Plan-to-Execution Map.</span>
+          <span>Probability values are classified automatically throughout the Plan-to-Execution Map.</span>
         </div>
         <div class="presale-product-threshold-field is-converted" aria-label="Converted threshold">
           <span>Converted</span>
@@ -413,8 +436,9 @@ function openPreSaleProductsModal() {
       <div class="presale-product-table-header">
         <span>#</span>
         <span>Product Name</span>
-        <span class="text-right">Amount</span>
-        <span class="text-right">Percent</span>
+        <span class="text-right">Value</span>
+        <span class="text-right">Probability</span>
+        <span class="text-right">Weighted Value</span>
         <span>Status</span>
         <span>Planned Resources · Hours · Revenue</span>
         <span></span>
@@ -422,8 +446,9 @@ function openPreSaleProductsModal() {
       <div id="preSaleProductRows"></div>
       <div class="presale-product-total-row" aria-live="polite">
         <span></span>
-        <strong>Total Amount</strong>
+        <strong>Total Value</strong>
         <output id="preSaleProductTotalAmount">${esc(formatPreSaleProductAmount(0))}</output>
+        <span></span>
         <span></span>
         <span></span>
         <output id="preSaleProductTotalPlannedRevenue">${esc(formatPreSaleProductAmount(0))}</output>
@@ -437,7 +462,7 @@ function openPreSaleProductsModal() {
         <button id="savePreSaleProductsBtn" type="button" onclick="savePreSaleProducts()" class="btn-blue">Save Products</button>
       </div>
     </div>
-  `, 'max-w-6xl presale-products-modal-panel');
+  `, 'max-w-7xl presale-products-modal-panel');
 
   renderPreSaleProductRows();
   syncPreSaleThresholdPreview();
@@ -485,7 +510,7 @@ async function savePreSaleProducts() {
     product.percent > 100
   ));
   if (invalidIndex !== -1) {
-    toast(`Product row ${invalidIndex + 1} requires a name, non-negative amount and Percent from 0 to 100.`, 'error');
+    toast(`Product row ${invalidIndex + 1} requires a name, non-negative Value and Probability from 0 to 100.`, 'error');
     return;
   }
 
