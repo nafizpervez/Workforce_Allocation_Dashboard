@@ -891,8 +891,10 @@ async function openPsTeamFyAssignmentPlanner() {
           data-month-key="${esc(key)}"
           data-initial-value="${esc(value)}"
           data-original-explicit="${isExplicit ? '1' : '0'}"
+          data-original-source="${esc(entry?.source || '')}"
           data-explicit="${isExplicit ? '1' : '0'}"
           data-dirty="0"
+          data-user-dirty="0"
           title="${esc(source)}"
           onchange="handlePsTeamFyPlannerChange(this)"
         >${psAssignedToOptionsHtml(value)}</select>
@@ -917,7 +919,7 @@ async function openPsTeamFyAssignmentPlanner() {
     <div class="modal-scroll-body ps-team-fy-planner-body">
     <div class="ps-team-fy-planner-toolbar">
       <div class="ps-team-fy-planner-note">
-        Set each resource's effective Assigned To by fiscal month. A saved value carries forward until the next saved month. Selecting <strong>—</strong> explicitly makes the resource unassigned from that month onward. Local PS and Intra-Sourcing are the only classifications included in the two PS Team Utilization panels.
+        Set each resource's Assigned To by fiscal month. A newly assigned value fills later months only while those months are still <strong>—</strong>. Once a later month already displays an assigned value, changing an earlier month must not change it—even when that displayed value originally came from carry-forward. Selecting <strong>—</strong> clears that month's manual override so the previous saved classification can inherit into it. Local PS and Intra-Sourcing are the classifications used for PS Team Utilization.
       </div>
       <label class="ps-team-fy-planner-search">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
@@ -963,20 +965,65 @@ function updatePsTeamFyPlannerCellSource(select, text) {
 
 function handlePsTeamFyPlannerChange(select) {
   if (!select) return;
-  select.dataset.dirty = '1';
-  select.dataset.explicit = '1';
-  updatePsTeamFyPlannerCellSource(select, 'Pending manual change');
 
-  // Preview effective-date carry-forward across later months in the same row.
-  // Stop when a later month already has its own explicit saved/user-edited event.
   const row = select.closest('[data-ps-team-fy-planner-row]');
   const selects = [...(row?.querySelectorAll('.ps-team-fy-assignment-select') || [])];
   const index = selects.indexOf(select);
-  for (let i = index + 1; i < selects.length; i += 1) {
-    const next = selects[i];
-    if (next.dataset.explicit === '1') break;
-    next.value = select.value;
-    updatePsTeamFyPlannerCellSource(next, `Carries from ${psTeamAssignmentMonthLabel(select.dataset.monthKey)}`);
+  if (index < 0) return;
+
+  const selectedValue = String(select.value || '');
+  const initialValue = String(select.dataset.initialValue || '');
+  const inheritedValue = selectedValue || (index > 0 ? String(selects[index - 1].value || '') : '');
+  const changed = selectedValue !== initialValue;
+
+  // In the FY planner, — means "no manual override for this month". Saving a
+  // blank therefore clears the exact-month event and lets the preceding saved
+  // classification inherit into this month.
+  select.dataset.dirty = changed ? '1' : '0';
+  select.dataset.userDirty = changed ? '1' : '0';
+  select.dataset.saveClear = selectedValue ? '0' : '1';
+  select.dataset.explicit = selectedValue ? '1' : '0';
+  updatePsTeamFyPlannerCellSource(
+    select,
+    changed
+      ? (selectedValue ? 'Pending manual change' : 'Pending clear · will inherit previous value')
+      : psTeamPlannerCellSource({
+        assignedTo: initialValue || null,
+        source: select.dataset.originalSource || '',
+        effectiveMonth: select.dataset.monthKey || '',
+      }),
+  );
+
+  // Forward preview is intentionally limited to genuinely blank cells. A
+  // carried-forward value that is already visible is treated as an existing
+  // assignment and must remain unchanged when an earlier month is edited.
+  // The save routine materializes a boundary event when necessary so this
+  // remains true after the server recalculates effective-dated carry-forward.
+  if (changed && selectedValue) {
+    for (let i = index + 1; i < selects.length; i += 1) {
+      const next = selects[i];
+      const nextValue = String(next.value || '');
+
+      // Any displayed assignment is a hard boundary, regardless of whether it
+      // was originally manual or carried-forward.
+      if (nextValue) break;
+
+      // A legacy/manual explicit — event would block server-side carry-forward.
+      // Clear that exact event on save so it behaves like an empty planner cell.
+      if (next.dataset.explicit === '1') {
+        next.dataset.dirty = '1';
+        next.dataset.saveClear = '1';
+        next.dataset.explicit = '0';
+      }
+
+      next.value = inheritedValue;
+      updatePsTeamFyPlannerCellSource(
+        next,
+        inheritedValue
+          ? `Inherits from ${psTeamAssignmentMonthLabel(select.dataset.monthKey)}`
+          : 'No assignment inherited',
+      );
+    }
   }
   updatePsTeamFyPlannerChangeCount();
 }
@@ -988,11 +1035,48 @@ async function savePsTeamFyAssignmentPlanner() {
     return;
   }
 
-  const assignments = dirtySelects.map(select => ({
-    employeeId: Number(select.dataset.employeeId),
-    effectiveMonth: String(select.dataset.monthKey || ''),
-    assignedTo: String(select.value || ''),
-  }));
+  const assignmentMap = new Map();
+  const queueAssignment = (employeeId, effectiveMonth, assignedTo) => {
+    const key = `${Number(employeeId)}:${String(effectiveMonth || '')}`;
+    assignmentMap.set(key, {
+      employeeId: Number(employeeId),
+      effectiveMonth: String(effectiveMonth || ''),
+      assignedTo: String(assignedTo || ''),
+    });
+  };
+
+  for (const select of dirtySelects) {
+    queueAssignment(
+      select.dataset.employeeId,
+      select.dataset.monthKey,
+      // Blank in the FY planner means clear the exact-month override.
+      select.dataset.saveClear === '1' ? '' : String(select.value || ''),
+    );
+  }
+
+  // Effective-dated history normally makes a new May value carry into June.
+  // When June already displayed an assignment before the edit, preserve that
+  // displayed June value by writing a boundary event at June. This makes a
+  // single-month edit truly single-month without changing the existing server
+  // carry-forward model for genuinely blank future months.
+  const rows = [...document.querySelectorAll('[data-ps-team-fy-planner-row]')];
+  for (const row of rows) {
+    const selects = [...row.querySelectorAll('.ps-team-fy-assignment-select')];
+    for (let index = 0; index < selects.length; index += 1) {
+      const select = selects[index];
+      if (select.dataset.userDirty !== '1') continue;
+      const next = selects[index + 1];
+      if (!next || next.dataset.userDirty === '1') continue;
+
+      const nextInitialValue = String(next.dataset.initialValue || '');
+      const nextWasExplicit = next.dataset.originalExplicit === '1';
+      if (!nextInitialValue || nextWasExplicit) continue;
+
+      queueAssignment(next.dataset.employeeId, next.dataset.monthKey, nextInitialValue);
+    }
+  }
+
+  const assignments = [...assignmentMap.values()];
   const saveButton = document.getElementById('psTeamFyPlannerSaveBtn');
   if (saveButton) {
     saveButton.disabled = true;
@@ -1004,7 +1088,7 @@ async function savePsTeamFyAssignmentPlanner() {
     await loadPsTeamAssignmentsForFiscalYear(S.matrixFiscalYear);
     if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
     closeModal();
-    toast(`${assignments.length} FY resource assignment${assignments.length === 1 ? '' : 's'} saved.`);
+    toast(`${dirtySelects.length} FY resource assignment${dirtySelects.length === 1 ? '' : 's'} saved.`);
   } catch (error) {
     toast(error?.message || 'Failed to save FY assignments', 'error');
     if (saveButton) {

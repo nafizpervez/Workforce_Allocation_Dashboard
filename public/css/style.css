@@ -7,6 +7,7 @@
 @import url("./capacity-executive.css?v=capacity-allocation-summary-compact-v2");
 @import url("./drag-drop.css?v=unified-single-card-drag-v2");
 @import url("./sales-charts.css");
+@import url("./revenue-budget-risk.css?v=budget-actual-risk-v2");
 @import url("./timesheets.css?v=work-summary-table-tooltip-v1");
 @import url("./project-lists.css");
 
@@ -223,6 +224,101 @@
 .team-utilization-comments-row td[colspan] {
   text-align: left;
   color: #94a3b8;
+}
+
+.team-utilization-next-month-cell {
+  min-width: 188px;
+}
+
+.team-utilization-next-month-editor {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  width: 100%;
+}
+
+.team-utilization-next-month-input {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.team-utilization-next-month-input input {
+  width: 76px;
+  height: 30px;
+  padding: 4px 7px;
+  border: 1px solid #cbd5e1;
+  border-radius: 7px;
+  background: #fff;
+  color: #0f172a;
+  font: inherit;
+  font-weight: 650;
+  text-align: right;
+  outline: none;
+}
+
+.team-utilization-next-month-input input:focus {
+  border-color: #60a5fa;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .12);
+}
+
+.team-utilization-next-month-input span,
+.team-utilization-next-month-equals {
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.team-utilization-next-month-result {
+  min-width: 38px;
+  cursor: help;
+  color: #0f172a;
+  font-weight: 750;
+  text-decoration: underline dotted #94a3b8;
+  text-underline-offset: 3px;
+  outline: none;
+}
+
+.team-utilization-next-month-result:hover,
+.team-utilization-next-month-result:focus-visible {
+  color: #1d4ed8;
+}
+
+.team-utilization-next-month-na,
+.team-utilization-table .team-utilization-na {
+  font-weight: 400 !important;
+  text-decoration: none !important;
+  color: inherit;
+}
+
+.team-utilization-comments-input {
+  width: 100%;
+  min-width: 220px;
+  height: 30px;
+  padding: 4px 8px;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  background: transparent;
+  color: #334155;
+  font: inherit;
+  outline: none;
+}
+
+.team-utilization-comments-input::placeholder {
+  color: #94a3b8;
+}
+
+.team-utilization-comments-input:hover {
+  border-color: #e2e8f0;
+  background: #fff;
+}
+
+.team-utilization-comments-input:focus {
+  border-color: #93c5fd;
+  background: #fff;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, .10);
 }
 .team-utilization-basis {
   display: grid;
@@ -606,14 +702,55 @@
   min-height: 205px;
 }
 
+.team-utilization-combined-panel {
+  margin-top: 18px;
+  overflow: hidden;
+  border: 1px solid #d7e0ea;
+  border-top: 3px solid #4f46e5;
+  border-radius: 13px;
+  background: #fff;
+}
+.team-utilization-combined-heading { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; padding:14px 16px 12px; border-bottom:1px solid #e2e8f0; background:#f8fafc; }
+.team-utilization-combined-heading h3 { margin:0; color:#0f172a; font-size:14px; font-weight:750; }
+.team-utilization-combined-heading p { margin:3px 0 0; color:#64748b; font-size:10.5px; line-height:1.45; }
+.team-utilization-combined-kpis { display:grid; grid-template-columns:repeat(6,minmax(0,1fr)); gap:8px; padding:12px 14px; border-bottom:1px solid #e2e8f0; background:#fff; }
+.team-utilization-combined-kpis > div { min-width:0; padding:9px 10px; border:1px solid #e2e8f0; border-radius:9px; background:#f8fafc; }
+.team-utilization-combined-kpis span,.team-utilization-combined-kpis small { display:block; }
+.team-utilization-combined-kpis span { color:#64748b; font-size:9.5px; font-weight:650; }
+.team-utilization-combined-kpis strong { display:block; margin-top:3px; color:#0f172a; font-size:16px; font-weight:750; }
+.team-utilization-combined-kpis strong em { margin-left:4px; font-size:11px; font-style:normal; font-weight:700; }
+.team-utilization-combined-kpis strong em.is-positive { color:#047857; }
+.team-utilization-combined-kpis strong em.is-negative { color:#dc2626; }
+.team-utilization-combined-kpis small { margin-top:2px; overflow:hidden; color:#94a3b8; font-size:8.5px; text-overflow:ellipsis; white-space:nowrap; }
+.team-utilization-combined-layout { display:grid; grid-template-columns:minmax(520px,.95fr) minmax(520px,1.05fr); gap:14px; align-items:stretch; padding:14px; }
+.team-utilization-combined-table-wrap { overflow:auto; border:1px solid #e2e8f0; border-radius:10px; background:#fff; }
+.team-utilization-combined-table { width:100%; min-width:680px; border-collapse:collapse; color:#334155; font-size:10px; }
+.team-utilization-combined-table th,.team-utilization-combined-table td { padding:6px 8px; border-bottom:1px solid #e8eef6; border-right:1px solid #eef2f7; text-align:center; white-space:nowrap; }
+.team-utilization-combined-table th:last-child,.team-utilization-combined-table td:last-child { border-right:0; }
+.team-utilization-combined-table thead th { position:sticky; top:0; z-index:1; background:#fff2c9; color:#111827; font-weight:700; }
+.team-utilization-combined-table tbody th { background:#f8fafc; color:#334155; text-align:left; font-weight:650; }
+.team-utilization-combined-table tbody tr.is-current th,.team-utilization-combined-table tbody tr.is-current td { background:#eef2ff; }
+
+.team-utilization-combined-kpi-trigger,
+.team-utilization-combined-calc { cursor: help; }
+.team-utilization-combined-kpi-trigger:hover,
+.team-utilization-combined-kpi-trigger:focus { border-color:#93c5fd !important; box-shadow:0 0 0 2px rgba(59,130,246,.08); outline:none; }
+.team-utilization-combined-calc:hover,
+.team-utilization-combined-calc:focus { background:#eff6ff !important; outline:none; text-decoration:underline dotted; text-underline-offset:2px; }
+.team-utilization-chart-card--combined { min-width:0; margin:0; border-top:3px solid #4f46e5; }
+.team-utilization-chart-wrap--combined { height:260px; min-height:260px; }
+
+@media (max-width: 1200px) {
+  .team-utilization-combined-kpis { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+  .team-utilization-combined-layout { grid-template-columns: 1fr; }
+}
 @media (max-width: 900px) {
-  .team-utilization-chart-card {
-    margin-inline: 10px;
-  }
-  .team-utilization-chart-wrap {
-    height: 190px;
-    min-height: 190px;
-  }
+  .team-utilization-chart-card { margin-inline: 10px; }
+  .team-utilization-chart-wrap { height: 190px; min-height: 190px; }
+  .team-utilization-chart-card--combined { margin-inline: 0; }
+  .team-utilization-chart-wrap--combined { height: 220px; min-height: 220px; }
+  .team-utilization-combined-kpis { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .team-utilization-combined-layout { padding: 10px; }
 }
 
 .team-resources-modal-panel {

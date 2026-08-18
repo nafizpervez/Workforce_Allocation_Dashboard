@@ -44,6 +44,7 @@ const S = {
   },
   employees: [], projects: [], assignments: [], matrixAssignments: [], revenueRates: [], committedTargets: [], preSaleProducts: [],
   psTeamAssignments: { fiscalYear: null, months: {}, current: { monthKey: '', assignments: [] } },
+  teamUtilizationInputs: { fiscalYear: null, entries: {} },
   preSaleProductThresholds: { securedMinPercent: 90, bestCaseMinPercent: 70 },
   matrix: {}, matrixEmployeeUtil: new Map(), employeeUtil: new Map(), charts: {},
   matrixSelectedAssignmentIds: new Set(),

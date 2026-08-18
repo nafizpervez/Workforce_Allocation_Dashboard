@@ -103,6 +103,13 @@ async function loadMatrixAssignments({ announce = false } = {}) {
     try { await loadPsTeamAssignmentsForFiscalYear(fiscalYear); }
     catch (error) { console.error('Failed to load PS team assignments for selected FY:', error); }
   }
+  if (typeof loadTeamUtilizationInputsForFiscalYear === 'function') {
+    try { await loadTeamUtilizationInputsForFiscalYear(fiscalYear); }
+    catch (error) {
+      console.error('Failed to load PS team utilization inputs for selected FY:', error);
+      S.teamUtilizationInputs = { fiscalYear, entries: {} };
+    }
+  }
   if (typeof refreshWorkSummaryForMatrixFiscalYear === 'function') {
     refreshWorkSummaryForMatrixFiscalYear();
   }
@@ -238,6 +245,15 @@ async function loadAll() {
         await loadPsTeamAssignmentsForFiscalYear(matrixFy);
       } catch (error) {
         console.error('Failed to load initial PS team assignments:', error);
+      }
+    }
+
+    if (typeof loadTeamUtilizationInputsForFiscalYear === 'function') {
+      try {
+        await loadTeamUtilizationInputsForFiscalYear(matrixFy);
+      } catch (error) {
+        console.error('Failed to load initial PS team utilization inputs:', error);
+        S.teamUtilizationInputs = { fiscalYear: matrixFy, entries: {} };
       }
     }
 

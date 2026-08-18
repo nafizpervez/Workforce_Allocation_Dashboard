@@ -1,0 +1,407 @@
+/* ================================================================
+   PS REVENUE — BUDGET VS ACTUAL VS RISK
+   ================================================================ */
+.revenue-budget-risk-card {
+  position: relative;
+}
+
+.revenue-budget-risk-surface {
+  overflow: visible;
+  border: 1px solid #dbe4ef;
+  border-radius: 14px;
+  background: #fff;
+  box-shadow: 0 8px 26px rgba(15, 23, 42, 0.055);
+}
+
+.revenue-budget-risk-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 18px;
+  padding: 21px 22px 17px;
+  border-bottom: 1px solid #e7edf5;
+  border-radius: 14px 14px 0 0;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.revenue-budget-risk-icon {
+  width: 36px;
+  height: 36px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid #dbeafe;
+  border-radius: 11px;
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.revenue-budget-risk-icon svg {
+  width: 18px;
+  height: 18px;
+}
+
+.revenue-budget-risk-fy-badge {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  flex: 0 0 auto;
+  min-width: 62px;
+  height: 27px;
+  padding: 0 10px;
+  border: 1px solid #dbeafe;
+  border-radius: 999px;
+  background: #eff6ff;
+  color: #1d4ed8;
+  font-size: 10px;
+  font-weight: 800;
+}
+
+.revenue-budget-risk-summary {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: 10px;
+  padding: 14px 18px;
+  border-bottom: 1px solid #e7edf5;
+  background: #f8fafc;
+}
+
+.revenue-budget-risk-kpi {
+  position: relative;
+  min-width: 0;
+  min-height: 74px;
+  border: 1px solid #dfe7f1;
+  border-radius: 11px;
+  background: #ffffff;
+  padding: 11px 12px 10px;
+  cursor: help;
+  outline: none;
+  transition: border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+}
+
+.revenue-budget-risk-kpi::before {
+  content: "";
+  position: absolute;
+  top: -1px;
+  left: 14px;
+  right: 14px;
+  height: 2px;
+  border-radius: 999px;
+  background: #94a3b8;
+  opacity: .72;
+}
+
+.revenue-budget-risk-kpi:hover,
+.revenue-budget-risk-kpi:focus-visible {
+  border-color: #bfdbfe;
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.09);
+  transform: translateY(-1px);
+}
+
+.revenue-budget-risk-kpi--actual::before { background: #059669; }
+.revenue-budget-risk-kpi--risk::before { background: #d97706; }
+.revenue-budget-risk-kpi--risk.is-favorable::before { background: #059669; }
+.revenue-budget-risk-kpi--attainment::before { background: #2563eb; }
+
+.revenue-budget-risk-kpi__label {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 750;
+  letter-spacing: 0.025em;
+  text-transform: uppercase;
+}
+
+.revenue-budget-risk-kpi__info {
+  display: inline-grid;
+  place-items: center;
+  width: 13px;
+  height: 13px;
+  border: 1px solid #cbd5e1;
+  border-radius: 999px;
+  color: #64748b;
+  font-size: 8px;
+  font-weight: 800;
+  line-height: 1;
+  text-transform: none;
+}
+
+.revenue-budget-risk-kpi__value {
+  margin-top: 4px;
+  color: #0f172a;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  font-variant-numeric: tabular-nums;
+}
+
+.revenue-budget-risk-kpi__meta {
+  margin-top: 4px;
+  color: #94a3b8;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.revenue-budget-risk-kpi--actual .revenue-budget-risk-kpi__value {
+  color: #047857;
+}
+
+.revenue-budget-risk-kpi--risk.is-positive .revenue-budget-risk-kpi__value {
+  color: #b45309;
+}
+
+.revenue-budget-risk-kpi--risk.is-favorable .revenue-budget-risk-kpi__value {
+  color: #047857;
+}
+
+.revenue-budget-risk-kpi--attainment .revenue-budget-risk-kpi__value {
+  color: #1d4ed8;
+}
+
+.revenue-budget-risk-status {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  min-height: 34px;
+  padding: 8px 20px 7px;
+  border-bottom: 1px solid #edf1f6;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 9.5px;
+  line-height: 1.35;
+}
+
+.revenue-budget-risk-status strong { color: #334155; font-weight: 750; }
+.revenue-budget-risk-status__divider {
+  width: 1px;
+  height: 14px;
+  background: #dbe4ef;
+}
+.revenue-budget-risk-status__variance.is-favorable,
+.revenue-budget-risk-status__variance.is-favorable strong { color: #047857; }
+.revenue-budget-risk-status__variance.is-at-risk,
+.revenue-budget-risk-status__variance.is-at-risk strong { color: #b45309; }
+
+.revenue-budget-risk-chart-wrap {
+  height: 382px;
+  padding: 18px 20px 5px;
+  background: linear-gradient(180deg, #fff 0%, #fdfefe 100%);
+}
+
+.revenue-budget-risk-details {
+  margin: 2px 18px 14px;
+  border: 1px solid #e2e8f0;
+  border-radius: 10px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.revenue-budget-risk-table-toggle {
+  width: 100%;
+  min-height: 39px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px;
+  border: 0;
+  background: #f8fafc;
+  color: #334155;
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 750;
+  text-align: left;
+  transition: background .15s ease;
+}
+
+.revenue-budget-risk-table-toggle:hover,
+.revenue-budget-risk-table-toggle:focus-visible {
+  background: #f1f5f9;
+  outline: none;
+}
+
+.revenue-budget-risk-table-toggle__meta {
+  margin-left: auto;
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 650;
+}
+
+.revenue-budget-risk-table-toggle svg {
+  width: 15px;
+  height: 15px;
+  color: #64748b;
+  transition: transform .18s ease;
+}
+
+.revenue-budget-risk-table-toggle[aria-expanded="true"] svg {
+  transform: rotate(180deg);
+}
+
+.revenue-budget-risk-table-panel[hidden] { display: none !important; }
+
+.revenue-budget-risk-table-wrap {
+  overflow-x: auto;
+  border-top: 1px solid #e2e8f0;
+}
+
+.revenue-budget-risk-table {
+  width: 100%;
+  min-width: 860px;
+  border-collapse: collapse;
+  table-layout: fixed;
+  color: #334155;
+  font-size: 10px;
+}
+
+.revenue-budget-risk-table th,
+.revenue-budget-risk-table td {
+  padding: 7px 9px;
+  border-right: 1px solid #e6edf5;
+  border-bottom: 1px solid #e6edf5;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
+}
+
+.revenue-budget-risk-table th:last-child,
+.revenue-budget-risk-table td:last-child { border-right: 0; }
+.revenue-budget-risk-table tbody tr:last-child td { border-bottom: 0; }
+
+.revenue-budget-risk-table thead th {
+  background: #f8fafc;
+  color: #475569;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: .01em;
+}
+
+.revenue-budget-risk-table th:first-child,
+.revenue-budget-risk-table td:first-child {
+  width: 110px;
+  text-align: left;
+  font-weight: 700;
+}
+
+.revenue-budget-risk-table tbody tr.is-latest-reported td {
+  background: #eff6ff;
+  font-weight: 700;
+}
+
+.revenue-budget-risk-table tbody tr:hover td { background: #f8fafc; }
+.revenue-budget-risk-table tbody tr.is-latest-reported:hover td { background: #eaf3ff; }
+.revenue-budget-risk-table .is-not-reported { color: #94a3b8; }
+.revenue-budget-risk-table .risk-positive { color: #b45309; font-weight: 700; }
+.revenue-budget-risk-table .risk-favorable { color: #047857; font-weight: 700; }
+
+.revenue-budget-risk-basis {
+  padding: 2px 20px 18px;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.55;
+}
+
+.revenue-budget-risk-basis strong { color: #334155; font-weight: 700; }
+
+.revenue-budget-risk-tooltip {
+  min-width: 300px;
+}
+
+.revenue-budget-risk-tooltip .dashboard-chart-tooltip-table tr.is-emphasis th,
+.revenue-budget-risk-tooltip .dashboard-chart-tooltip-table tr.is-emphasis td {
+  color: #ffffff;
+  font-weight: 700;
+}
+
+.revenue-budget-risk-tooltip .dashboard-chart-tooltip-table tr.is-risk-positive td {
+  color: #fbbf24;
+  font-weight: 700;
+}
+
+.revenue-budget-risk-tooltip .dashboard-chart-tooltip-table tr.is-risk-favorable td {
+  color: #6ee7b7;
+  font-weight: 700;
+}
+
+.revenue-budget-risk-kpi-tooltip {
+  position: fixed;
+  z-index: 99999;
+  display: none;
+  max-height: min(520px, calc(100vh - 20px));
+  overflow: auto;
+  padding: 12px;
+  border: 1px solid rgba(71, 85, 105, .48);
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  box-shadow: 0 16px 36px rgba(15, 23, 42, .26);
+  font-size: 10px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.revenue-budget-risk-kpi-tooltip.is-visible { display: block; }
+.revenue-budget-risk-kpi-tooltip__title {
+  margin-bottom: 7px;
+  color: #fff;
+  font-size: 11px;
+  font-weight: 800;
+}
+.revenue-budget-risk-kpi-tooltip__note {
+  margin: 6px 0;
+  color: #cbd5e1;
+}
+.revenue-budget-risk-kpi-tooltip__table {
+  width: 100%;
+  margin: 7px 0;
+  border-collapse: collapse;
+}
+.revenue-budget-risk-kpi-tooltip__table th,
+.revenue-budget-risk-kpi-tooltip__table td {
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, .16);
+  vertical-align: top;
+}
+.revenue-budget-risk-kpi-tooltip__table th {
+  width: 48%;
+  padding-right: 12px;
+  color: #cbd5e1;
+  font-weight: 600;
+  text-align: left;
+}
+.revenue-budget-risk-kpi-tooltip__table td {
+  color: #fff;
+  font-weight: 750;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.revenue-budget-risk-kpi-tooltip__table small {
+  display: block;
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 8.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+.revenue-budget-risk-kpi-tooltip__formula {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(96, 165, 250, .2);
+  border-radius: 7px;
+  background: rgba(30, 64, 175, .15);
+  color: #dbeafe;
+}
+
+@media (max-width: 1150px) {
+  .revenue-budget-risk-summary { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+}
+
+@media (max-width: 720px) {
+  .revenue-budget-risk-header { align-items: flex-start; padding: 18px; }
+  .revenue-budget-risk-summary { grid-template-columns: repeat(2, minmax(0, 1fr)); padding: 12px; }
+  .revenue-budget-risk-status { flex-wrap: wrap; padding: 8px 14px; }
+  .revenue-budget-risk-chart-wrap { height: 340px; padding: 14px 9px 5px; }
+  .revenue-budget-risk-details { margin: 2px 12px 12px; }
+  .revenue-budget-risk-basis { padding: 2px 14px 15px; }
+}

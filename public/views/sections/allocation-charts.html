@@ -162,6 +162,82 @@
             </div>
           </div>
 
+          <div class="dc revenue-budget-risk-card mt-6">
+            <div class="dc-handle" title="Drag card">
+              <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                <circle cx="4" cy="3" r="1" />
+                <circle cx="8" cy="3" r="1" />
+                <circle cx="4" cy="6" r="1" />
+                <circle cx="8" cy="6" r="1" />
+                <circle cx="4" cy="9" r="1" />
+                <circle cx="8" cy="9" r="1" />
+              </svg>
+            </div>
+            <div class="bg-white rounded-xl revenue-budget-risk-surface">
+              <div class="revenue-budget-risk-header card-title-pad">
+                <div class="flex items-center gap-3">
+                  <div class="revenue-budget-risk-icon" aria-hidden="true">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                      <path d="M3 3v18h18" />
+                      <path d="m7 15 4-4 3 3 5-7" />
+                      <path d="M18 7h1v1" />
+                    </svg>
+                  </div>
+                  <div>
+                    <h3 id="budgetActualRiskTitle" class="font-semibold text-gray-900">PS Revenue · Budget vs Actual vs Risk</h3>
+                    <p id="budgetActualRiskSubtitle" class="text-xs text-gray-500 mt-0.5">Monthly Local PS + Intra-Sourcing revenue plan, Time Sheet actual, and outstanding revenue risk.</p>
+                  </div>
+                </div>
+                <div id="budgetActualRiskFyBadge" class="revenue-budget-risk-fy-badge">FY</div>
+              </div>
+
+              <div id="budgetActualRiskSummary" class="revenue-budget-risk-summary" aria-label="Budget versus actual versus risk summary"></div>
+
+              <div id="budgetActualRiskStatus" class="revenue-budget-risk-status" aria-live="polite"></div>
+
+              <div class="revenue-budget-risk-chart-wrap">
+                <canvas id="budgetActualRiskChart"></canvas>
+              </div>
+
+              <div class="revenue-budget-risk-details">
+                <button
+                  id="budgetActualRiskTableToggle"
+                  type="button"
+                  class="revenue-budget-risk-table-toggle"
+                  aria-expanded="false"
+                  aria-controls="budgetActualRiskTablePanel"
+                  onclick="toggleBudgetRiskTable()"
+                >
+                  <span>Monthly reconciliation</span>
+                  <span class="revenue-budget-risk-table-toggle__meta">Expand</span>
+                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                    <path d="m6 8 4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+                  </svg>
+                </button>
+                <div id="budgetActualRiskTablePanel" class="revenue-budget-risk-table-panel" hidden>
+                  <div class="revenue-budget-risk-table-wrap nice-scroll">
+                    <table class="revenue-budget-risk-table">
+                      <thead>
+                        <tr>
+                          <th>Month</th>
+                          <th>Budget</th>
+                          <th>Actual</th>
+                          <th>Risk</th>
+                          <th>Cum. Budget</th>
+                          <th>Cum. Actual</th>
+                          <th>Cum. Risk</th>
+                        </tr>
+                      </thead>
+                      <tbody id="budgetActualRiskTableBody"></tbody>
+                    </table>
+                  </div>
+                </div>
+              </div>
+
+              <div id="budgetActualRiskBasis" class="revenue-budget-risk-basis"></div>
+            </div>
+          </div>
+
           <div class="dc monthly-planned-work-card mt-6">
             <div class="dc-handle" title="Drag card">
               <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
