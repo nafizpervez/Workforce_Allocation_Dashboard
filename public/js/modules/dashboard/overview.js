@@ -1211,6 +1211,9 @@ function renderStats(s) {
   if (typeof renderCapacityExecutiveCards === 'function') {
     renderCapacityExecutiveCards();
   }
+  if (typeof renderBudgetActualRiskChart === 'function') {
+    renderBudgetActualRiskChart();
+  }
 }
 
 /* ================================================================ CHARTS */
@@ -1790,6 +1793,13 @@ function getAssignmentBurnRevenueSeries() {
 
   const plannedRevenue = months.map(() => 0);
   const actualRevenue = months.map(() => 0);
+  const plannedLocal = months.map(() => 0);
+  const plannedIntra = months.map(() => 0);
+  const actualLocal = months.map(() => 0);
+  const actualIntra = months.map(() => 0);
+  const plannedUnpricedHours = months.map(() => 0);
+  const actualUnpricedHours = months.map(() => 0);
+  const actualReported = months.map(() => false);
 
   for (const assignment of getEffectiveFiscalAssignments(S.fiscalYear)) {
     const employee = employeesById.get(Number(assignment.employee_id));
@@ -1807,14 +1817,22 @@ function getAssignmentBurnRevenueSeries() {
       : null;
     if (!['serviceDeliveryIntrasourcing', 'serviceDeliveryLocalPs'].includes(categoryKey)) continue;
 
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
     const rateInfo = getMonthlyRevenueRate(
       categoryKey,
       employee,
       getRevenueRateDateForAssignment(assignment),
     );
-    if (!rateInfo.eligible || !rateInfo.hasRate) continue;
-    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
-    plannedRevenue[index] += hours * rateInfo.rate;
+    if (!rateInfo.eligible) continue;
+    if (!rateInfo.hasRate) {
+      plannedUnpricedHours[index] += hours;
+      continue;
+    }
+
+    const revenue = hours * rateInfo.rate;
+    plannedRevenue[index] += revenue;
+    if (categoryKey === 'serviceDeliveryIntrasourcing') plannedIntra[index] += revenue;
+    else plannedLocal[index] += revenue;
   }
 
   const visibleTimesheetRows = typeof getVisibleTimesheetRows === 'function'
@@ -1828,6 +1846,14 @@ function getAssignmentBurnRevenueSeries() {
     if (!parsedMonth) continue;
     const index = monthIndex.get(`${parsedMonth.year}-${parsedMonth.month}`);
     if (index === undefined) continue;
+
+    const hours = Number(row.qty ?? row.hours ?? row.quantity);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+
+    // A month is considered reported as soon as any valid Time Sheet effort exists
+    // for that fiscal month. PS revenue can legitimately be zero when that month has
+    // no Local PS / Intra-Sourcing delivery.
+    actualReported[index] = true;
 
     const categoryKey = typeof classifyMonthlyActualWorkType === 'function'
       ? classifyMonthlyActualWorkType(row.workType ?? row.work_type ?? row['Work Type'])
@@ -1843,21 +1869,31 @@ function getAssignmentBurnRevenueSeries() {
       employee,
       getRevenueRateDateForTimesheetRow(row, parsedMonth.year, parsedMonth.month),
     );
-    if (!rateInfo.eligible || !rateInfo.hasRate) continue;
+    if (!rateInfo.eligible) continue;
+    if (!rateInfo.hasRate) {
+      actualUnpricedHours[index] += hours;
+      continue;
+    }
 
-    const hours = Number(row.qty ?? row.hours ?? row.quantity);
-    if (!Number.isFinite(hours) || hours <= 0) continue;
-    actualRevenue[index] += hours * rateInfo.rate;
+    const revenue = hours * rateInfo.rate;
+    actualRevenue[index] += revenue;
+    if (categoryKey === 'serviceDeliveryIntrasourcing') actualIntra[index] += revenue;
+    else actualLocal[index] += revenue;
   }
 
   const roundMoney = value => +((Number(value) || 0).toFixed(2));
+  const roundHours = value => +((Number(value) || 0).toFixed(2));
   const roundedPlannedRevenue = plannedRevenue.map(roundMoney);
   const roundedActualRevenue = actualRevenue.map(roundMoney);
+  const roundedPlannedLocal = plannedLocal.map(roundMoney);
+  const roundedPlannedIntra = plannedIntra.map(roundMoney);
+  const roundedActualLocal = actualLocal.map(roundMoney);
+  const roundedActualIntra = actualIntra.map(roundMoney);
   const totalPlannedRevenue = roundMoney(
     roundedPlannedRevenue.reduce((total, value) => total + value, 0),
   );
-  const lastActualIndex = roundedActualRevenue.reduce(
-    (latest, value, index) => value > 0 ? index : latest,
+  const lastActualIndex = actualReported.reduce(
+    (latest, reported, index) => reported ? index : latest,
     -1,
   );
 
@@ -1874,9 +1910,17 @@ function getAssignmentBurnRevenueSeries() {
   });
 
   return {
+    months,
     labels,
     plannedRevenue: roundedPlannedRevenue,
     actualRevenue: roundedActualRevenue,
+    plannedLocal: roundedPlannedLocal,
+    plannedIntra: roundedPlannedIntra,
+    actualLocal: roundedActualLocal,
+    actualIntra: roundedActualIntra,
+    actualReported,
+    plannedUnpricedHours: plannedUnpricedHours.map(roundHours),
+    actualUnpricedHours: actualUnpricedHours.map(roundHours),
     cumulativePlanned,
     cumulativeActual,
     totalPlannedRevenue,
@@ -2004,4 +2048,753 @@ function renderBurnupChart() {
       },
     },
   });
+
+  if (typeof renderBudgetActualRiskChart === 'function') {
+    renderBudgetActualRiskChart();
+  }
 }
+
+function formatBudgetRiskMoney(value, { exact = false } = {}) {
+  const numeric = Number(value) || 0;
+  const absolute = Math.abs(numeric);
+  const formatted = absolute.toLocaleString('en-US', {
+    minimumFractionDigits: exact ? 2 : 0,
+    maximumFractionDigits: exact ? 2 : 0,
+  });
+  return `${numeric < 0 ? '-' : ''}$${formatted}`;
+}
+
+function formatBudgetRiskPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '—';
+  return `${numeric.toLocaleString('en-US', {
+    minimumFractionDigits: numeric >= 10 ? 0 : 1,
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
+function getBudgetActualRiskSeries() {
+  const source = getAssignmentBurnRevenueSeries();
+  const roundMoney = value => +((Number(value) || 0).toFixed(2));
+  const sumMoney = values => roundMoney((values || []).reduce(
+    (total, value) => total + (Number(value) || 0),
+    0,
+  ));
+  const budget = source.plannedRevenue.map(roundMoney);
+  const actual = source.actualRevenue.map(roundMoney);
+  const reported = Array.isArray(source.actualReported)
+    ? source.actualReported.map(Boolean)
+    : source.labels.map((_label, index) => index <= source.lastActualIndex);
+
+  const risk = budget.map((value, index) => (
+    roundMoney(value - (reported[index] ? actual[index] : 0))
+  ));
+
+  let cumulativeBudgetValue = 0;
+  let cumulativeActualValue = 0;
+  const cumulativeBudget = [];
+  const cumulativeActual = [];
+  const cumulativeRisk = [];
+
+  budget.forEach((value, index) => {
+    cumulativeBudgetValue += value;
+    if (reported[index]) cumulativeActualValue += actual[index];
+    cumulativeBudget.push(roundMoney(cumulativeBudgetValue));
+    cumulativeActual.push(roundMoney(cumulativeActualValue));
+    cumulativeRisk.push(roundMoney(cumulativeBudgetValue - cumulativeActualValue));
+  });
+
+  const lastReportedIndex = reported.reduce(
+    (latest, isReported, index) => isReported ? index : latest,
+    -1,
+  );
+  const ytdBudget = lastReportedIndex >= 0 ? cumulativeBudget[lastReportedIndex] : 0;
+  const ytdActual = lastReportedIndex >= 0 ? cumulativeActual[lastReportedIndex] : 0;
+  const ytdRisk = roundMoney(ytdBudget - ytdActual);
+  const ytdVariance = roundMoney(ytdActual - ytdBudget);
+
+  const committedSummary = typeof getCommittedTargetSummary === 'function'
+    ? getCommittedTargetSummary()
+    : { intrasourcing: 0, local: 0, total: 0 };
+  const committedTarget = roundMoney(committedSummary.total);
+  const targetAttainment = committedTarget > 0
+    ? (ytdActual / committedTarget) * 100
+    : null;
+  const budgetCoverage = committedTarget > 0
+    ? (source.totalPlannedRevenue / committedTarget) * 100
+    : null;
+
+  const savedIntra = typeof getCommittedTargetRecord === 'function'
+    ? getCommittedTargetRecord('intrasourcing')
+    : null;
+  const savedLocal = typeof getCommittedTargetRecord === 'function'
+    ? getCommittedTargetRecord('local')
+    : null;
+
+  const ytdSliceEnd = lastReportedIndex >= 0 ? lastReportedIndex + 1 : 0;
+  const ytdActualLocal = sumMoney((source.actualLocal || []).slice(0, ytdSliceEnd));
+  const ytdActualIntra = sumMoney((source.actualIntra || []).slice(0, ytdSliceEnd));
+  const fyPlannedLocal = sumMoney(source.plannedLocal || []);
+  const fyPlannedIntra = sumMoney(source.plannedIntra || []);
+
+  return {
+    ...source,
+    budget,
+    actual,
+    reported,
+    risk,
+    cumulativeBudget,
+    cumulativeActual,
+    cumulativeRisk,
+    lastReportedIndex,
+    reportedMonths: reported.filter(Boolean).length,
+    ytdBudget: roundMoney(ytdBudget),
+    ytdActual: roundMoney(ytdActual),
+    ytdRisk,
+    ytdVariance,
+    ytdActualLocal,
+    ytdActualIntra,
+    fyPlannedLocal,
+    fyPlannedIntra,
+    committedTarget,
+    committedBreakdown: {
+      intrasourcing: roundMoney(committedSummary.intrasourcing),
+      local: roundMoney(committedSummary.local),
+      intrasourcingSource: savedIntra?.updated_at ? 'Saved committed target' : 'Calculated from current assignment/rate data',
+      localSource: savedLocal?.updated_at ? 'Saved committed target' : 'Calculated from current assignment/rate data',
+    },
+    targetAttainment,
+    budgetCoverage,
+    fyBudget: roundMoney(source.totalPlannedRevenue),
+  };
+}
+
+const BUDGET_RISK_KPI_TOOLTIP_DATA = new Map();
+
+function budgetRiskKpiTooltipRows(rows) {
+  return `<table class="revenue-budget-risk-kpi-tooltip__table"><tbody>${rows.map(row => `
+    <tr><th>${esc(row.label)}</th><td>${esc(row.value)}${row.note ? `<small>${esc(row.note)}</small>` : ''}</td></tr>
+  `).join('')}</tbody></table>`;
+}
+
+function buildBudgetRiskKpiTooltipData(series) {
+  BUDGET_RISK_KPI_TOOLTIP_DATA.clear();
+  const fyLabel = fiscalYearDisplayLabel(S.fiscalYear);
+  const latestLabel = series.lastReportedIndex >= 0
+    ? series.labels[series.lastReportedIndex]
+    : 'No reported month';
+  const plannedUnpriced = (series.plannedUnpricedHours || []).reduce(
+    (total, value) => total + (Number(value) || 0),
+    0,
+  );
+  const actualUnpriced = series.lastReportedIndex >= 0
+    ? (series.actualUnpricedHours || []).slice(0, series.lastReportedIndex + 1).reduce(
+      (total, value) => total + (Number(value) || 0),
+      0,
+    )
+    : 0;
+  const budgetRateNote = plannedUnpriced > 0
+    ? `${plannedUnpriced.toLocaleString('en-US', { maximumFractionDigits: 1 })} eligible planned hours currently have no matching rate and are excluded.`
+    : 'All eligible planned hours with available rates are included.';
+  const actualRateNote = actualUnpriced > 0
+    ? `${actualUnpriced.toLocaleString('en-US', { maximumFractionDigits: 1 })} eligible YTD Time Sheet hours currently have no matching rate and are excluded.`
+    : 'All eligible YTD Time Sheet hours with available rates are included.';
+
+  BUDGET_RISK_KPI_TOOLTIP_DATA.set('fy-budget', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">FY Budget Plan · ${esc(fyLabel)}</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">Derived from the current Local PS and Intra-Sourcing Resource Assignment plan and the applicable effective-dated Resource Revenue rates.</div>
+    ${budgetRiskKpiTooltipRows([
+      { label: 'Local PS plan', value: formatBudgetRiskMoney(series.fyPlannedLocal, { exact: true }) },
+      { label: 'Intra-Sourcing plan', value: formatBudgetRiskMoney(series.fyPlannedIntra, { exact: true }) },
+      { label: 'FY Budget Plan', value: formatBudgetRiskMoney(series.fyBudget, { exact: true }) },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Monthly revenue = ${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable hourly rate. FY Budget Plan = sum of all fiscal-month Local PS + Intra-Sourcing planned revenue.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">${esc(budgetRateNote)}</div>
+  `);
+
+  BUDGET_RISK_KPI_TOOLTIP_DATA.set('committed-target', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Committed Target · ${esc(fyLabel)}</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">Uses the same values as the dashboard Committed Target KPI. Local Pipeline Target is not included in this total.</div>
+    ${budgetRiskKpiTooltipRows([
+      {
+        label: 'Intra-Sourcing target',
+        value: formatBudgetRiskMoney(series.committedBreakdown.intrasourcing, { exact: true }),
+        note: series.committedBreakdown.intrasourcingSource,
+      },
+      {
+        label: 'Local PS target',
+        value: formatBudgetRiskMoney(series.committedBreakdown.local, { exact: true }),
+        note: series.committedBreakdown.localSource,
+      },
+      { label: 'Committed Target', value: formatBudgetRiskMoney(series.committedTarget, { exact: true }) },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Committed Target = Intra-Sourcing Target + Local PS Target.</div>
+  `);
+
+  BUDGET_RISK_KPI_TOOLTIP_DATA.set('actual-ytd', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Actual YTD · through ${esc(latestLabel)}</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">Derived from uploaded Time Sheet rows classified as Local PS or Intra-Sourcing, priced with the applicable effective-dated Resource Revenue rate for the matched resource.</div>
+    ${budgetRiskKpiTooltipRows([
+      { label: 'Local PS actual', value: formatBudgetRiskMoney(series.ytdActualLocal, { exact: true }) },
+      { label: 'Intra-Sourcing actual', value: formatBudgetRiskMoney(series.ytdActualIntra, { exact: true }) },
+      { label: 'Actual YTD', value: formatBudgetRiskMoney(series.ytdActual, { exact: true }) },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Actual revenue = Time Sheet hours × applicable hourly rate. Actual YTD = sum of reported fiscal months through ${esc(latestLabel)}.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">${esc(actualRateNote)}</div>
+  `);
+
+  BUDGET_RISK_KPI_TOOLTIP_DATA.set('ytd-risk', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">YTD Risk · through ${esc(latestLabel)}</div>
+    ${budgetRiskKpiTooltipRows([
+      { label: 'YTD Budget', value: formatBudgetRiskMoney(series.ytdBudget, { exact: true }) },
+      { label: 'Actual YTD', value: formatBudgetRiskMoney(series.ytdActual, { exact: true }) },
+      { label: 'YTD Risk', value: formatBudgetRiskMoney(series.ytdRisk, { exact: true }) },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">YTD Risk = cumulative Budget through the latest reported Time Sheet month − Actual YTD. A negative value means Actual is ahead of Budget.</div>
+  `);
+
+  const attainmentFormula = series.committedTarget > 0
+    ? `${formatBudgetRiskMoney(series.ytdActual, { exact: true })} ÷ ${formatBudgetRiskMoney(series.committedTarget, { exact: true })} × 100 = ${formatBudgetRiskPercent(series.targetAttainment)}`
+    : 'Target Attainment is unavailable because the Committed Target is zero.';
+  BUDGET_RISK_KPI_TOOLTIP_DATA.set('target-attainment', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Target Attainment · ${esc(fyLabel)}</div>
+    ${budgetRiskKpiTooltipRows([
+      { label: 'Actual YTD', value: formatBudgetRiskMoney(series.ytdActual, { exact: true }) },
+      { label: 'Committed Target', value: formatBudgetRiskMoney(series.committedTarget, { exact: true }) },
+      { label: 'Target Attainment', value: formatBudgetRiskPercent(series.targetAttainment) },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">${esc(attainmentFormula)}</div>
+  `);
+}
+
+function getBudgetRiskKpiTooltipElement() {
+  let tooltip = document.getElementById('budgetRiskKpiTooltip');
+  if (tooltip) return tooltip;
+  tooltip = document.createElement('div');
+  tooltip.id = 'budgetRiskKpiTooltip';
+  tooltip.className = 'revenue-budget-risk-kpi-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function positionBudgetRiskKpiTooltip(tooltip, trigger) {
+  if (!tooltip || !trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  const margin = 10;
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+  const width = Math.max(240, Math.min(390, viewportWidth - (margin * 2)));
+  tooltip.style.width = `${width}px`;
+  tooltip.style.left = `${Math.max(margin, Math.min(rect.left, viewportWidth - width - margin))}px`;
+  tooltip.style.top = '0px';
+  tooltip.classList.add('is-visible');
+  const tooltipHeight = tooltip.offsetHeight;
+  const preferredTop = rect.bottom + 8;
+  const top = preferredTop + tooltipHeight <= viewportHeight - margin
+    ? preferredTop
+    : Math.max(margin, rect.top - tooltipHeight - 8);
+  tooltip.style.top = `${top}px`;
+}
+
+function showBudgetRiskKpiTooltip(trigger) {
+  const key = trigger?.dataset?.budgetRiskKpiTooltip;
+  const html = key ? BUDGET_RISK_KPI_TOOLTIP_DATA.get(key) : '';
+  if (!html) return;
+  const tooltip = getBudgetRiskKpiTooltipElement();
+  tooltip.innerHTML = html;
+  positionBudgetRiskKpiTooltip(tooltip, trigger);
+}
+
+function hideBudgetRiskKpiTooltip() {
+  document.getElementById('budgetRiskKpiTooltip')?.classList.remove('is-visible');
+}
+
+function bindBudgetRiskKpiTooltips(container) {
+  container?.querySelectorAll('[data-budget-risk-kpi-tooltip]').forEach(trigger => {
+    trigger.addEventListener('mouseenter', () => showBudgetRiskKpiTooltip(trigger));
+    trigger.addEventListener('mouseleave', hideBudgetRiskKpiTooltip);
+    trigger.addEventListener('focus', () => showBudgetRiskKpiTooltip(trigger));
+    trigger.addEventListener('blur', hideBudgetRiskKpiTooltip);
+  });
+}
+
+function renderBudgetRiskSummary(series) {
+  const container = document.getElementById('budgetActualRiskSummary');
+  if (!container) return;
+
+  const latestLabel = series.lastReportedIndex >= 0
+    ? series.labels[series.lastReportedIndex]
+    : 'No Time Sheet month reported';
+  const riskClass = series.ytdRisk <= 0 ? 'is-favorable' : 'is-positive';
+  const riskMeta = series.lastReportedIndex >= 0
+    ? `Through ${latestLabel} · Budget − Actual`
+    : 'No reported actual revenue yet';
+  const targetMeta = series.committedTarget > 0
+    ? 'Intra-Sourcing + Local PS target'
+    : 'No committed revenue target available';
+  const budgetCoverageMeta = series.committedTarget > 0
+    ? `${formatBudgetRiskPercent(series.budgetCoverage)} of committed target covered by the current assignment plan`
+    : 'Local PS + Intra-Sourcing assignment plan';
+
+  container.innerHTML = `
+    <div class="revenue-budget-risk-kpi" data-budget-risk-kpi-tooltip="fy-budget" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">FY Budget Plan <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.fyBudget))}</div>
+      <div class="revenue-budget-risk-kpi__meta">${esc(budgetCoverageMeta)}</div>
+    </div>
+    <div class="revenue-budget-risk-kpi" data-budget-risk-kpi-tooltip="committed-target" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Committed Target <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.committedTarget))}</div>
+      <div class="revenue-budget-risk-kpi__meta">${esc(targetMeta)}</div>
+    </div>
+    <div class="revenue-budget-risk-kpi revenue-budget-risk-kpi--actual" data-budget-risk-kpi-tooltip="actual-ytd" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Actual YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdActual))}</div>
+      <div class="revenue-budget-risk-kpi__meta">${esc(series.lastReportedIndex >= 0 ? `Time Sheet revenue through ${latestLabel}` : latestLabel)}</div>
+    </div>
+    <div class="revenue-budget-risk-kpi revenue-budget-risk-kpi--risk ${riskClass}" data-budget-risk-kpi-tooltip="ytd-risk" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">YTD Risk <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdRisk))}</div>
+      <div class="revenue-budget-risk-kpi__meta">${esc(riskMeta)}</div>
+    </div>
+    <div class="revenue-budget-risk-kpi revenue-budget-risk-kpi--attainment" data-budget-risk-kpi-tooltip="target-attainment" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Target Attainment <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskPercent(series.targetAttainment))}</div>
+      <div class="revenue-budget-risk-kpi__meta">Actual YTD ÷ Committed Target</div>
+    </div>
+  `;
+
+  buildBudgetRiskKpiTooltipData(series);
+  bindBudgetRiskKpiTooltips(container);
+}
+
+function renderBudgetRiskStatus(series) {
+  const element = document.getElementById('budgetActualRiskStatus');
+  if (!element) return;
+
+  const latestLabel = series.lastReportedIndex >= 0
+    ? series.labels[series.lastReportedIndex]
+    : 'No Time Sheet month reported';
+  const varianceClass = series.ytdVariance >= 0 ? 'is-favorable' : 'is-at-risk';
+  const varianceLabel = series.ytdVariance >= 0 ? 'ahead of YTD budget' : 'behind YTD budget';
+  const targetText = series.committedTarget > 0
+    ? `${formatBudgetRiskPercent(series.targetAttainment)} target attainment`
+    : 'Committed target unavailable';
+
+  if (series.lastReportedIndex < 0) {
+    element.innerHTML = `
+      <span class="revenue-budget-risk-status__period"><strong>No Time Sheet actual revenue reported for this fiscal year yet</strong></span>
+      <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
+      <span>${esc(targetText)}</span>
+    `;
+    return;
+  }
+
+  element.innerHTML = `
+    <span class="revenue-budget-risk-status__period">Actual through <strong>${esc(latestLabel)}</strong></span>
+    <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
+    <span class="revenue-budget-risk-status__variance ${varianceClass}"><strong>${esc(formatBudgetRiskMoney(Math.abs(series.ytdVariance)))}</strong> ${esc(varianceLabel)}</span>
+    <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
+    <span>${esc(targetText)}</span>
+  `;
+}
+
+function toggleBudgetRiskTable(forceExpanded) {
+  const panel = document.getElementById('budgetActualRiskTablePanel');
+  const button = document.getElementById('budgetActualRiskTableToggle');
+  if (!panel || !button) return;
+
+  const currentlyExpanded = button.getAttribute('aria-expanded') === 'true';
+  const expanded = typeof forceExpanded === 'boolean' ? forceExpanded : !currentlyExpanded;
+  panel.hidden = !expanded;
+  button.setAttribute('aria-expanded', String(expanded));
+  const meta = button.querySelector('.revenue-budget-risk-table-toggle__meta');
+  if (meta) meta.textContent = expanded ? 'Collapse' : 'Expand';
+}
+
+function budgetRiskValueClass(value) {
+  return Number(value) <= 0 ? 'risk-favorable' : 'risk-positive';
+}
+
+function renderBudgetRiskTable(series) {
+  const body = document.getElementById('budgetActualRiskTableBody');
+  if (!body) return;
+
+  body.innerHTML = series.labels.map((label, index) => {
+    const reported = series.reported[index];
+    const risk = series.risk[index];
+    const cumulativeRisk = series.cumulativeRisk[index];
+    const rowClass = index === series.lastReportedIndex ? 'is-latest-reported' : '';
+    return `
+      <tr class="${rowClass}">
+        <td>${esc(label)}</td>
+        <td>${esc(formatBudgetRiskMoney(series.budget[index]))}</td>
+        <td class="${reported ? '' : 'is-not-reported'}">${reported ? esc(formatBudgetRiskMoney(series.actual[index])) : '—'}</td>
+        <td class="${budgetRiskValueClass(risk)}">${esc(formatBudgetRiskMoney(risk))}</td>
+        <td>${esc(formatBudgetRiskMoney(series.cumulativeBudget[index]))}</td>
+        <td>${esc(formatBudgetRiskMoney(series.cumulativeActual[index]))}</td>
+        <td class="${budgetRiskValueClass(cumulativeRisk)}">${esc(formatBudgetRiskMoney(cumulativeRisk))}</td>
+      </tr>
+    `;
+  }).join('');
+}
+
+function renderBudgetRiskBasis(series) {
+  const element = document.getElementById('budgetActualRiskBasis');
+  if (!element) return;
+
+  const unpricedPlanned = (series.plannedUnpricedHours || []).reduce(
+    (total, value) => total + (Number(value) || 0),
+    0,
+  );
+  const unpricedActual = (series.actualUnpricedHours || []).reduce(
+    (total, value) => total + (Number(value) || 0),
+    0,
+  );
+  const unpricedNote = unpricedPlanned > 0 || unpricedActual > 0
+    ? ` <strong>Rate warning:</strong> ${(+unpricedPlanned.toFixed(1)).toLocaleString('en-US')} planned hours and ${(+unpricedActual.toFixed(1)).toLocaleString('en-US')} actual hours could not be priced because a matching Resource Revenue rate was unavailable.`
+    : '';
+
+  element.innerHTML = `
+    <strong>Calculation basis:</strong>
+    Budget = Local PS + Intra-Sourcing Resource Assignment revenue
+    (${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable Resource Revenue hourly rate).
+    Actual = Local PS + Intra-Sourcing Time Sheet hours × applicable rate.
+    Risk = Budget − Actual; for a future/unreported month, Actual is treated as 0 so the month's full planned revenue remains outstanding.
+    Cumulative lines are running totals from April to March.${unpricedNote}
+  `;
+}
+
+function getBudgetRiskTooltipElement(chart) {
+  const element = getOverviewChartTooltipElement(chart, 'budget-risk');
+  element.classList.add('revenue-budget-risk-tooltip');
+  return element;
+}
+
+function renderBudgetRiskTooltip(context, series) {
+  const { chart, tooltip } = context;
+  const element = getBudgetRiskTooltipElement(chart);
+  const index = tooltip?.dataPoints?.[0]?.dataIndex;
+
+  if (!tooltip || tooltip.opacity === 0 || index === undefined) {
+    hideOverviewChartTooltip(element);
+    return;
+  }
+
+  const reported = series.reported[index];
+  const risk = series.risk[index];
+  const cumulativeRisk = series.cumulativeRisk[index];
+  const plannedUnpriced = Number(series.plannedUnpricedHours?.[index]) || 0;
+  const actualUnpriced = Number(series.actualUnpricedHours?.[index]) || 0;
+
+  const rows = [
+    { label: 'Budget', value: formatBudgetRiskMoney(series.budget[index], { exact: true }), emphasis: true },
+    { label: '↳ Local PS plan', value: formatBudgetRiskMoney(series.plannedLocal?.[index], { exact: true }) },
+    { label: '↳ Intra-Sourcing plan', value: formatBudgetRiskMoney(series.plannedIntra?.[index], { exact: true }) },
+    { label: 'Actual', value: reported ? formatBudgetRiskMoney(series.actual[index], { exact: true }) : 'Not reported', emphasis: true },
+    { label: '↳ Local PS actual', value: reported ? formatBudgetRiskMoney(series.actualLocal?.[index], { exact: true }) : '—' },
+    { label: '↳ Intra-Sourcing actual', value: reported ? formatBudgetRiskMoney(series.actualIntra?.[index], { exact: true }) : '—' },
+    { label: reported ? 'Risk = Budget − Actual' : 'Risk / outstanding', value: formatBudgetRiskMoney(risk, { exact: true }), risk: true },
+    { label: 'Cumulative Budget', value: formatBudgetRiskMoney(series.cumulativeBudget[index], { exact: true }), emphasis: true },
+    { label: 'Cumulative Actual', value: formatBudgetRiskMoney(series.cumulativeActual[index], { exact: true }), emphasis: true },
+    { label: 'Cumulative Risk', value: formatBudgetRiskMoney(cumulativeRisk, { exact: true }), risk: true },
+  ];
+
+  if (plannedUnpriced > 0) {
+    rows.push({ label: 'Unpriced planned hours', value: `${plannedUnpriced.toLocaleString('en-US', { maximumFractionDigits: 1 })}h` });
+  }
+  if (actualUnpriced > 0) {
+    rows.push({ label: 'Unpriced actual hours', value: `${actualUnpriced.toLocaleString('en-US', { maximumFractionDigits: 1 })}h` });
+  }
+
+  element.innerHTML = `
+    <div class="dashboard-chart-table-tooltip__title">${esc(series.labels[index])}</div>
+    <table class="dashboard-chart-tooltip-table">
+      <tbody>
+        ${rows.map(row => `
+          <tr class="${row.emphasis ? 'is-emphasis' : ''} ${row.risk ? (Number(row.value?.replace?.(/[^0-9.-]/g, '')) <= 0 ? 'is-risk-favorable' : 'is-risk-positive') : ''}">
+            <th>${esc(row.label)}</th>
+            <td>${esc(row.value)}</td>
+          </tr>
+        `).join('')}
+      </tbody>
+    </table>
+  `;
+
+  positionOverviewChartTooltip(element, chart, tooltip);
+}
+
+function renderBudgetActualRiskChart() {
+  const element = document.getElementById('budgetActualRiskChart');
+  if (!element || typeof Chart === 'undefined') return;
+
+  if (S.charts.budgetActualRisk) {
+    S.charts.budgetActualRisk.destroy();
+    S.charts.budgetActualRisk = null;
+  }
+
+  const series = getBudgetActualRiskSeries();
+  const fyLabel = fiscalYearDisplayLabel(S.fiscalYear);
+  const title = document.getElementById('budgetActualRiskTitle');
+  const subtitle = document.getElementById('budgetActualRiskSubtitle');
+  const badge = document.getElementById('budgetActualRiskFyBadge');
+  const latestLabel = series.lastReportedIndex >= 0
+    ? series.labels[series.lastReportedIndex]
+    : 'no reported Time Sheet month';
+
+  if (title) title.textContent = `PS Revenue · ${fyLabel} YTD · Budget vs Actual vs Risk`;
+  if (subtitle) {
+    subtitle.textContent = `Monthly Local PS + Intra-Sourcing revenue plan, Time Sheet actual through ${latestLabel}, and outstanding revenue exposure.`;
+  }
+  if (badge) badge.textContent = fyLabel;
+
+  renderBudgetRiskSummary(series);
+  renderBudgetRiskStatus(series);
+  renderBudgetRiskTable(series);
+  renderBudgetRiskBasis(series);
+
+  const monthlyMin = Math.min(0, ...series.risk);
+  const monthlyMax = Math.max(
+    1,
+    ...series.budget,
+    ...series.actual,
+    ...series.risk.map(value => Math.abs(value)),
+  );
+  const cumulativeMin = Math.min(0, ...series.cumulativeRisk);
+  const cumulativeMax = Math.max(
+    1,
+    ...series.cumulativeBudget,
+    ...series.cumulativeActual,
+    ...series.cumulativeRisk.map(value => Math.abs(value)),
+    series.committedTarget,
+  );
+
+  const riskColors = series.risk.map((value, index) => {
+    if (!series.reported[index]) return 'rgba(245, 158, 11, 0.34)';
+    return Number(value) <= 0 ? 'rgba(16, 185, 129, 0.72)' : 'rgba(245, 158, 11, 0.78)';
+  });
+  const riskBorderColors = series.risk.map((value, index) => {
+    if (!series.reported[index]) return 'rgba(217, 119, 6, 0.55)';
+    return Number(value) <= 0 ? '#059669' : '#D97706';
+  });
+  const cumulativeActualChart = series.cumulativeActual.map((value, index) => (
+    series.lastReportedIndex >= 0 && index <= series.lastReportedIndex ? value : null
+  ));
+
+  const futurePeriodPlugin = {
+    id: 'budgetRiskFuturePeriod',
+    beforeDatasetsDraw(chart) {
+      if (series.lastReportedIndex < 0 || series.lastReportedIndex >= series.labels.length - 1) return;
+      const xScale = chart.scales.x;
+      const chartArea = chart.chartArea;
+      if (!xScale || !chartArea) return;
+      const currentX = xScale.getPixelForTick(series.lastReportedIndex);
+      const nextX = xScale.getPixelForTick(series.lastReportedIndex + 1);
+      const startX = (currentX + nextX) / 2;
+      const { ctx } = chart;
+      ctx.save();
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.82)';
+      ctx.fillRect(startX, chartArea.top, chartArea.right - startX, chartArea.bottom - chartArea.top);
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.55)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(startX, chartArea.top);
+      ctx.lineTo(startX, chartArea.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '600 9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Future / not reported', Math.min(startX + 8, chartArea.right - 92), chartArea.top + 13);
+      ctx.restore();
+    },
+  };
+
+  S.charts.budgetActualRisk = new Chart(element.getContext('2d'), {
+    type: 'bar',
+    plugins: [futurePeriodPlugin],
+    data: {
+      labels: series.labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Budget',
+          data: series.budget,
+          yAxisID: 'yMonthly',
+          backgroundColor: 'rgba(59, 130, 246, 0.78)',
+          borderColor: '#2563EB',
+          borderWidth: 0,
+          borderRadius: 5,
+          borderSkipped: false,
+          maxBarThickness: 20,
+          categoryPercentage: 0.72,
+          barPercentage: 0.88,
+          order: 4,
+        },
+        {
+          type: 'bar',
+          label: 'Actual',
+          data: series.actual.map((value, index) => series.reported[index] ? value : null),
+          yAxisID: 'yMonthly',
+          backgroundColor: 'rgba(5, 150, 105, 0.82)',
+          borderColor: '#047857',
+          borderWidth: 0,
+          borderRadius: 5,
+          borderSkipped: false,
+          maxBarThickness: 20,
+          categoryPercentage: 0.72,
+          barPercentage: 0.88,
+          order: 4,
+        },
+        {
+          type: 'bar',
+          label: 'Risk / exposure',
+          data: series.risk,
+          yAxisID: 'yMonthly',
+          backgroundColor: riskColors,
+          borderColor: riskBorderColors,
+          borderWidth: 1,
+          borderRadius: 5,
+          borderSkipped: false,
+          maxBarThickness: 20,
+          categoryPercentage: 0.72,
+          barPercentage: 0.88,
+          order: 4,
+        },
+        {
+          type: 'line',
+          label: 'Cumulative Budget',
+          data: series.cumulativeBudget,
+          yAxisID: 'yCumulative',
+          borderColor: '#1D4ED8',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          borderDash: [5, 4],
+          tension: 0.24,
+          pointRadius: 2.2,
+          pointHoverRadius: 4.2,
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderWidth: 1.7,
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'Cumulative Actual',
+          data: cumulativeActualChart,
+          yAxisID: 'yCumulative',
+          borderColor: '#047857',
+          backgroundColor: 'transparent',
+          borderWidth: 2.8,
+          tension: 0.24,
+          pointRadius: 3,
+          pointHoverRadius: 5,
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderWidth: 2,
+          spanGaps: false,
+          order: 1,
+        },
+        {
+          type: 'line',
+          label: 'Cumulative Risk',
+          data: series.cumulativeRisk,
+          yAxisID: 'yCumulative',
+          borderColor: '#B45309',
+          backgroundColor: 'transparent',
+          borderWidth: 1.8,
+          borderDash: [2, 4],
+          tension: 0.24,
+          pointRadius: 2,
+          pointHoverRadius: 4,
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderWidth: 1.5,
+          order: 2,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { top: 10, right: 8, bottom: 0, left: 4 } },
+      animation: { duration: 450 },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            boxWidth: 9,
+            boxHeight: 9,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            padding: 18,
+            color: '#475569',
+            font: { size: 10, weight: '600' },
+          },
+        },
+        tooltip: {
+          enabled: false,
+          external: context => renderBudgetRiskTooltip(context, series),
+        },
+      },
+      scales: {
+        x: {
+          stacked: false,
+          grid: { display: false },
+          border: { color: '#E2E8F0' },
+          ticks: {
+            color: '#475569',
+            font: { size: 10, weight: '600' },
+            maxRotation: 0,
+            minRotation: 0,
+            padding: 8,
+          },
+        },
+        yMonthly: {
+          position: 'left',
+          beginAtZero: true,
+          suggestedMin: monthlyMin < 0 ? monthlyMin * 1.16 : 0,
+          suggestedMax: monthlyMax * 1.16,
+          border: { display: false },
+          grid: {
+            color: context => Number(context.tick.value) === 0 ? '#CBD5E1' : '#EEF2F7',
+            lineWidth: context => Number(context.tick.value) === 0 ? 1.2 : 1,
+          },
+          ticks: {
+            color: '#64748B',
+            font: { size: 9 },
+            padding: 6,
+            callback: burnupRevenueAxisUnit,
+          },
+          title: {
+            display: true,
+            text: 'Monthly revenue (USD)',
+            color: '#94A3B8',
+            font: { size: 10, weight: '600' },
+          },
+        },
+        yCumulative: {
+          position: 'right',
+          beginAtZero: true,
+          suggestedMin: cumulativeMin < 0 ? cumulativeMin * 1.1 : 0,
+          suggestedMax: cumulativeMax * 1.08,
+          border: { display: false },
+          grid: { drawOnChartArea: false },
+          ticks: {
+            color: '#64748B',
+            font: { size: 9 },
+            padding: 6,
+            callback: burnupRevenueAxisUnit,
+          },
+          title: {
+            display: true,
+            text: 'Cumulative revenue (USD)',
+            color: '#94A3B8',
+            font: { size: 10, weight: '600' },
+          },
+        },
+      },
+    },
+  });
+}
+

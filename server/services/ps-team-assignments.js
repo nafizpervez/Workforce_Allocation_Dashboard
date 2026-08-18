@@ -243,15 +243,51 @@ function saveManualAssignment(db, employeeId, assignedTo, effectiveMonth) {
   };
 }
 
+function clearManualAssignmentEvent(db, employeeId, effectiveMonth) {
+  ensurePsTeamAssignmentsTable(db);
+  const employee = db.prepare('SELECT id, name FROM employees WHERE id = ?').get(Number(employeeId));
+  if (!employee) throw new Error('Employee not found.');
+  const target = normalizeMonth(effectiveMonth);
+  if (!target) throw new Error('A valid effective month is required.');
+
+  db.prepare(`
+    DELETE FROM employee_ps_team_assignments
+    WHERE employee_id = ? AND effective_month = ?
+  `).run(Number(employeeId), target.start);
+
+  return {
+    employeeId: Number(employeeId),
+    employeeName: canonicalPersonName(employee.name),
+    effectiveMonth: target.key,
+    assignedTo: null,
+    source: 'cleared',
+  };
+}
+
 function saveManualAssignments(db, updates = []) {
   if (!Array.isArray(updates)) throw new Error('Assignments must be an array.');
   if (updates.length > 5000) throw new Error('Too many assignment updates in one request.');
-  const transaction = db.transaction(items => items.map(item => saveManualAssignment(
-    db,
-    Number(item?.employeeId),
-    item?.assignedTo,
-    item?.effectiveMonth,
-  )));
+
+  // The bulk endpoint is used by the FY Resource Assignment Planner. In that
+  // planner, blank/— means "clear this month's override" rather than create a
+  // new unassignment boundary. The normal single-resource PATCH endpoint keeps
+  // its existing explicit-unassignment behaviour for Team Resources.
+  const transaction = db.transaction(items => items.map(item => {
+    const assignedTo = String(item?.assignedTo || '').trim();
+    if (!assignedTo) {
+      return clearManualAssignmentEvent(
+        db,
+        Number(item?.employeeId),
+        item?.effectiveMonth,
+      );
+    }
+    return saveManualAssignment(
+      db,
+      Number(item?.employeeId),
+      assignedTo,
+      item?.effectiveMonth,
+    );
+  }));
   return transaction(updates);
 }
 
@@ -265,6 +301,7 @@ module.exports = {
   VALID_PS_TEAMS,
   buildAssignmentSnapshot,
   buildFiscalAssignmentCalendar,
+  clearManualAssignmentEvent,
   ensurePsTeamAssignmentsTable,
   fiscalMonths,
   monthKey,

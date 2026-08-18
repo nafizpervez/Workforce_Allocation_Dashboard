@@ -14,6 +14,178 @@ let teamUtilizationTooltipHideTimer = null;
 let teamUtilizationTooltipActiveTrigger = null;
 let teamUtilizationSelectedFiscalYear = null;
 let teamUtilizationSelectedMonthKey = null;
+const TEAM_UTILIZATION_INPUT_SAVE_DELAY = 450;
+const teamUtilizationInputSaveTimers = new Map();
+
+function teamUtilizationManualInputKey(tone, monthKey) {
+  return `${tone}:${monthKey}`;
+}
+
+function teamUtilizationMonthInput(tone, month) {
+  if (!month) return { team: tone, month: '', utilizationPercent: null, comments: '' };
+  const monthKey = teamUtilizationMonthKey(month.y, month.m);
+  return S.teamUtilizationInputs?.entries?.[teamUtilizationManualInputKey(tone, monthKey)] || {
+    team: tone,
+    month: monthKey,
+    utilizationPercent: null,
+    comments: '',
+  };
+}
+
+function teamUtilizationStoreMonthInput(input) {
+  const team = String(input?.team || '').trim().toLowerCase();
+  const month = String(input?.month || '').trim();
+  if (!['local', 'intra'].includes(team) || !/^\d{4}-\d{2}$/.test(month)) return null;
+  const utilizationPercent = input?.utilizationPercent === null || input?.utilizationPercent === undefined || input?.utilizationPercent === ''
+    ? null
+    : Number(input.utilizationPercent);
+  const normalized = {
+    team,
+    month,
+    utilizationPercent: Number.isFinite(utilizationPercent) && utilizationPercent >= 0 ? utilizationPercent : null,
+    comments: String(input?.comments ?? ''),
+    updatedAt: input?.updatedAt || null,
+  };
+  S.teamUtilizationInputs ||= { fiscalYear: Number(S.matrixFiscalYear), entries: {} };
+  S.teamUtilizationInputs.entries ||= {};
+  S.teamUtilizationInputs.entries[teamUtilizationManualInputKey(team, month)] = normalized;
+  return normalized;
+}
+
+async function loadTeamUtilizationInputsForFiscalYear(fiscalYear) {
+  const requestedFiscalYear = Number(fiscalYear);
+  const data = await api('GET', `/api/ps-team-utilization-inputs?fiscalYear=${requestedFiscalYear}`);
+  if (requestedFiscalYear !== Number(S.matrixFiscalYear)) return false;
+
+  const entries = {};
+  for (const input of data?.inputs || []) {
+    const team = String(input?.team || '').trim().toLowerCase();
+    const month = String(input?.month || '').trim();
+    if (!['local', 'intra'].includes(team) || !/^\d{4}-\d{2}$/.test(month)) continue;
+    const utilizationPercent = input?.utilizationPercent === null || input?.utilizationPercent === undefined
+      ? null
+      : Number(input.utilizationPercent);
+    entries[teamUtilizationManualInputKey(team, month)] = {
+      team,
+      month,
+      utilizationPercent: Number.isFinite(utilizationPercent) && utilizationPercent >= 0 ? utilizationPercent : null,
+      comments: String(input?.comments ?? ''),
+      updatedAt: input?.updatedAt || null,
+    };
+  }
+
+  S.teamUtilizationInputs = {
+    fiscalYear: requestedFiscalYear,
+    entries,
+  };
+  return true;
+}
+
+window.loadTeamUtilizationInputsForFiscalYear = loadTeamUtilizationInputsForFiscalYear;
+
+function teamUtilizationManualTooltip(tone, month, percent) {
+  const teamLabel = tone === 'combined'
+    ? 'Combined PS Team (Local PS + Intra-Sourcing)'
+    : (tone === 'local' ? 'Local PS Team' : 'Intra-Sourcing PS Team');
+  const monthLabel = month
+    ? `${teamUtilizationMonthLabel(month.y, month.m, true)} ${month.y}`
+    : 'Next month';
+  if (percent === null || percent === undefined || !Number.isFinite(Number(percent))) {
+    return `
+      ${teamUtilizationTooltipTitle('Next Month Project Utilization', `${monthLabel} · ${teamLabel}`)}
+      <div class="team-utilization-tooltip__note">Enter the next-month Project Utilization percentage directly in the table.</div>`;
+  }
+  return `
+    ${teamUtilizationTooltipTitle('Next Month Project Utilization', `${monthLabel} · ${teamLabel}`)}
+    <div class="team-utilization-tooltip__note">This is a manually entered percentage. No project-days conversion is applied.</div>
+    <div class="team-utilization-tooltip__formula">Entered Project Utilization = <strong>${teamUtilizationFormatPercent(percent)}</strong></div>`;
+}
+
+function teamUtilizationScheduleInputSave(tone, monthKey) {
+  const key = teamUtilizationManualInputKey(tone, monthKey);
+  const existingTimer = teamUtilizationInputSaveTimers.get(key);
+  if (existingTimer) clearTimeout(existingTimer);
+
+  const timer = setTimeout(async () => {
+    teamUtilizationInputSaveTimers.delete(key);
+    const input = S.teamUtilizationInputs?.entries?.[key];
+    if (!input) return;
+    const snapshot = {
+      utilizationPercent: input.utilizationPercent,
+      comments: input.comments,
+    };
+    try {
+      const saved = await api('PUT', `/api/ps-team-utilization-inputs/${encodeURIComponent(tone)}/${encodeURIComponent(monthKey)}`, snapshot);
+      const current = S.teamUtilizationInputs?.entries?.[key];
+      const unchanged = current
+        && current.utilizationPercent === snapshot.utilizationPercent
+        && current.comments === snapshot.comments;
+      if (unchanged) teamUtilizationStoreMonthInput(saved);
+    } catch (error) {
+      console.error('Failed to save PS team utilization input:', error);
+      toast(error.message || 'Failed to save PS team utilization input', 'error');
+    }
+  }, TEAM_UTILIZATION_INPUT_SAVE_DELAY);
+
+  teamUtilizationInputSaveTimers.set(key, timer);
+}
+
+function teamUtilizationBindManualInputs(root, statsByTone, nextMonth) {
+  if (!root || !nextMonth) return;
+  const monthKey = teamUtilizationMonthKey(nextMonth.y, nextMonth.m);
+
+  root.querySelectorAll('[data-team-utilization-project-percent]').forEach(input => {
+    input.addEventListener('input', event => {
+      const tone = String(event.currentTarget.dataset.teamUtilizationTeam || '').trim();
+      if (!statsByTone[tone]) return;
+
+      const raw = String(event.currentTarget.value || '').trim();
+      const utilizationPercent = raw === '' ? null : Number(raw);
+      if (utilizationPercent !== null && (!Number.isFinite(utilizationPercent) || utilizationPercent < 0)) return;
+
+      const current = teamUtilizationMonthInput(tone, nextMonth);
+      const stored = teamUtilizationStoreMonthInput({
+        ...current,
+        team: tone,
+        month: monthKey,
+        utilizationPercent,
+      });
+
+      TEAM_UTILIZATION_TOOLTIP_DATA.set(
+        `${tone}:next-month-project-utilization`,
+        teamUtilizationManualTooltip(tone, nextMonth, stored?.utilizationPercent),
+      );
+      teamUtilizationScheduleInputSave(tone, monthKey);
+    });
+
+    input.addEventListener('blur', event => {
+      const tone = String(event.currentTarget.dataset.teamUtilizationTeam || '').trim();
+      if (!tone) return;
+      teamUtilizationScheduleInputSave(tone, monthKey);
+    });
+  });
+
+  root.querySelectorAll('[data-team-utilization-comments]').forEach(input => {
+    input.addEventListener('input', event => {
+      const tone = String(event.currentTarget.dataset.teamUtilizationTeam || '').trim();
+      if (!statsByTone[tone]) return;
+      const current = teamUtilizationMonthInput(tone, nextMonth);
+      teamUtilizationStoreMonthInput({
+        ...current,
+        team: tone,
+        month: monthKey,
+        comments: event.currentTarget.value,
+      });
+      teamUtilizationScheduleInputSave(tone, monthKey);
+    });
+
+    input.addEventListener('blur', event => {
+      const tone = String(event.currentTarget.dataset.teamUtilizationTeam || '').trim();
+      if (!tone) return;
+      teamUtilizationScheduleInputSave(tone, monthKey);
+    });
+  });
+}
 
 function selectTeamUtilizationReportingMonth(monthKey) {
   const normalized = String(monthKey || '').trim();
@@ -84,7 +256,7 @@ function teamUtilizationBuildCalculationBasisTooltip() {
       <tr><th>Billable Utilization</th><td>Total Billable Days ÷ Monthly Team Capacity × 100</td></tr>
       <tr><th>Project Utilization</th><td>Total Project Days ÷ Monthly Team Capacity × 100</td></tr>
       <tr><th>YTD</th><td>Sum monthly actuals using each month’s effective Assigned To.</td></tr>
-      <tr><th>Next month</th><td>Next-month Time Sheet actuals; no data = NA.</td></tr>
+      <tr><th>Next month</th><td>Enter Project Utilization % directly; if left blank, next-month Time Sheet actual remains the fallback.</td></tr>
       <tr><th>FY Target</th><td>Project Utilization target = ${TEAM_UTILIZATION_FY_PROJECT_TARGET}%.</td></tr>
     </table>
     <div class="team-utilization-tooltip__formula">DEFAULT_ANNUAL_WORKDAYS = <strong>${defaultAnnualWorkdays.toLocaleString('en-US')}</strong> from root config.js</div>`;
@@ -111,7 +283,9 @@ function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
       <td>${teamUtilizationFormatHours(item.localHours)}</td>
       <td>${teamUtilizationFormatHours(item.intraHours)}</td>
     </tr>`);
-  const teamLabel = tone === 'local' ? 'Local PS Team' : 'Intra-Sourcing PS Team';
+  const teamLabel = tone === 'combined'
+    ? 'Combined PS Team (Local PS + Intra-Sourcing)'
+    : (tone === 'local' ? 'Local PS Team' : 'Intra-Sourcing PS Team');
   TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:staff`, `
     ${teamUtilizationTooltipTitle('Total Staff — Resource List', `${monthLabel} · ${stats.staffCount} resources · ${teamLabel}`)}
     <div class="team-utilization-tooltip__note">Every row below is included in the displayed Total Staff count. Team membership comes only from the manually saved Assigned To value for this exact month. Resources left unassigned (—) are excluded from both PS teams.</div>
@@ -234,12 +408,22 @@ function teamUtilizationBuildTooltipData(tone, stats, reportMonth, nextMonth) {
     const hours = nextActual?.typeBreakdown?.[label] || 0;
     return `<tr><th>${esc(label)}</th><td>${teamUtilizationFormatHours(hours)}<small>${(hours / TEAM_UTILIZATION_HOURS_PER_DAY).toLocaleString('en-US', { maximumFractionDigits: 1 })} days</small></td></tr>`;
   });
-  TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:next-month-project-utilization`, `
-    ${teamUtilizationTooltipTitle('Next Month Project Utilization — Time Sheet', nextActualLabel)}
-    <div class="team-utilization-tooltip__note">This value uses Time Sheet actuals only. Project work includes Local PS, Intra-Sourcing, Pre-Sales and Training Delivery for resources manually assigned to this team for the next month.</div>
-    ${nextActual?.hasActual ? teamUtilizationTooltipRows(nextTypeRows) : '<div class="team-utilization-tooltip__note">No Time Sheet actuals are available for this next month, so the value is NA.</div>'}
-    ${nextActual?.hasActual ? `<div class="team-utilization-tooltip__formula">Project days = ${teamUtilizationFormatHours(nextActual.projectHours)} ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY} = <strong>${nextActual.projectDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days</strong></div>
-    <div class="team-utilization-tooltip__formula">${nextActual.projectDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} project days ÷ ${nextActual.capacityDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} team-capacity days × 100 = <strong>${teamUtilizationFormatPercent(nextActual.percent)}</strong></div>` : ''}`);
+  if (stats.nextMonthManualUtilizationPercent !== null) {
+    TEAM_UTILIZATION_TOOLTIP_DATA.set(
+      `${tone}:next-month-project-utilization`,
+      teamUtilizationManualTooltip(
+        tone,
+        nextMonth,
+        stats.nextMonthManualUtilizationPercent,
+      ),
+    );
+  } else {
+    TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:next-month-project-utilization`, `
+      ${teamUtilizationTooltipTitle('Next Month Project Utilization — Time Sheet', nextActualLabel)}
+      <div class="team-utilization-tooltip__note">Enter the Project Utilization percentage directly in this row. No project-days conversion is applied to a manual entry. Until a manual percentage is entered, uploaded next-month Time Sheet actuals remain the fallback.</div>
+      ${nextActual?.hasActual ? teamUtilizationTooltipRows(nextTypeRows) : '<div class="team-utilization-tooltip__note">No manual percentage or next-month Time Sheet actual is available, so the value is NA.</div>'}
+      ${nextActual?.hasActual ? `<div class="team-utilization-tooltip__formula">Fallback Time Sheet Project Utilization = ${nextActual.projectDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} project days ÷ ${nextActual.capacityDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} team-capacity days × 100 = <strong>${teamUtilizationFormatPercent(nextActual.percent)}</strong></div>` : ''}`);
+  }
 
   TEAM_UTILIZATION_TOOLTIP_DATA.set(`${tone}:fy-target`, `
     ${teamUtilizationTooltipTitle('FY Target — Project Utilization', fiscalYearDisplayLabel(S.matrixFiscalYear))}
@@ -492,10 +676,12 @@ function teamUtilizationAssignmentSnapshot(year, month) {
 
 function teamUtilizationAssignedEntries(year, month, tone) {
   const snapshot = teamUtilizationAssignmentSnapshot(year, month);
-  const expected = tone === 'intra' ? 'Intra-Sourcing' : 'Local PS';
   const activeIds = new Set((typeof getActiveEmployees === 'function' ? getActiveEmployees() : (S.employees || []).filter(e => e.active !== 0)).map(e => Number(e.id)));
+  const expectedTeams = tone === 'combined'
+    ? new Set(['Local PS', 'Intra-Sourcing'])
+    : new Set([tone === 'intra' ? 'Intra-Sourcing' : 'Local PS']);
   return (snapshot?.assignments || []).filter(entry => (
-    activeIds.has(Number(entry.employeeId)) && entry.assignedTo === expected
+    activeIds.has(Number(entry.employeeId)) && expectedTeams.has(entry.assignedTo)
   ));
 }
 
@@ -724,8 +910,8 @@ function buildTeamUtilizationSection(title, tone, stats, reportMonth, nextMonth)
               <th scope="row">Billable Utilization</th>
               <td class="team-utilization-table-value" data-team-utilization-tooltip="${tone}:billable-utilization" tabindex="0">${teamUtilizationFormatPercent(stats.monthBillablePercent)}</td>
               <td class="team-utilization-table-value" data-team-utilization-tooltip="${tone}:ytd-billable-utilization" tabindex="0">${teamUtilizationFormatPercent(stats.ytdBillablePercent)}</td>
-              <td>NA</td>
-              <td>NA</td>
+              <td class="team-utilization-na">NA</td>
+              <td class="team-utilization-na">NA</td>
             </tr>
             <tr>
               <td>2</td>
@@ -738,15 +924,48 @@ function buildTeamUtilizationSection(title, tone, stats, reportMonth, nextMonth)
             <tr>
               <td>3</td>
               <th scope="row">Next Month Project Utilization<br><span>Time Sheet (${esc(nextMonthName)})</span></th>
-              <td class="team-utilization-table-value" data-team-utilization-tooltip="${tone}:next-month-project-utilization" tabindex="0">${teamUtilizationFormatPercent(stats.nextMonthProjectPercent)}</td>
-              <td>NA</td>
-              <td>NA</td>
-              <td>NA</td>
+              <td class="team-utilization-next-month-cell">
+                ${nextMonth ? `
+                  <div class="team-utilization-next-month-editor">
+                    <label class="team-utilization-next-month-input">
+                      <input
+                        type="number"
+                        min="0"
+                        step="0.1"
+                        inputmode="decimal"
+                        value="${stats.nextMonthProjectPercent === null || stats.nextMonthProjectPercent === undefined ? '' : esc(+Number(stats.nextMonthProjectPercent).toFixed(1))}"
+                        placeholder="Percent"
+                        data-team-utilization-project-percent
+                        data-team-utilization-team="${tone}"
+                        data-team-utilization-tooltip="${tone}:next-month-project-utilization"
+                        aria-label="${esc(title)} ${esc(nextMonthName)} Project Utilization percentage"
+                      />
+                      <span>%</span>
+                    </label>
+                  </div>
+                ` : '<span class="team-utilization-next-month-na team-utilization-na">NA</span>'}
+              </td>
+              <td class="team-utilization-na">NA</td>
+              <td class="team-utilization-na">NA</td>
+              <td class="team-utilization-na">NA</td>
             </tr>
             <tr class="team-utilization-comments-row">
               <td></td>
               <th scope="row">Comments:</th>
-              <td colspan="4">—</td>
+              <td colspan="4">
+                ${nextMonth ? `
+                  <input
+                    type="text"
+                    maxlength="2000"
+                    class="team-utilization-comments-input"
+                    value="${esc(stats.nextMonthInput?.comments || '')}"
+                    placeholder="Write comments"
+                    data-team-utilization-comments
+                    data-team-utilization-team="${tone}"
+                    aria-label="${esc(title)} ${esc(nextMonthName)} comments"
+                  />
+                ` : '—'}
+              </td>
             </tr>
           </tbody>
         </table>
@@ -776,6 +995,136 @@ function buildTeamUtilizationSection(title, tone, stats, reportMonth, nextMonth)
         </div>
         <div class="team-utilization-chart-wrap">
           <canvas id="teamUtilizationChart-${tone}" aria-label="${tone === 'local' ? 'Local PS' : 'Intra-Sourcing'} utilization chart"></canvas>
+        </div>
+      </div>
+    </section>`;
+}
+
+function teamUtilizationBuildCombinedMonthTooltipData(allRows, year, month) {
+  const monthLabel = `${teamUtilizationMonthLabel(year, month, true)} ${year}`;
+  const members = teamUtilizationAssignedMembers(year, month, 'combined');
+  const localStaff = teamUtilizationAssignedMembers(year, month, 'local').length;
+  const intraStaff = teamUtilizationAssignedMembers(year, month, 'intra').length;
+  const monthRows = teamUtilizationRowsForMonth(allRows, year, month);
+  const billableRows = teamUtilizationBillableRowsForMonth(year, month);
+  const actual = teamUtilizationAggregateActual(monthRows, members, billableRows);
+  const billableBreakdown = teamUtilizationBillableTypeBreakdown(billableRows, members);
+  const projectBreakdown = teamUtilizationActualTypeBreakdown(monthRows, members);
+  const capacityPerStaff = teamUtilizationDefaultMonthlyCapacityPerStaff();
+  const capacityDays = teamUtilizationMonthlyTeamCapacity(members.length);
+  const billableDays = actual.billableHours / TEAM_UTILIZATION_HOURS_PER_DAY;
+  const projectDays = actual.projectHours / TEAM_UTILIZATION_HOURS_PER_DAY;
+  const billablePercent = teamUtilizationPercent(billableDays, capacityDays);
+  const projectPercent = teamUtilizationPercent(projectDays, capacityDays);
+  const key = teamUtilizationMonthKey(year, month);
+
+  const capacityRows = [
+    `<tr><th>Local PS Staff</th><td>${localStaff}</td></tr>`,
+    `<tr><th>Intra-Sourcing Staff</th><td>${intraStaff}</td></tr>`,
+    `<tr><th>Combined Staff</th><td>${members.length}</td></tr>`,
+    `<tr><th>Capacity / staff</th><td>${capacityPerStaff.toLocaleString('en-US', { maximumFractionDigits: 1 })} days<small>${Number(getDefaultAnnualWorkdays()).toLocaleString('en-US')} ÷ 12</small></td></tr>`,
+    `<tr><th>Combined capacity</th><td>${capacityDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days<small>(${Number(getDefaultAnnualWorkdays()).toLocaleString('en-US')} ÷ 12) × ${members.length}</small></td></tr>`,
+  ];
+  const billableRowsHtml = Object.entries(billableBreakdown || {})
+    .filter(([, hours]) => Number(hours) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]) || String(a[0]).localeCompare(String(b[0])))
+    .map(([label, hours]) => `<tr><th>${esc(label)}</th><td>${teamUtilizationFormatHours(hours)}<small>${(Number(hours) / TEAM_UTILIZATION_HOURS_PER_DAY).toLocaleString('en-US', { maximumFractionDigits: 1 })} days</small></td></tr>`);
+  const projectRowsHtml = [
+    'Service Delivery - Local PS',
+    'Service Delivery - Intrasourcing',
+    'Pre - Sales',
+    'Training Delivery',
+  ].map(label => {
+    const hours = Number(projectBreakdown?.[label]) || 0;
+    return `<tr><th>${esc(label)}</th><td>${teamUtilizationFormatHours(hours)}<small>${(hours / TEAM_UTILIZATION_HOURS_PER_DAY).toLocaleString('en-US', { maximumFractionDigits: 1 })} days</small></td></tr>`;
+  });
+
+  TEAM_UTILIZATION_TOOLTIP_DATA.set(`combined:${key}:billable`, `
+    ${teamUtilizationTooltipTitle('Combined Billable Utilization', monthLabel)}
+    <div class="team-utilization-tooltip__note">Members are all active resources assigned to either Local PS or Intra-Sourcing in ${esc(monthLabel)}. Billable work comes from uploaded Time Sheet rows where <strong>Billable? = Yes</strong> for those members.</div>
+    ${billableRowsHtml.length ? teamUtilizationTooltipRows(billableRowsHtml) : '<div class="team-utilization-tooltip__note">No Billable? = Yes Time Sheet hours were found for the combined team in this month.</div>'}
+    ${teamUtilizationTooltipRows(capacityRows)}
+    <div class="team-utilization-tooltip__formula">Billable days = ${teamUtilizationFormatHours(actual.billableHours)} ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY} = <strong>${billableDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days</strong></div>
+    <div class="team-utilization-tooltip__formula">${billableDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} ÷ ${capacityDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} × 100 = <strong>${teamUtilizationFormatPercent(billablePercent)}</strong></div>`);
+
+  TEAM_UTILIZATION_TOOLTIP_DATA.set(`combined:${key}:project`, `
+    ${teamUtilizationTooltipTitle('Combined Project Utilization', monthLabel)}
+    <div class="team-utilization-tooltip__note">Project work includes Local PS + Intra-Sourcing + Pre-Sales + Training Delivery Time Sheet hours for all resources assigned to either PS team in this month.</div>
+    ${teamUtilizationTooltipRows(projectRowsHtml)}
+    ${teamUtilizationTooltipRows(capacityRows)}
+    <div class="team-utilization-tooltip__formula">Project days = ${teamUtilizationFormatHours(actual.projectHours)} ÷ ${TEAM_UTILIZATION_HOURS_PER_DAY} = <strong>${projectDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days</strong></div>
+    <div class="team-utilization-tooltip__formula">${projectDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} ÷ ${capacityDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} × 100 = <strong>${teamUtilizationFormatPercent(projectPercent)}</strong></div>`);
+}
+
+function buildCombinedTeamUtilizationSection(stats, allRows, reportMonth) {
+  teamUtilizationBuildTooltipData('combined', stats, reportMonth, null);
+  const series = teamUtilizationBuildFiscalChartSeries(allRows, 'combined');
+  const months = fiscalMonths(S.matrixFiscalYear);
+  const reportKey = teamUtilizationMonthKey(reportMonth.year, reportMonth.month);
+  const monthlyRows = months.map((month, index) => {
+    const monthKey = teamUtilizationMonthKey(month.y, month.m);
+    teamUtilizationBuildCombinedMonthTooltipData(allRows, month.y, month.m);
+    const localStaff = teamUtilizationAssignedMembers(month.y, month.m, 'local').length;
+    const intraStaff = teamUtilizationAssignedMembers(month.y, month.m, 'intra').length;
+    const combinedStaff = teamUtilizationAssignedMembers(month.y, month.m, 'combined').length;
+    return `<tr class="${monthKey === reportKey ? 'is-current' : ''}">
+      <th scope="row">${esc(teamUtilizationMonthLabel(month.y, month.m, true))} ${month.y}</th>
+      <td>${localStaff}</td>
+      <td>${intraStaff}</td>
+      <td><strong>${combinedStaff}</strong></td>
+      <td class="team-utilization-combined-calc" data-team-utilization-tooltip="combined:${monthKey}:billable" tabindex="0">${teamUtilizationFormatPercent(series.billableValues[index])}</td>
+      <td class="team-utilization-combined-calc" data-team-utilization-tooltip="combined:${monthKey}:project" tabindex="0">${teamUtilizationFormatPercent(series.projectValues[index])}</td>
+    </tr>`;
+  }).join('');
+
+  const projectVariance = stats.ytdProjectPercent - TEAM_UTILIZATION_FY_PROJECT_TARGET;
+  const reportMonthLabel = `${teamUtilizationMonthLabel(reportMonth.year, reportMonth.month, true)} ${reportMonth.year}`;
+  const localStaff = teamUtilizationAssignedMembers(reportMonth.year, reportMonth.month, 'local').length;
+  const intraStaff = teamUtilizationAssignedMembers(reportMonth.year, reportMonth.month, 'intra').length;
+  const monthBillableDays = stats.monthBillableHours / TEAM_UTILIZATION_HOURS_PER_DAY;
+  const monthProjectDays = stats.monthProjectHours / TEAM_UTILIZATION_HOURS_PER_DAY;
+  const capacityLabel = stats.monthCapacityDays.toLocaleString('en-US', { maximumFractionDigits: 1 });
+  const ytdStart = stats.ytdMonths?.[0];
+  const ytdEnd = stats.ytdMonths?.[stats.ytdMonths.length - 1];
+  const ytdShortLabel = ytdStart && ytdEnd
+    ? `${teamUtilizationMonthLabel(ytdStart.y, ytdStart.m, true)}–${teamUtilizationMonthLabel(ytdEnd.y, ytdEnd.m, true)}`
+    : 'FY YTD';
+
+  return `
+    <section class="team-utilization-combined-panel">
+      <div class="team-utilization-combined-heading">
+        <div>
+          <h3>Combined PS Utilization – Local PS + Intra-Sourcing</h3>
+          <p>Utilization = Time Sheet days ÷ combined team capacity × 100. Capacity = (${Number(getDefaultAnnualWorkdays()).toLocaleString('en-US')} ÷ 12) × combined staff. Hover KPI cards or monthly percentages to see the full calculation.</p>
+        </div>
+        <span class="team-utilization-chart-period">${esc(fiscalYearDisplayLabel(S.matrixFiscalYear))}</span>
+      </div>
+
+      <div class="team-utilization-combined-kpis">
+        <div class="team-utilization-combined-kpi-trigger" data-team-utilization-tooltip="combined:staff" tabindex="0"><span>Combined Staff</span><strong>${stats.staffCount}</strong><small>${localStaff} Local PS + ${intraStaff} Intra · ${esc(reportMonthLabel)}</small></div>
+        <div class="team-utilization-combined-kpi-trigger" data-team-utilization-tooltip="combined:billable-utilization" tabindex="0"><span>This Month Billable (${esc(reportMonthLabel)})</span><strong>${teamUtilizationFormatPercent(stats.monthBillablePercent)}</strong><small>${monthBillableDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days ÷ ${capacityLabel} capacity days</small></div>
+        <div class="team-utilization-combined-kpi-trigger" data-team-utilization-tooltip="combined:project-utilization" tabindex="0"><span>This Month Project (${esc(reportMonthLabel)})</span><strong>${teamUtilizationFormatPercent(stats.monthProjectPercent)}</strong><small>${monthProjectDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days ÷ ${capacityLabel} capacity days</small></div>
+        <div class="team-utilization-combined-kpi-trigger" data-team-utilization-tooltip="combined:ytd-billable-utilization" tabindex="0"><span>YTD Billable (${esc(ytdShortLabel)})</span><strong>${teamUtilizationFormatPercent(stats.ytdBillablePercent)}</strong><small>YTD billable days ÷ YTD combined capacity</small></div>
+        <div class="team-utilization-combined-kpi-trigger" data-team-utilization-tooltip="combined:ytd-project-utilization" tabindex="0"><span>YTD Project (${esc(ytdShortLabel)})</span><strong>${teamUtilizationFormatPercent(stats.ytdProjectPercent)}</strong><small>YTD project days ÷ YTD combined capacity</small></div>
+        <div class="team-utilization-combined-kpi-trigger" data-team-utilization-tooltip="combined:variance" tabindex="0"><span>FY Target / Var</span><strong>${TEAM_UTILIZATION_FY_PROJECT_TARGET}% <em class="${projectVariance >= 0 ? 'is-positive' : 'is-negative'}">${teamUtilizationFormatVariance(projectVariance)}</em></strong><small>YTD Project − ${TEAM_UTILIZATION_FY_PROJECT_TARGET}% target</small></div>
+      </div>
+
+      <div class="team-utilization-combined-layout">
+        <div class="team-utilization-combined-table-wrap">
+          <table class="team-utilization-combined-table">
+            <thead><tr><th>Month</th><th>Local PS Staff</th><th>Intra-Sourcing Staff</th><th>Combined Staff</th><th>Billable Utilization</th><th>Project Utilization</th></tr></thead>
+            <tbody>${monthlyRows}</tbody>
+          </table>
+        </div>
+
+        <div class="team-utilization-chart-card team-utilization-chart-card--combined">
+          <div class="team-utilization-chart-heading">
+            <div><strong>Combined PS Utilization Trend</strong><span>Local PS + Intra-Sourcing team utilization across April–March · hover the table percentages for calculation details</span></div>
+            <span class="team-utilization-chart-period">${esc(fiscalYearDisplayLabel(S.matrixFiscalYear))}</span>
+          </div>
+          <div class="team-utilization-chart-wrap team-utilization-chart-wrap--combined">
+            <canvas id="teamUtilizationChart-combined" aria-label="Combined Local PS and Intra-Sourcing utilization chart"></canvas>
+          </div>
         </div>
       </div>
     </section>`;
@@ -847,6 +1196,11 @@ function teamUtilizationBuildStats(tone, allRows, reportMonth, ytdMonths, nextMo
     nextMonthDetails.staffCount = nextMembers.length;
   }
 
+  const nextMonthInput = teamUtilizationMonthInput(tone, nextMonth);
+  const nextMonthManualUtilizationPercent = nextMonthInput.utilizationPercent === null || nextMonthInput.utilizationPercent === undefined
+    ? null
+    : Number(nextMonthInput.utilizationPercent);
+
   return {
     tone,
     staffCount: members.length,
@@ -870,7 +1224,11 @@ function teamUtilizationBuildStats(tone, allRows, reportMonth, ytdMonths, nextMo
     ytdProjectPercent,
     projectVariance: ytdProjectPercent - TEAM_UTILIZATION_FY_PROJECT_TARGET,
     nextMonthDetails,
-    nextMonthProjectPercent: nextMonthDetails.percent,
+    nextMonthInput,
+    nextMonthManualUtilizationPercent,
+    nextMonthProjectPercent: nextMonthManualUtilizationPercent === null
+      ? nextMonthDetails.percent
+      : nextMonthManualUtilizationPercent,
   };
 }
 
@@ -909,7 +1267,11 @@ function teamUtilizationRenderChart(tone, allRows) {
   if (!canvas) return;
 
   if (!S.charts) S.charts = {};
-  const chartKey = tone === 'local' ? 'teamUtilizationLocal' : 'teamUtilizationIntra';
+  const chartKey = tone === 'local'
+    ? 'teamUtilizationLocal'
+    : tone === 'intra'
+      ? 'teamUtilizationIntra'
+      : 'teamUtilizationCombined';
   teamUtilizationDestroyChart(chartKey);
 
   const series = teamUtilizationBuildFiscalChartSeries(allRows, tone);
@@ -1036,6 +1398,7 @@ function teamUtilizationRenderChart(tone, allRows) {
 function teamUtilizationRenderCharts(allRows) {
   teamUtilizationRenderChart('local', allRows);
   teamUtilizationRenderChart('intra', allRows);
+  teamUtilizationRenderChart('combined', allRows);
 }
 
 function renderTeamUtilizationSummary() {
@@ -1083,12 +1446,25 @@ function renderTeamUtilizationSummary() {
     ytdMonths,
     nextMonth,
   );
+  const combinedStats = teamUtilizationBuildStats(
+    'combined',
+    allRows,
+    reportMonth,
+    ytdMonths,
+    nextMonth,
+  );
 
   content.innerHTML = `
     <div class="team-utilization-grid">
       ${buildTeamUtilizationSection('Utilization – Local PS Team', 'local', localStats, reportMonth, nextMonth)}
       ${buildTeamUtilizationSection('Utilization – Intra-Sourcing PS Team', 'intra', intraStats, reportMonth, nextMonth)}
-    </div>`;
+    </div>
+    ${buildCombinedTeamUtilizationSection(combinedStats, allRows, reportMonth)}`;
 
+  teamUtilizationBindManualInputs(
+    content,
+    { local: localStats, intra: intraStats },
+    nextMonth,
+  );
   teamUtilizationRenderCharts(allRows);
 }
