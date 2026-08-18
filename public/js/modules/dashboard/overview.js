@@ -1360,7 +1360,8 @@ function renderTrends(data) {
 }
 
 function getAssignmentBurnSeries() {
-  const months = fiscalMonths(S.fiscalYear);
+  const analysisFiscalYear = getRevenueAnalysisFiscalYear();
+  const months = fiscalMonths(analysisFiscalYear);
   const labels = months.map(month => month.label);
   const monthIndex = new Map(
     months.map((month, index) => [`${month.y}-${month.m}`, index]),
@@ -1374,7 +1375,7 @@ function getAssignmentBurnSeries() {
   // Planned effort comes from the effective Resource Assignment rows. The
   // effective-assignment helper already removes N/A resource-weeks and any
   // other assignments that must not participate in analytics for those slots.
-  for (const assignment of getEffectiveFiscalAssignments(S.fiscalYear)) {
+  for (const assignment of getEffectiveFiscalAssignments(analysisFiscalYear, S.matrixAssignments)) {
     const employeeId = Number(assignment.employee_id);
     if (!activeEmployeeIds.has(employeeId)) continue;
 
@@ -1685,7 +1686,7 @@ function renderBurndownChart() {
 
 function getAssignmentBurnRevenueSeries() {
   const source = typeof getMonthlyPlannedWorkSeries === 'function'
-    ? getMonthlyPlannedWorkSeries(S.fiscalYear, S.assignments)
+    ? getMonthlyPlannedWorkSeries(getRevenueAnalysisFiscalYear(), S.matrixAssignments)
     : { rows: [], totalPlannedRevenue: 0 };
   const rows = source.rows || [];
   const roundAmount = value => +((Number(value) || 0).toFixed(2));
@@ -1776,7 +1777,8 @@ function burnRevenueTooltipOptions(series) {
 }
 
 function getAssignmentBurnRevenueSeries() {
-  const months = fiscalMonths(S.fiscalYear);
+  const analysisFiscalYear = getRevenueAnalysisFiscalYear();
+  const months = fiscalMonths(analysisFiscalYear);
   const labels = months.map(month => month.label);
   const monthIndex = new Map(
     months.map((month, index) => [`${month.y}-${month.m}`, index]),
@@ -1801,7 +1803,7 @@ function getAssignmentBurnRevenueSeries() {
   const actualUnpricedHours = months.map(() => 0);
   const actualReported = months.map(() => false);
 
-  for (const assignment of getEffectiveFiscalAssignments(S.fiscalYear)) {
+  for (const assignment of getEffectiveFiscalAssignments(analysisFiscalYear, S.matrixAssignments)) {
     const employee = employeesById.get(Number(assignment.employee_id));
     if (!employee) continue;
     const index = monthIndex.get(`${Number(assignment.year)}-${Number(assignment.month)}`);
@@ -1929,6 +1931,81 @@ function getAssignmentBurnRevenueSeries() {
   };
 }
 
+
+let revenueAnalyticsActiveTab = 'budget-risk';
+
+function getRevenueAnalyticsActiveTab() {
+  return revenueAnalyticsActiveTab === 'contribution-margin'
+    ? 'contribution-margin'
+    : 'budget-risk';
+}
+
+function updateRevenueAnalyticsHeader(tab, fyLabel, latestLabel = '') {
+  const title = document.getElementById('budgetActualRiskTitle');
+  const subtitle = document.getElementById('budgetActualRiskSubtitle');
+  const badge = document.getElementById('budgetActualRiskFyBadge');
+  const icon = document.getElementById('revenueAnalyticsIcon');
+
+  if (title) title.textContent = `PS Revenue · ${fyLabel} YTD`;
+  if (badge) badge.textContent = fyLabel;
+
+  if (tab === 'contribution-margin') {
+    if (subtitle) {
+      subtitle.textContent = latestLabel
+        ? `Contribution performance through ${latestLabel}: revenue, resource cost basis, profit and margin.`
+        : 'Contribution performance across Pre-Sales, Local PS and Intra-Sourcing.';
+    }
+    if (icon) icon.classList.add('is-contribution-margin');
+  } else {
+    if (subtitle) {
+      subtitle.textContent = `Monthly Local PS + Intra-Sourcing revenue plan, Time Sheet actual${latestLabel ? ` through ${latestLabel}` : ''}, and outstanding revenue exposure.`;
+    }
+    if (icon) icon.classList.remove('is-contribution-margin');
+  }
+}
+
+function setRevenueAnalyticsTab(tab) {
+  const nextTab = tab === 'contribution-margin' ? 'contribution-margin' : 'budget-risk';
+  revenueAnalyticsActiveTab = nextTab;
+
+  const tabConfig = [
+    ['budget-risk', 'revenueAnalyticsBudgetTab', 'revenueAnalyticsBudgetPane'],
+    ['contribution-margin', 'revenueAnalyticsMarginTab', 'revenueAnalyticsMarginPane'],
+  ];
+
+  tabConfig.forEach(([key, tabId, paneId]) => {
+    const button = document.getElementById(tabId);
+    const pane = document.getElementById(paneId);
+    const isActive = key === nextTab;
+    if (button) {
+      button.classList.toggle('is-active', isActive);
+      button.setAttribute('aria-selected', String(isActive));
+    }
+    if (pane) {
+      pane.hidden = !isActive;
+      pane.classList.toggle('is-active', isActive);
+      if (isActive) {
+        pane.classList.remove('is-entering');
+        // Re-trigger the entrance animation on every tab activation.
+        void pane.offsetWidth;
+        pane.classList.add('is-entering');
+      }
+    }
+  });
+
+  requestAnimationFrame(() => {
+    if (nextTab === 'contribution-margin') {
+      if (typeof renderContributionMarginChart === 'function') renderContributionMarginChart();
+    } else if (typeof renderBudgetActualRiskChart === 'function') {
+      renderBudgetActualRiskChart();
+    }
+  });
+}
+
+function getRevenueAnalysisFiscalYear() {
+  return normalizeFiscalYearStart(S.matrixFiscalYear, S.fiscalYear);
+}
+
 function burnupRevenueTooltipUnit(value) {
   return `$${(Number(value) || 0).toLocaleString('en-US', {
     minimumFractionDigits: 0,
@@ -2053,6 +2130,540 @@ function renderBurnupChart() {
     renderBudgetActualRiskChart();
   }
 }
+
+
+function formatContributionMarginPercent(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '—';
+  return `${numeric.toLocaleString('en-US', {
+    minimumFractionDigits: numeric >= 10 ? 0 : 1,
+    maximumFractionDigits: 1,
+  })}%`;
+}
+
+function getContributionMarginSeries() {
+  const analysisFiscalYear = getRevenueAnalysisFiscalYear();
+  const source = typeof getMonthlyPlannedWorkSeries === 'function'
+    ? getMonthlyPlannedWorkSeries(analysisFiscalYear, S.matrixAssignments)
+    : { rows: [] };
+  const rows = source.rows || [];
+  const categories = ['preSales', 'serviceDeliveryLocalPs', 'serviceDeliveryIntrasourcing'];
+  const categoryLabels = {
+    preSales: 'Pre-Sales',
+    serviceDeliveryLocalPs: 'Local PS',
+    serviceDeliveryIntrasourcing: 'Intra-Sourcing',
+  };
+  const roundMoney = value => +((Number(value) || 0).toFixed(2));
+  const sumCategoryRevenue = (monthlySource, key) => categories.reduce(
+    (total, category) => total + (Number(monthlySource?.revenue?.[category]) || 0),
+    0,
+  );
+
+  const labels = rows.map(row => row.label);
+  const resourceCost = [];
+  const revenue = [];
+  const profit = [];
+  const marginPercent = [];
+  const reported = [];
+  const breakdown = categories.reduce((acc, key) => {
+    acc[key] = { cost: [], revenue: [] };
+    return acc;
+  }, {});
+
+  let lastReportedIndex = -1;
+  rows.forEach((row, index) => {
+    const monthCost = roundMoney(sumCategoryRevenue(row.planned));
+    const monthRevenue = roundMoney(sumCategoryRevenue(row.actual));
+    const isReported = Boolean(row.actual?.hasData);
+
+    categories.forEach(key => {
+      breakdown[key].cost.push(roundMoney(Number(row.planned?.revenue?.[key]) || 0));
+      breakdown[key].revenue.push(roundMoney(Number(row.actual?.revenue?.[key]) || 0));
+    });
+
+    resourceCost.push(monthCost);
+    revenue.push(isReported ? monthRevenue : null);
+    profit.push(isReported ? roundMoney(monthRevenue - monthCost) : null);
+    marginPercent.push(isReported && monthCost > 0 ? +(((monthRevenue / monthCost) * 100).toFixed(1)) : null);
+    reported.push(isReported);
+    if (isReported) lastReportedIndex = index;
+  });
+
+  const ytdSliceEnd = lastReportedIndex >= 0 ? lastReportedIndex + 1 : 0;
+  const sumMoney = values => roundMoney((values || []).slice(0, ytdSliceEnd).reduce((t, v) => t + (Number(v) || 0), 0));
+  const ytdRevenue = sumMoney(revenue.map(value => value == null ? 0 : value));
+  const ytdResourceCost = sumMoney(resourceCost);
+  const ytdProfit = roundMoney(ytdRevenue - ytdResourceCost);
+  const ytdContributionMargin = ytdResourceCost > 0 ? +(((ytdRevenue / ytdResourceCost) * 100).toFixed(1)) : null;
+
+  return {
+    fiscalYear: analysisFiscalYear,
+    labels,
+    revenue,
+    resourceCost,
+    profit,
+    marginPercent,
+    reported,
+    lastReportedIndex,
+    ytdRevenue,
+    ytdResourceCost,
+    ytdProfit,
+    ytdContributionMargin,
+    reportedMonths: reported.filter(Boolean).length,
+    latestLabel: lastReportedIndex >= 0 ? labels[lastReportedIndex] : 'No reported month',
+    breakdown,
+    categoryLabels,
+  };
+}
+
+const CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA = new Map();
+
+function contributionMarginTooltipRows(rows) {
+  return `<table class="revenue-budget-risk-kpi-tooltip__table"><tbody>${rows.map(row => `
+    <tr><th>${esc(row.label)}</th><td>${esc(row.value)}${row.note ? `<small>${esc(row.note)}</small>` : ''}</td></tr>
+  `).join('')}</tbody></table>`;
+}
+
+function buildContributionMarginKpiTooltipData(series) {
+  CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.clear();
+  const fyLabel = fiscalYearDisplayLabel(series.fiscalYear);
+  const basisNote = 'Revenue uses actual Time Sheet revenue for Pre-Sales, Local PS, and Intra-Sourcing. Resource Cost Basis uses the assigned resource value for the same categories from Resource Assignment and the applicable effective-dated Resource Revenue rate.';
+
+  CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('revenue-ytd', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Revenue YTD · ${esc(fyLabel)}</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">${esc(basisNote)}</div>
+    ${contributionMarginTooltipRows([
+      { label: 'Revenue YTD', value: formatBudgetRiskMoney(series.ytdRevenue, { exact: true }) },
+      { label: 'Latest reported month', value: series.latestLabel },
+      { label: 'Reported months', value: `${series.reportedMonths} of ${series.labels.length}` },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Revenue YTD = sum of actual Time Sheet revenue for reported fiscal months (Pre-Sales + Local PS + Intra-Sourcing).</div>
+  `);
+
+  CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('resource-cost-ytd', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Resource Cost Basis YTD · ${esc(fyLabel)}</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">${esc(basisNote)}</div>
+    ${contributionMarginTooltipRows([
+      { label: 'Resource Cost Basis YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Latest reported month', value: series.latestLabel },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Resource Cost Basis YTD = sum of assigned resource value through the latest reported month for Pre-Sales + Local PS + Intra-Sourcing.</div>
+  `);
+
+  CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('profit-ytd', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Profit YTD · ${esc(fyLabel)}</div>
+    ${contributionMarginTooltipRows([
+      { label: 'Revenue YTD', value: formatBudgetRiskMoney(series.ytdRevenue, { exact: true }) },
+      { label: 'Resource Cost Basis YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Profit YTD', value: formatBudgetRiskMoney(series.ytdProfit, { exact: true }) },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Profit = Revenue − Resource Cost Basis.</div>
+  `);
+
+  CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('margin-ytd', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Contribution Margin · ${esc(fyLabel)}</div>
+    ${contributionMarginTooltipRows([
+      { label: 'Revenue YTD', value: formatBudgetRiskMoney(series.ytdRevenue, { exact: true }) },
+      { label: 'Resource Cost Basis YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Contribution Margin', value: formatContributionMarginPercent(series.ytdContributionMargin) },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Per your requested formula: Contribution Margin = Revenue ÷ Resource Cost Basis × 100.</div>
+  `);
+
+  CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('reported-scope', `
+    <div class="revenue-budget-risk-kpi-tooltip__title">Reported Scope · ${esc(fyLabel)}</div>
+    ${contributionMarginTooltipRows([
+      { label: 'Categories included', value: 'Pre-Sales · Local PS · Intra-Sourcing' },
+      { label: 'Latest reported month', value: series.latestLabel },
+      { label: 'Reported months', value: `${series.reportedMonths} of ${series.labels.length}` },
+    ])}
+    <div class="revenue-budget-risk-kpi-tooltip__formula">The section follows the global Matrix FY selector. Reported months are determined from Time Sheet data within the selected fiscal year.</div>
+  `);
+}
+
+function getContributionMarginKpiTooltipElement() {
+  let tooltip = document.getElementById('contributionMarginKpiTooltip');
+  if (tooltip) return tooltip;
+  tooltip = document.createElement('div');
+  tooltip.id = 'contributionMarginKpiTooltip';
+  tooltip.className = 'revenue-budget-risk-kpi-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function showContributionMarginKpiTooltip(trigger) {
+  const key = trigger?.dataset?.contributionMarginKpiTooltip;
+  const html = key ? CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.get(key) : '';
+  if (!html) return;
+  const tooltip = getContributionMarginKpiTooltipElement();
+  tooltip.innerHTML = html;
+  positionBudgetRiskKpiTooltip(tooltip, trigger);
+}
+
+function hideContributionMarginKpiTooltip() {
+  document.getElementById('contributionMarginKpiTooltip')?.classList.remove('is-visible');
+}
+
+function bindContributionMarginKpiTooltips(container) {
+  container?.querySelectorAll('[data-contribution-margin-kpi-tooltip]').forEach(trigger => {
+    trigger.addEventListener('mouseenter', () => showContributionMarginKpiTooltip(trigger));
+    trigger.addEventListener('mouseleave', hideContributionMarginKpiTooltip);
+    trigger.addEventListener('focus', () => showContributionMarginKpiTooltip(trigger));
+    trigger.addEventListener('blur', hideContributionMarginKpiTooltip);
+  });
+}
+
+function renderContributionMarginSummary(series) {
+  const container = document.getElementById('contributionMarginSummary');
+  if (!container) return;
+  const profitClass = series.ytdProfit >= 0 ? 'is-favorable' : 'is-positive';
+  container.innerHTML = `
+    <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--revenue" data-contribution-margin-kpi-tooltip="revenue-ytd" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Revenue YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdRevenue))}</div>
+      <div class="revenue-budget-risk-kpi__meta">Actual revenue through ${esc(series.latestLabel)}</div>
+    </div>
+    <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--cost" data-contribution-margin-kpi-tooltip="resource-cost-ytd" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Resource Cost Basis YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdResourceCost))}</div>
+      <div class="revenue-budget-risk-kpi__meta">Assigned resource value through ${esc(series.latestLabel)}</div>
+    </div>
+    <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--profit revenue-budget-risk-kpi--risk ${profitClass}" data-contribution-margin-kpi-tooltip="profit-ytd" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Profit YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdProfit))}</div>
+      <div class="revenue-budget-risk-kpi__meta">Revenue − Resource Cost Basis</div>
+    </div>
+    <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--margin revenue-budget-risk-kpi--attainment" data-contribution-margin-kpi-tooltip="margin-ytd" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Contribution Margin <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(formatContributionMarginPercent(series.ytdContributionMargin))}</div>
+      <div class="revenue-budget-risk-kpi__meta">Revenue ÷ Resource Cost Basis × 100</div>
+    </div>
+    <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--scope" data-contribution-margin-kpi-tooltip="reported-scope" tabindex="0">
+      <div class="revenue-budget-risk-kpi__label">Reported Scope <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__value">${esc(series.latestLabel)}</div>
+      <div class="revenue-budget-risk-kpi__meta">${series.reportedMonths} of ${series.labels.length} months reported</div>
+    </div>
+  `;
+
+  buildContributionMarginKpiTooltipData(series);
+  bindContributionMarginKpiTooltips(container);
+}
+
+function renderContributionMarginStatus(series) {
+  const element = document.getElementById('contributionMarginStatus');
+  if (!element) return;
+  if (series.lastReportedIndex < 0) {
+    element.innerHTML = '<span class="revenue-budget-risk-status__period"><strong>No Time Sheet revenue reported for the selected fiscal year yet</strong></span>';
+    return;
+  }
+  const profitClass = series.ytdProfit >= 0 ? 'is-favorable' : 'is-at-risk';
+  const profitLabel = series.ytdProfit >= 0 ? 'YTD profit' : 'YTD loss';
+  element.innerHTML = `
+    <span class="revenue-budget-risk-status__period">Revenue through <strong>${esc(series.latestLabel)}</strong></span>
+    <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
+    <span class="revenue-budget-risk-status__variance ${profitClass}"><strong>${esc(formatBudgetRiskMoney(Math.abs(series.ytdProfit)))}</strong> ${esc(profitLabel)}</span>
+    <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
+    <span><strong>${esc(formatContributionMarginPercent(series.ytdContributionMargin))}</strong> contribution margin</span>
+  `;
+}
+
+function toggleContributionMarginTable(forceExpanded) {
+  const panel = document.getElementById('contributionMarginTablePanel');
+  const button = document.getElementById('contributionMarginTableToggle');
+  if (!panel || !button) return;
+  const currentlyExpanded = button.getAttribute('aria-expanded') === 'true';
+  const expanded = typeof forceExpanded === 'boolean' ? forceExpanded : !currentlyExpanded;
+  panel.hidden = !expanded;
+  button.setAttribute('aria-expanded', String(expanded));
+  const meta = button.querySelector('.revenue-budget-risk-table-toggle__meta');
+  if (meta) meta.textContent = expanded ? 'Collapse' : 'Expand';
+}
+
+function renderContributionMarginTable(series) {
+  const body = document.getElementById('contributionMarginTableBody');
+  if (!body) return;
+  body.innerHTML = series.labels.map((label, index) => `
+    <tr class="${index === series.lastReportedIndex ? 'is-latest-reported' : ''}">
+      <td>${esc(label)}</td>
+      <td>${esc(formatBudgetRiskMoney(series.resourceCost[index]))}</td>
+      <td class="${series.reported[index] ? '' : 'is-not-reported'}">${series.reported[index] ? esc(formatBudgetRiskMoney(series.revenue[index])) : '—'}</td>
+      <td class="${series.reported[index] ? (Number(series.profit[index]) >= 0 ? 'risk-favorable' : 'risk-positive') : 'is-not-reported'}">${series.reported[index] ? esc(formatBudgetRiskMoney(series.profit[index])) : '—'}</td>
+      <td class="${series.reported[index] ? '' : 'is-not-reported'}">${series.reported[index] ? esc(formatContributionMarginPercent(series.marginPercent[index])) : '—'}</td>
+    </tr>
+  `).join('');
+}
+
+function renderContributionMarginBasis(series) {
+  const element = document.getElementById('contributionMarginBasis');
+  if (!element) return;
+  element.innerHTML = `
+    <strong>Calculation basis:</strong>
+    Revenue = actual Time Sheet revenue for <strong>Pre-Sales + Local PS + Intra-Sourcing</strong>.
+    Resource Cost Basis = assigned resource value for the same categories from Resource Assignment
+    (${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable hourly rate).
+    Profit = Revenue − Resource Cost Basis.
+    Contribution Margin = Revenue ÷ Resource Cost Basis × 100 (per your requested formula).
+    The section follows the global Matrix FY selector.
+  `;
+}
+
+function getContributionMarginTooltipElement(chart) {
+  const element = getOverviewChartTooltipElement(chart, 'contribution-margin');
+  element.classList.add('revenue-budget-risk-tooltip');
+  return element;
+}
+
+function renderContributionMarginTooltip(context, series) {
+  const { chart, tooltip } = context;
+  const element = getContributionMarginTooltipElement(chart);
+  const index = tooltip?.dataPoints?.[0]?.dataIndex;
+
+  if (!tooltip || tooltip.opacity === 0 || index === undefined) {
+    hideOverviewChartTooltip(element);
+    return;
+  }
+
+  const rows = [
+    { label: 'Resource Cost Basis', value: formatBudgetRiskMoney(series.resourceCost[index], { exact: true }), emphasis: true },
+    { label: '↳ Pre-Sales cost basis', value: formatBudgetRiskMoney(series.breakdown.preSales.cost[index], { exact: true }) },
+    { label: '↳ Local PS cost basis', value: formatBudgetRiskMoney(series.breakdown.serviceDeliveryLocalPs.cost[index], { exact: true }) },
+    { label: '↳ Intra-Sourcing cost basis', value: formatBudgetRiskMoney(series.breakdown.serviceDeliveryIntrasourcing.cost[index], { exact: true }) },
+    { label: 'Revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.revenue[index], { exact: true }) : 'Not reported', emphasis: true },
+    { label: '↳ Pre-Sales revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.breakdown.preSales.revenue[index], { exact: true }) : '—' },
+    { label: '↳ Local PS revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.breakdown.serviceDeliveryLocalPs.revenue[index], { exact: true }) : '—' },
+    { label: '↳ Intra-Sourcing revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.breakdown.serviceDeliveryIntrasourcing.revenue[index], { exact: true }) : '—' },
+    { label: 'Profit', value: series.reported[index] ? formatBudgetRiskMoney(series.profit[index], { exact: true }) : 'Not reported', risk: true },
+    { label: 'Contribution Margin', value: series.reported[index] ? formatContributionMarginPercent(series.marginPercent[index]) : 'Not reported', emphasis: true },
+  ];
+
+  element.innerHTML = `
+    <div class="dashboard-chart-table-tooltip__title">${esc(series.labels[index])}</div>
+    <table class="dashboard-chart-tooltip-table"><tbody>
+      ${rows.map(row => `
+        <tr class="${row.emphasis ? 'is-emphasis' : ''} ${row.risk ? (series.reported[index] && Number(series.profit[index]) >= 0 ? 'is-risk-favorable' : 'is-risk-positive') : ''}">
+          <th>${esc(row.label)}</th>
+          <td>${esc(row.value)}</td>
+        </tr>
+      `).join('')}
+    </tbody></table>
+  `;
+
+  positionOverviewChartTooltip(element, chart, tooltip);
+}
+
+function renderContributionMarginChart() {
+  if (getRevenueAnalyticsActiveTab() !== 'contribution-margin') return;
+  const element = document.getElementById('contributionMarginChart');
+  if (!element || typeof Chart === 'undefined') return;
+
+  if (S.charts.contributionMargin) {
+    S.charts.contributionMargin.destroy();
+    S.charts.contributionMargin = null;
+  }
+
+  const series = getContributionMarginSeries();
+  const fyLabel = fiscalYearDisplayLabel(series.fiscalYear);
+  updateRevenueAnalyticsHeader('contribution-margin', fyLabel, series.latestLabel);
+
+  renderContributionMarginSummary(series);
+  renderContributionMarginStatus(series);
+  renderContributionMarginTable(series);
+  renderContributionMarginBasis(series);
+
+  const monetaryMax = Math.max(1,
+    ...series.resourceCost,
+    ...series.revenue.map(value => Number(value) || 0),
+    ...series.profit.map(value => Math.abs(Number(value) || 0)),
+  );
+  const monetaryMin = Math.min(0, ...series.profit.map(value => Number(value) || 0));
+  const percentMax = Math.max(125, ...series.marginPercent.map(value => Number(value) || 0));
+
+  const futurePeriodPlugin = {
+    id: 'contributionMarginFuturePeriod',
+    beforeDatasetsDraw(chart) {
+      if (series.lastReportedIndex < 0 || series.lastReportedIndex >= series.labels.length - 1) return;
+      const xScale = chart.scales.x;
+      const chartArea = chart.chartArea;
+      if (!xScale || !chartArea) return;
+      const currentX = xScale.getPixelForTick(series.lastReportedIndex);
+      const nextX = xScale.getPixelForTick(series.lastReportedIndex + 1);
+      const startX = (currentX + nextX) / 2;
+      const { ctx } = chart;
+      ctx.save();
+      ctx.fillStyle = 'rgba(248, 250, 252, 0.82)';
+      ctx.fillRect(startX, chartArea.top, chartArea.right - startX, chartArea.bottom - chartArea.top);
+      ctx.strokeStyle = 'rgba(148, 163, 184, 0.55)';
+      ctx.setLineDash([4, 4]);
+      ctx.beginPath();
+      ctx.moveTo(startX, chartArea.top);
+      ctx.lineTo(startX, chartArea.bottom);
+      ctx.stroke();
+      ctx.setLineDash([]);
+      ctx.fillStyle = '#94A3B8';
+      ctx.font = '600 9px sans-serif';
+      ctx.textAlign = 'left';
+      ctx.fillText('Future / not reported', Math.min(startX + 8, chartArea.right - 92), chartArea.top + 13);
+      ctx.restore();
+    },
+  };
+
+  S.charts.contributionMargin = new Chart(element.getContext('2d'), {
+    type: 'bar',
+    plugins: [futurePeriodPlugin],
+    data: {
+      labels: series.labels,
+      datasets: [
+        {
+          type: 'bar',
+          label: 'Resource cost basis',
+          data: series.resourceCost,
+          yAxisID: 'yMoney',
+          backgroundColor: 'rgba(37, 99, 235, 0.72)',
+          borderColor: '#1D4ED8',
+          borderWidth: 0,
+          borderRadius: 5,
+          borderSkipped: false,
+          maxBarThickness: 18,
+          categoryPercentage: 0.74,
+          barPercentage: 0.88,
+          order: 4,
+        },
+        {
+          type: 'bar',
+          label: 'Revenue',
+          data: series.revenue,
+          yAxisID: 'yMoney',
+          backgroundColor: 'rgba(16, 185, 129, 0.78)',
+          borderColor: '#059669',
+          borderWidth: 0,
+          borderRadius: 5,
+          borderSkipped: false,
+          maxBarThickness: 18,
+          categoryPercentage: 0.74,
+          barPercentage: 0.88,
+          order: 4,
+        },
+        {
+          type: 'line',
+          label: 'Profit',
+          data: series.profit,
+          yAxisID: 'yMoney',
+          borderColor: '#B45309',
+          backgroundColor: 'transparent',
+          borderWidth: 2,
+          tension: 0.24,
+          pointRadius: 2.5,
+          pointHoverRadius: 4.5,
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderWidth: 1.6,
+          spanGaps: false,
+          order: 2,
+        },
+        {
+          type: 'line',
+          label: 'Contribution margin',
+          data: series.marginPercent,
+          yAxisID: 'yPercent',
+          borderColor: '#7C3AED',
+          backgroundColor: 'transparent',
+          borderDash: [4, 4],
+          borderWidth: 2,
+          tension: 0.24,
+          pointRadius: 2.4,
+          pointHoverRadius: 4.4,
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderWidth: 1.5,
+          spanGaps: false,
+          order: 1,
+        },
+      ],
+    },
+    options: {
+      responsive: true,
+      maintainAspectRatio: false,
+      interaction: { mode: 'index', intersect: false },
+      layout: { padding: { top: 10, right: 8, bottom: 0, left: 4 } },
+      animation: { duration: 720, easing: 'easeOutQuart' },
+      plugins: {
+        legend: {
+          display: true,
+          position: 'bottom',
+          labels: {
+            boxWidth: 9,
+            boxHeight: 9,
+            usePointStyle: true,
+            pointStyle: 'circle',
+            padding: 18,
+            color: '#475569',
+            font: { size: 10, weight: '600' },
+          },
+        },
+        tooltip: {
+          enabled: false,
+          external: context => renderContributionMarginTooltip(context, series),
+        },
+      },
+      scales: {
+        x: {
+          stacked: false,
+          grid: { display: false },
+          border: { color: '#E2E8F0' },
+          ticks: {
+            color: '#475569',
+            font: { size: 10, weight: '600' },
+            maxRotation: 0,
+            minRotation: 0,
+            padding: 8,
+          },
+        },
+        yMoney: {
+          position: 'left',
+          beginAtZero: true,
+          suggestedMin: monetaryMin < 0 ? monetaryMin * 1.18 : 0,
+          suggestedMax: monetaryMax * 1.16,
+          border: { display: false },
+          grid: {
+            color: context => Number(context.tick.value) === 0 ? '#CBD5E1' : '#EEF2F7',
+            lineWidth: context => Number(context.tick.value) === 0 ? 1.2 : 1,
+          },
+          ticks: {
+            color: '#64748B',
+            font: { size: 9 },
+            padding: 6,
+            callback: burnupRevenueAxisUnit,
+          },
+          title: {
+            display: true,
+            text: 'Revenue / cost / profit (USD)',
+            color: '#94A3B8',
+            font: { size: 10, weight: '600' },
+          },
+        },
+        yPercent: {
+          position: 'right',
+          beginAtZero: true,
+          suggestedMax: percentMax,
+          border: { display: false },
+          grid: { drawOnChartArea: false },
+          ticks: {
+            color: '#64748B',
+            font: { size: 9 },
+            padding: 6,
+            callback: value => `${Number(value) || 0}%`,
+          },
+          title: {
+            display: true,
+            text: 'Contribution margin (%)',
+            color: '#94A3B8',
+            font: { size: 10, weight: '600' },
+          },
+        },
+      },
+    },
+  });
+}
+
 
 function formatBudgetRiskMoney(value, { exact = false } = {}) {
   const numeric = Number(value) || 0;
@@ -2179,7 +2790,7 @@ function budgetRiskKpiTooltipRows(rows) {
 
 function buildBudgetRiskKpiTooltipData(series) {
   BUDGET_RISK_KPI_TOOLTIP_DATA.clear();
-  const fyLabel = fiscalYearDisplayLabel(S.fiscalYear);
+  const fyLabel = fiscalYearDisplayLabel(getRevenueAnalysisFiscalYear());
   const latestLabel = series.lastReportedIndex >= 0
     ? series.labels[series.lastReportedIndex]
     : 'No reported month';
@@ -2526,6 +3137,10 @@ function renderBudgetRiskTooltip(context, series) {
 }
 
 function renderBudgetActualRiskChart() {
+  if (getRevenueAnalyticsActiveTab() === 'contribution-margin') {
+    if (typeof renderContributionMarginChart === 'function') renderContributionMarginChart();
+    return;
+  }
   const element = document.getElementById('budgetActualRiskChart');
   if (!element || typeof Chart === 'undefined') return;
 
@@ -2535,19 +3150,12 @@ function renderBudgetActualRiskChart() {
   }
 
   const series = getBudgetActualRiskSeries();
-  const fyLabel = fiscalYearDisplayLabel(S.fiscalYear);
-  const title = document.getElementById('budgetActualRiskTitle');
-  const subtitle = document.getElementById('budgetActualRiskSubtitle');
-  const badge = document.getElementById('budgetActualRiskFyBadge');
+  const fyLabel = fiscalYearDisplayLabel(getRevenueAnalysisFiscalYear());
   const latestLabel = series.lastReportedIndex >= 0
     ? series.labels[series.lastReportedIndex]
     : 'no reported Time Sheet month';
 
-  if (title) title.textContent = `PS Revenue · ${fyLabel} YTD · Budget vs Actual vs Risk`;
-  if (subtitle) {
-    subtitle.textContent = `Monthly Local PS + Intra-Sourcing revenue plan, Time Sheet actual through ${latestLabel}, and outstanding revenue exposure.`;
-  }
-  if (badge) badge.textContent = fyLabel;
+  updateRevenueAnalyticsHeader('budget-risk', fyLabel, latestLabel);
 
   renderBudgetRiskSummary(series);
   renderBudgetRiskStatus(series);
