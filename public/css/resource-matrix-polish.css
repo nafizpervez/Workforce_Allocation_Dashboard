@@ -1,0 +1,550 @@
+/* ================================================================
+   RESOURCE ASSIGNMENT MATRIX — focused UI refinement
+   Visual-only overrides for the Resource Assignment card.
+   ================================================================ */
+
+.resource-assignment-card-shell {
+  border: 1px solid #dfe7f1;
+  border-radius: 14px !important;
+  background: #ffffff;
+  box-shadow: 0 6px 20px rgba(15, 23, 42, 0.06) !important;
+}
+
+.resource-assignment-card-header {
+  padding: 17px 20px !important;
+  border-bottom: 1px solid #e7edf5 !important;
+  background: linear-gradient(180deg, #ffffff 0%, #fbfdff 100%);
+}
+
+.resource-assignment-header-row {
+  display: grid;
+  grid-template-columns: minmax(310px, 1fr) max-content;
+  align-items: center;
+  gap: 18px;
+}
+
+.resource-assignment-heading > div:first-child {
+  width: 36px !important;
+  height: 36px !important;
+  border: 1px solid #dbeafe;
+  border-radius: 10px !important;
+  background: #eff6ff !important;
+}
+
+.resource-assignment-heading h2 {
+  font-size: 15px !important;
+  line-height: 1.25;
+  letter-spacing: -0.01em;
+}
+
+.resource-assignment-heading-copy p {
+  margin-top: 3px !important;
+  color: #64748b !important;
+  font-size: 11px !important;
+  line-height: 1.35;
+}
+
+.resource-assignment-header-actions {
+  gap: 7px !important;
+}
+
+.resource-matrix-tab-btn,
+.resource-matrix-action-btn {
+  height: 31px;
+  padding: 0 12px;
+  border-color: #dfe7f1;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #475569;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.02);
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.resource-matrix-tab-btn:hover,
+.resource-matrix-action-btn:hover {
+  border-color: #bfdbfe;
+  background: #f8fbff;
+  color: #1d4ed8;
+}
+
+.resource-matrix-tab-btn.active {
+  border-color: #2563eb;
+  background: #2563eb;
+  color: #ffffff;
+  box-shadow: 0 3px 8px rgba(37, 99, 235, 0.18);
+}
+
+/* Filter toolbar */
+.matrix-filter-bar {
+  padding: 10px 14px 9px !important;
+  border-bottom: 1px solid #e7edf5 !important;
+  background: #f8fafc !important;
+}
+
+.matrix-filter-main-row {
+  gap: 10px;
+  align-items: end;
+}
+
+.matrix-filter-control {
+  display: flex;
+  flex-direction: column;
+  align-items: stretch;
+  gap: 4px;
+}
+
+.matrix-filter-control label {
+  color: #64748b !important;
+  font-size: 9px !important;
+  font-weight: 750 !important;
+  letter-spacing: 0.035em;
+  line-height: 1;
+  text-transform: uppercase;
+}
+
+.matrix-filter-control select {
+  height: 32px;
+  padding: 0 28px 0 9px !important;
+  border: 1px solid #d9e2ec !important;
+  border-radius: 7px !important;
+  background-color: #ffffff !important;
+  color: #334155;
+  font-size: 11px !important;
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.02);
+}
+
+.matrix-filter-control select:focus {
+  border-color: #93c5fd !important;
+  box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.08);
+  outline: none;
+}
+
+.assignment-download-btn {
+  height: 32px;
+  border-color: #bfdbfe;
+  border-radius: 8px;
+  background: #ffffff;
+  color: #1d4ed8;
+  box-shadow: none;
+  font-size: 11px;
+}
+
+.assignment-download-btn:hover {
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.matrix-filter-sort-row {
+  gap: 6px;
+  margin-top: 7px;
+}
+
+.matrix-filter-sort-row .flt-sort-btn {
+  min-height: 27px;
+  padding: 0 9px;
+  border: 1px solid #e2e8f0;
+  border-radius: 7px;
+  background: #ffffff;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.matrix-filter-sort-row .flt-sort-btn:hover,
+.matrix-filter-sort-row .flt-sort-btn.active {
+  border-color: #bfdbfe;
+  background: #eff6ff;
+  color: #1d4ed8;
+}
+
+/* Matrix viewport */
+.resource-assignment-card-shell .matrix-wrap {
+  max-height: 560px;
+  border-top: 0;
+  background: #ffffff;
+  scrollbar-color: #94a3b8 #eef2f7;
+  scrollbar-width: thin;
+}
+
+.resource-assignment-card-shell .matrix-wrap::-webkit-scrollbar {
+  width: 10px;
+  height: 10px;
+}
+
+.resource-assignment-card-shell .matrix-wrap::-webkit-scrollbar-track {
+  background: #f1f5f9;
+}
+
+.resource-assignment-card-shell .matrix-wrap::-webkit-scrollbar-thumb {
+  border: 2px solid #f1f5f9;
+  border-radius: 999px;
+  background: #94a3b8;
+}
+
+/* Header hierarchy */
+.resource-assignment-card-shell table.matrix thead tr.months th {
+  border-bottom: 1px solid #dbe4ef;
+  background: #f8fafc;
+  color: #334155;
+}
+
+.resource-assignment-card-shell table.matrix thead tr.weeks th {
+  border-bottom: 1px solid #dbe4ef;
+  background: #fbfdff;
+  color: #64748b;
+  font-size: 10px;
+  font-weight: 650;
+}
+
+.resource-assignment-card-shell .matrix-month-heading .matrix-month-label {
+  color: #334155;
+  font-size: 11px;
+  font-weight: 750;
+  letter-spacing: -0.005em;
+}
+
+.resource-assignment-card-shell .matrix-month-heading .matrix-month-allocation {
+  color: #2563eb;
+  font-weight: 800;
+}
+
+.resource-assignment-card-shell .matrix-month-heading .matrix-month-metrics {
+  gap: 5px;
+  margin-top: 4px;
+}
+
+.resource-assignment-card-shell .matrix-month-heading .matrix-month-revenue,
+.resource-assignment-card-shell .matrix-month-heading .matrix-month-unallocated {
+  font-size: 9px;
+  font-weight: 750;
+}
+
+.resource-assignment-card-shell .matrix-month-heading .matrix-month-revenue {
+  color: #0f766e;
+}
+
+.resource-assignment-card-shell .matrix-month-heading .matrix-month-unallocated {
+  color: #b45309;
+}
+
+/* Left summary block */
+.resource-assignment-card-shell .sticky-name,
+.resource-assignment-card-shell .sticky-sn,
+.resource-assignment-card-shell .sticky-allocation-cell,
+.resource-assignment-card-shell .sticky-revenue-cell {
+  border-right-color: #e2e8f0 !important;
+}
+
+.resource-assignment-card-shell .sticky-revenue-group {
+  box-shadow: 7px 0 12px rgba(15, 23, 42, 0.055);
+}
+
+.resource-assignment-card-shell tr.row-even .matrix-fixed-cell,
+.resource-assignment-card-shell tr.row-even td.cell {
+  background: #ffffff;
+}
+
+.resource-assignment-card-shell tr.row-odd .matrix-fixed-cell,
+.resource-assignment-card-shell tr.row-odd td.cell {
+  background: #fbfcfe;
+}
+
+.resource-assignment-card-shell tr.row-even .matrix-allocation-cell,
+.resource-assignment-card-shell tr.row-odd .matrix-allocation-cell {
+  background: #f8fafc;
+}
+
+.resource-assignment-card-shell tr.row-even .matrix-revenue-cell,
+.resource-assignment-card-shell tr.row-odd .matrix-revenue-cell {
+  background: #f2f7ff;
+}
+
+.resource-assignment-card-shell tr.matrix-row:hover .matrix-fixed-cell,
+.resource-assignment-card-shell tr.matrix-row:hover td.cell {
+  background: #f5f9ff !important;
+}
+
+/* Week cells: lighter grid, stronger month boundary */
+.resource-assignment-card-shell td.cell {
+  min-height: 56px;
+  padding: 5px 5px 4px;
+  border-right: 1px solid #eef2f7;
+  border-bottom: 1px solid #eef2f7;
+  background-clip: padding-box;
+}
+
+.resource-assignment-card-shell td.cell:hover {
+  background: #f6f9ff !important;
+}
+
+.resource-assignment-card-shell th.month-end,
+.resource-assignment-card-shell td.month-end {
+  border-right: 1px solid #cbd5e1 !important;
+}
+
+.resource-assignment-card-shell td.cell .cell-add {
+  right: 4px;
+  bottom: 4px;
+  width: 16px;
+  height: 16px;
+  border-radius: 5px;
+  background: #2563eb;
+  box-shadow: 0 2px 5px rgba(37, 99, 235, 0.18);
+  font-size: 11px;
+}
+
+/* Project assignment cards: every project receives its own stable visual color. */
+.resource-assignment-card-shell .chip {
+  margin-bottom: 4px;
+  padding: 4px 6px 4px 7px;
+  border: 1px solid color-mix(in srgb, var(--matrix-project-accent, #2563eb) 28%, transparent);
+  border-left: 3px solid var(--matrix-project-accent, #2563eb);
+  border-radius: 6px;
+  background: var(--matrix-project-tint, #eff6ff);
+  box-shadow: 0 1px 1px rgba(15, 23, 42, 0.025);
+  color: #334155;
+  font-size: 10px;
+  line-height: 1.2;
+  transform: none;
+  transition: border-color 110ms ease, box-shadow 110ms ease, background 110ms ease;
+}
+
+.resource-assignment-card-shell .chip:hover {
+  z-index: 2;
+  border-color: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 52%, transparent);
+  background: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 11%, white);
+  box-shadow: 0 3px 8px rgba(15, 23, 42, 0.07);
+  transform: none;
+}
+
+.resource-assignment-card-shell .chip .chip-code {
+  color: var(--matrix-project-text, #1e40af) !important;
+  font-family: inherit;
+  font-size: 10px !important;
+  font-weight: 800;
+  letter-spacing: 0;
+}
+
+.resource-assignment-card-shell .chip .chip-values {
+  gap: 0;
+}
+
+.resource-assignment-card-shell .chip .chip-pct {
+  color: #475569 !important;
+  font-size: 8.5px;
+  font-weight: 750;
+  opacity: 1;
+}
+
+.resource-assignment-card-shell .chip .chip-revenue {
+  color: #0f766e !important;
+  font-size: 8px;
+  font-weight: 750;
+}
+
+.resource-assignment-card-shell .chip .chip-revenue.is-excluded {
+  color: #94a3b8 !important;
+}
+
+/* General Admin remains readable even when its generated tint is pale. */
+.resource-assignment-card-shell .chip.is-general-admin .chip-code,
+.resource-assignment-card-shell .chip.is-general-admin .chip-pct {
+  color: #111827 !important;
+}
+
+.resource-assignment-card-shell .chip.is-selected {
+  border-color: #2563eb;
+  box-shadow: 0 0 0 2px rgba(37, 99, 235, 0.38), 0 4px 10px rgba(37, 99, 235, 0.12);
+  transform: none;
+}
+
+.resource-assignment-card-shell .chip:focus-visible {
+  outline: 2px solid #2563eb;
+  outline-offset: 1px;
+}
+
+/* Total/average row: compact and clearly separated from resource rows. */
+.resource-assignment-card-shell table.matrix tbody tr.matrix-total-row > td {
+  border-bottom: 1px solid #cbd5e1;
+  background: #eef4fb !important;
+  color: #334155;
+}
+
+.resource-assignment-card-shell table.matrix tbody tr.matrix-total-row .matrix-revenue-cell {
+  background: #e6f0ff !important;
+}
+
+/* Keep the resource identity column calm and readable. */
+.resource-assignment-card-shell .matrix-resource-name {
+  color: #0f172a;
+  font-weight: 700;
+}
+
+.resource-assignment-card-shell .matrix-resource-designation,
+.resource-assignment-card-shell .matrix-resource-code {
+  color: #64748b;
+}
+
+@media (max-width: 1550px) {
+  .resource-assignment-header-row {
+    grid-template-columns: minmax(280px, 1fr) max-content;
+    gap: 12px;
+  }
+
+  .resource-assignment-header-actions {
+    gap: 5px !important;
+  }
+
+  .resource-matrix-tab-btn,
+  .resource-matrix-action-btn {
+    padding: 0 9px;
+    font-size: 10px;
+  }
+}
+
+@media (max-width: 1180px) {
+  .resource-assignment-header-row {
+    grid-template-columns: 1fr;
+    align-items: start;
+  }
+
+  .resource-assignment-header-actions {
+    justify-content: flex-start;
+    overflow-x: auto;
+    padding-bottom: 2px;
+  }
+}
+
+/* ================================================================
+   RESOURCE MATRIX — CRISP SUMMARY HEADERS + HIGH-CONTRAST PROJECTS
+   ================================================================ */
+.resource-assignment-card-shell .matrix-summary-group {
+  color: #111827 !important;
+  font-weight: 800 !important;
+  letter-spacing: 0 !important;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.resource-assignment-card-shell .matrix-allocation-group {
+  background: #e5e7eb !important;
+  color: #111827 !important;
+}
+
+.resource-assignment-card-shell .matrix-revenue-group {
+  background: #dbeafe !important;
+  color: #111827 !important;
+}
+
+.resource-assignment-card-shell .matrix-summary-subheading,
+.resource-assignment-card-shell .matrix-summary-subheading span {
+  color: #111827 !important;
+  font-weight: 750 !important;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.resource-assignment-card-shell .matrix-allocation-subheading {
+  background: #f3f4f6 !important;
+}
+
+.resource-assignment-card-shell .matrix-revenue-subheading {
+  background: #eff6ff !important;
+}
+
+.resource-assignment-card-shell .matrix-summary-cell,
+.resource-assignment-card-shell .matrix-allocation-cell,
+.resource-assignment-card-shell .matrix-revenue-cell {
+  color: #111827 !important;
+  font-weight: 650;
+  opacity: 1 !important;
+  text-shadow: none !important;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+.resource-assignment-card-shell table.matrix tbody tr.matrix-total-row > td,
+.resource-assignment-card-shell table.matrix tbody tr.matrix-total-row .matrix-revenue-cell {
+  color: #111827 !important;
+}
+
+.resource-assignment-card-shell .sticky-revenue-group {
+  box-shadow: 5px 0 8px rgba(15, 23, 42, 0.035);
+}
+
+/* Keep each project distinct, but render the cards in very light pastel tones. */
+.resource-assignment-card-shell .chip {
+  border-color: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 24%, #ffffff);
+  border-left-width: 2px;
+  border-left-color: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 42%, #ffffff);
+  background: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 3.75%, #ffffff);
+  box-shadow: none;
+}
+
+.resource-assignment-card-shell .chip:hover {
+  border-color: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 34%, #ffffff);
+  border-left-color: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 55%, #ffffff);
+  background: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 6%, #ffffff);
+  box-shadow: 0 2px 6px rgba(15, 23, 42, 0.045);
+}
+
+.resource-assignment-card-shell .chip .chip-code {
+  color: color-mix(in srgb, var(--matrix-project-accent, #2563eb) 68%, #0f172a) !important;
+  font-weight: 800;
+}
+
+.resource-assignment-card-shell .chip .chip-pct {
+  color: #1f2937 !important;
+  font-weight: 800;
+}
+
+.resource-assignment-card-shell .chip .chip-revenue {
+  color: #0f766e !important;
+  font-weight: 800;
+}
+
+.resource-assignment-card-shell .chip.is-general-admin .chip-code,
+.resource-assignment-card-shell .chip.is-general-admin .chip-pct,
+.resource-assignment-card-shell .chip.is-general-admin .chip-revenue,
+.resource-assignment-card-shell .chip.is-general-admin .chip-revenue.is-excluded {
+  color: #111827 !important;
+  font-weight: 800;
+}
+
+
+/* ================================================================
+   RESOURCE MATRIX — RESTORE ORIGINAL ALLOCATION / REVENUE PALETTE
+   ================================================================ */
+.resource-assignment-card-shell .matrix-summary-group {
+  color: #ffffff !important;
+  font-weight: 600 !important;
+  letter-spacing: 0.01em !important;
+}
+
+.resource-assignment-card-shell .matrix-allocation-group {
+  background: #64748b !important;
+  color: #ffffff !important;
+}
+
+.resource-assignment-card-shell .matrix-revenue-group {
+  background: #2563eb !important;
+  color: #ffffff !important;
+}
+
+.resource-assignment-card-shell .matrix-summary-subheading,
+.resource-assignment-card-shell .matrix-summary-subheading span {
+  color: #334155 !important;
+  font-weight: 600 !important;
+}
+
+.resource-assignment-card-shell .matrix-allocation-subheading {
+  background: #f8fafc !important;
+}
+
+.resource-assignment-card-shell .matrix-revenue-subheading {
+  background: #dbeafe !important;
+}

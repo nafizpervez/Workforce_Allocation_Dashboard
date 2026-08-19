@@ -649,18 +649,109 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
   return allocationCells + revenueCells;
 }
 
-function isYellowAssignmentColor(value) {
-  const raw = String(value || '').trim();
-  const match = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
-  if (!match) return false;
+const MATRIX_PROJECT_COLOR_PALETTE = Object.freeze([
+  Object.freeze({ accent: '#2563EB', text: '#1D4ED8' }), // blue
+  Object.freeze({ accent: '#EA580C', text: '#C2410C' }), // orange
+  Object.freeze({ accent: '#059669', text: '#047857' }), // emerald
+  Object.freeze({ accent: '#7C3AED', text: '#6D28D9' }), // violet
+  Object.freeze({ accent: '#DB2777', text: '#BE185D' }), // pink
+  Object.freeze({ accent: '#0891B2', text: '#0E7490' }), // cyan
+  Object.freeze({ accent: '#CA8A04', text: '#A16207' }), // amber
+  Object.freeze({ accent: '#4F46E5', text: '#4338CA' }), // indigo
+  Object.freeze({ accent: '#65A30D', text: '#4D7C0F' }), // lime
+  Object.freeze({ accent: '#C026D3', text: '#A21CAF' }), // fuchsia
+  Object.freeze({ accent: '#0284C7', text: '#0369A1' }), // sky
+  Object.freeze({ accent: '#DC2626', text: '#B91C1C' }), // red
+  Object.freeze({ accent: '#0F766E', text: '#115E59' }), // teal
+  Object.freeze({ accent: '#9333EA', text: '#7E22CE' }), // purple
+  Object.freeze({ accent: '#D97706', text: '#B45309' }), // warm amber
+  Object.freeze({ accent: '#16A34A', text: '#15803D' }), // green
+  Object.freeze({ accent: '#E11D48', text: '#BE123C' }), // rose
+  Object.freeze({ accent: '#0369A1', text: '#075985' }), // deep sky
+  Object.freeze({ accent: '#A21CAF', text: '#86198F' }), // magenta
+  Object.freeze({ accent: '#B45309', text: '#92400E' }), // brown
+  Object.freeze({ accent: '#047857', text: '#065F46' }), // deep emerald
+  Object.freeze({ accent: '#6D28D9', text: '#5B21B6' }), // deep violet
+  Object.freeze({ accent: '#BE123C', text: '#9F1239' }), // deep rose
+  Object.freeze({ accent: '#0E7490', text: '#155E75' }), // deep cyan
+]);
 
-  let hex = match[1];
-  if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
-  const r = parseInt(hex.slice(0, 2), 16);
-  const g = parseInt(hex.slice(2, 4), 16);
-  const b = parseInt(hex.slice(4, 6), 16);
+function matrixProjectIdentityKey(project, assignment) {
+  const projectId = Number(project?.id ?? assignment?.project_id);
+  if (Number.isFinite(projectId) && projectId > 0) return `id:${projectId}`;
 
-  return r >= 200 && g >= 135 && b <= 170 && (r - b) >= 55;
+  const code = String(project?.code || assignment?.project_code || '')
+    .trim()
+    .toLowerCase();
+  const name = String(project?.name || assignment?.project_name || '')
+    .trim()
+    .toLowerCase();
+  return `project:${code}|${name}`;
+}
+
+function matrixProjectIdentityHash(identity) {
+  let hash = 2166136261;
+  for (let index = 0; index < identity.length; index += 1) {
+    hash ^= identity.charCodeAt(index);
+    hash = Math.imul(hash, 16777619);
+  }
+  return hash >>> 0;
+}
+
+function getMatrixProjectPaletteAssignments() {
+  const identities = new Set();
+  for (const project of (S.projects || [])) {
+    identities.add(matrixProjectIdentityKey(project, null));
+  }
+  for (const assignment of (S.matrixAssignments || [])) {
+    const project = (S.projects || []).find(item => Number(item.id) === Number(assignment.project_id)) || null;
+    identities.add(matrixProjectIdentityKey(project, assignment));
+  }
+
+  const paletteLength = MATRIX_PROJECT_COLOR_PALETTE.length;
+  const assignments = new Map();
+  const occupied = new Set();
+
+  [...identities].filter(Boolean).sort().forEach(identity => {
+    const preferred = matrixProjectIdentityHash(identity) % paletteLength;
+    let slot = preferred;
+    if (occupied.size < paletteLength) {
+      for (let offset = 0; offset < paletteLength; offset += 1) {
+        const candidate = (preferred + (offset * 7)) % paletteLength;
+        if (!occupied.has(candidate)) {
+          slot = candidate;
+          break;
+        }
+      }
+      occupied.add(slot);
+    }
+    assignments.set(identity, slot);
+  });
+
+  return assignments;
+}
+
+function getMatrixProjectVisual(project, assignment) {
+  const projectName = project?.name || assignment?.project_name || assignment?.project_code || '';
+  if (typeof isUnavailableProjectName === 'function' && isUnavailableProjectName(projectName)) {
+    return {
+      accent: '#EF4444',
+      text: '#B91C1C',
+      tint: '#FEF2F2',
+    };
+  }
+
+  const identity = matrixProjectIdentityKey(project, assignment);
+  const paletteAssignments = getMatrixProjectPaletteAssignments();
+  const fallbackSlot = matrixProjectIdentityHash(identity) % MATRIX_PROJECT_COLOR_PALETTE.length;
+  const paletteSlot = paletteAssignments.get(identity) ?? fallbackSlot;
+  const visual = MATRIX_PROJECT_COLOR_PALETTE[paletteSlot];
+
+  return {
+    accent: visual.accent,
+    text: visual.text,
+    tint: `${visual.accent}14`,
+  };
 }
 
 function renderAssignmentCells(employee, months, unavailableSlots) {
@@ -723,11 +814,11 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
           S.matrixSelectedAssignmentIds.has(Number(assignment.id));
         const assignmentClassificationText = `${assignment.project_name || project.name || ''} ${assignment.project_code || project.code || ''}`;
         const isGeneralAdminProject = /\bgeneral[\s_-]*admin(?:istration)?\b/i.test(assignmentClassificationText);
-        const isYellowProject = isGeneralAdminProject || isYellowAssignmentColor(assignment.project_color);
+        const projectVisual = getMatrixProjectVisual(project, assignment);
 
         cells += `
           <div
-            class="chip matrix-assignment-detail-trigger${isSelected ? ' is-selected' : ''}${isYellowProject ? ' is-yellow-project' : ''}${isGeneralAdminProject ? ' is-general-admin' : ''}"
+            class="chip matrix-assignment-detail-trigger${isSelected ? ' is-selected' : ''}${isGeneralAdminProject ? ' is-general-admin' : ''}"
             data-action="edit-assign"
             data-assignment-detail="${esc(encodeURIComponent(JSON.stringify(assignmentDetail)))}"
             data-id="${assignment.id}"
@@ -740,10 +831,10 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
             role="button"
             aria-selected="${isSelected ? 'true' : 'false'}"
             aria-label="${esc(`${assignmentTitle || 'Assignment'}. Hover or focus to view assignment details.`)}"
-            style="background:${assignment.project_color}20;border-left:3px solid ${assignment.project_color};min-width:0;width:100%;box-sizing:border-box;"
+            style="--matrix-project-accent:${projectVisual.accent};--matrix-project-text:${projectVisual.text};--matrix-project-tint:${projectVisual.tint};min-width:0;width:100%;box-sizing:border-box;"
           >
             <div style="display:flex;justify-content:space-between;align-items:center;width:100%;gap:4px;min-width:0;">
-              <span class="chip-code" style="color:${assignment.project_color};overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-size:11px;">${esc(displayName)}</span>
+              <span class="chip-code" style="overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1;min-width:0;font-size:11px;">${esc(displayName)}</span>
               <span class="chip-values">
                 <span class="chip-pct">${assignment.percentage}%</span>
                 <span class="chip-revenue ${revenue.eligible ? '' : 'is-excluded'}">${esc(revenueText)}</span>
