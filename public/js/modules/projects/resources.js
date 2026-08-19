@@ -51,20 +51,20 @@ function openResourceModal() {
       isActive ? 'active' : 'inactive',
     ].filter(Boolean).join(' ').toLowerCase();
 
-    return `<tr data-team-resource-row data-search="${esc(searchText)}" class="${isActive ? '' : 'opacity-50'} hover:bg-gray-50 transition-colors">
-      <td class="py-2.5 px-4 text-sm text-gray-500">${esc(e.employee_code || '')}</td>
-      <td class="py-2.5 px-4">
-        <div class="flex items-center gap-2">
-          <div class="w-7 h-7 avatar-grad rounded-full flex items-center justify-center text-xs flex-shrink-0">${esc(inits(e.name))}</div>
-          <div>
-            <div class="text-sm font-semibold text-gray-900">${esc(e.name)}</div>
-            <div class="text-xs text-gray-400">${esc(e.email || '')}</div>
+    return `<tr data-team-resource-row data-search="${esc(searchText)}" class="team-resource-row ${isActive ? 'team-resource-row--active' : 'team-resource-row--inactive'}">
+      <td class="team-resource-code">${esc(e.employee_code || '')}</td>
+      <td class="team-resource-person-cell">
+        <div class="team-resource-person">
+          <div class="team-resource-avatar avatar-grad">${esc(inits(e.name))}</div>
+          <div class="team-resource-person-copy">
+            <div class="team-resource-name">${esc(e.name)}</div>
+            <div class="team-resource-email">${esc(e.email || '')}</div>
           </div>
         </div>
       </td>
-      <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.dept || '—')}</td>
-      <td class="py-2.5 px-4 text-xs text-gray-500">${esc(e.designation || '—')}</td>
-      <td class="py-2.5 px-4 ps-team-assignment-cell">
+      <td class="team-resource-meta">${esc(e.dept || '—')}</td>
+      <td class="team-resource-meta">${esc(e.designation || '—')}</td>
+      <td class="ps-team-assignment-cell">
         <select
           class="ps-team-assignment-select"
           aria-label="Assigned To for ${esc(e.name)}"
@@ -74,31 +74,33 @@ function openResourceModal() {
         </select>
         <div class="ps-team-assignment-source" title="${esc(assignmentSource)}">${esc(assignmentSource)}</div>
       </td>
-      <td class="py-2.5 px-4">
-        <div class="workdays-inline-editor">
+      <td class="team-resource-workdays-cell">
+        <div class="workdays-inline-editor team-resource-workdays-editor">
           <input id="teamWorkdays-${e.id}" type="number" min="0" step="1" value="${esc(String(Number(e.workdays) || 0))}" aria-label="Workdays for ${esc(e.name)}">
           <button type="button" onclick="saveEmployeeWorkdays(${e.id}, 'teamWorkdays-${e.id}', 'team')">Save</button>
         </div>
       </td>
-      <td class="py-2.5 px-4">
-        <span class="${badge} text-xs px-2 py-0.5 rounded-full font-medium">${util}%</span>
+      <td class="team-resource-util-cell">
+        <span class="team-resource-util-badge ${badge}">${util}%</span>
       </td>
-      <td class="py-2.5 px-4">
+      <td class="team-resource-status-cell">
         <button onclick="toggleEmployeeActive(${e.id})"
-          class="text-xs font-semibold px-3 py-1 rounded-full border transition-all ${isActive
-        ? 'bg-emerald-50 text-emerald-700 border-emerald-200 hover:bg-red-50 hover:text-red-700 hover:border-red-200'
-        : 'bg-gray-100 text-gray-500 border-gray-200 hover:bg-emerald-50 hover:text-emerald-700 hover:border-emerald-200'}">
+          class="team-resource-status-btn ${isActive ? 'is-active' : 'is-inactive'}">
           ${isActive ? '✓ Active' : '✗ Inactive'}
         </button>
       </td>
-      <td class="py-2.5 px-4">
+      <td class="team-resource-edit-cell">
         <button
           type="button"
           onclick="openEmployeeModal({ id: ${e.id} })"
-          class="text-xs font-semibold px-3 py-1 rounded-lg border border-blue-200 bg-blue-50 text-blue-700 transition-colors hover:bg-blue-100 hover:border-blue-300"
+          class="team-resource-edit-btn"
           aria-label="Edit ${esc(e.name)}"
         >
-          Edit
+          <svg class="team-resource-edit-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+          </svg>
+          <span class="sr-only">Edit ${esc(e.name)}</span>
         </button>
       </td>
     </tr>`;
@@ -117,16 +119,16 @@ function openResourceModal() {
           <col class="team-resources-col-status">
           <col class="team-resources-col-edit">
         </colgroup>
-        <thead><tr class="border-b border-gray-200">
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Code</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Name</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Dept</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Designation</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500 ps-team-assignment-header">Assigned To</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Workdays</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Util</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Status</th>
-          <th class="py-2 px-4 text-xs font-semibold text-gray-500">Edit</th>
+        <thead><tr>
+          <th>Code</th>
+          <th>Name</th>
+          <th>Department</th>
+          <th>Designation</th>
+          <th class="ps-team-assignment-header">Assigned To</th>
+          <th>Workdays</th>
+          <th>Utilization</th>
+          <th>Status</th>
+          <th>Edit</th>
         </tr></thead>
         <tbody>${emps.map(empRow).join('')}</tbody>
       </table></div>`
@@ -140,27 +142,27 @@ function openResourceModal() {
   openModal(
     mHdr('Team Resources', `${activeEmps.length} active · ${inactiveEmps.length} inactive · productivity calculated on active only${assignedToContext}`)
     + `<div class="modal-scroll-body nice-scroll">
-        <div class="sticky top-0 z-10 px-4 py-3 border-b border-gray-200 bg-white">
+        <div class="team-resources-toolbar">
           <label for="teamResourcesSearch" class="sr-only">Search team resources</label>
-          <div class="relative">
-            <svg class="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 pointer-events-none" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
+          <div class="team-resources-search">
+            <svg class="team-resources-search-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="8"/><path d="m21 21-4.35-4.35"/></svg>
             <input id="teamResourcesSearch" type="search" autocomplete="off"
               placeholder="Search by name, code, email, department, designation, Assigned To or status..."
               oninput="filterTeamResources(this.value)"
-              class="w-full rounded-lg border border-gray-300 bg-white py-2.5 pl-10 pr-3 text-sm text-gray-900 outline-none transition focus:border-blue-500 focus:ring-2 focus:ring-blue-100">
+              class="team-resources-search-input">
           </div>
-          <div id="teamResourcesSearchSummary" class="mt-2 text-xs text-gray-500" aria-live="polite"></div>
+          <div id="teamResourcesSearchSummary" class="team-resources-search-summary" aria-live="polite"></div>
         </div>
         <div id="teamResourcesActiveGroup" data-team-resource-group>
-          <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-500 uppercase tracking-wider">
-            Active Members (<span data-team-resource-count>${activeEmps.length}</span>)
+          <div class="team-resources-group-heading is-active">
+            <span>Active Members</span><span class="team-resources-group-count" data-team-resource-count>${activeEmps.length}</span>
           </div>
           ${tableHtml(activeEmps)}
         </div>
         ${inactiveEmps.length ? `
         <div id="teamResourcesInactiveGroup" data-team-resource-group>
-          <div class="px-4 pt-4 pb-1 text-xs font-bold text-gray-400 uppercase tracking-wider">
-            Inactive Members (<span data-team-resource-count>${inactiveEmps.length}</span>)
+          <div class="team-resources-group-heading is-inactive">
+            <span>Inactive Members</span><span class="team-resources-group-count" data-team-resource-count>${inactiveEmps.length}</span>
           </div>
           ${tableHtml(inactiveEmps)}
         </div>` : ''}
@@ -168,8 +170,9 @@ function openResourceModal() {
           No team resources match this search.
         </div>
       </div>
-      <div class="modal-footer px-6 py-4 border-t border-gray-100 flex justify-end bg-gray-50 rounded-b-2xl">
-        <button onclick="closeModal()" class="btn-gray">Close</button>
+      <div class="modal-footer team-resources-footer">
+        <span class="team-resources-footer-note">Changes to Assigned To and Workdays are saved per resource.</span>
+        <button onclick="closeModal()" class="btn-gray team-resources-close-btn">Close</button>
       </div>`,
     'max-w-[1500px] team-resources-modal-panel'
   );
