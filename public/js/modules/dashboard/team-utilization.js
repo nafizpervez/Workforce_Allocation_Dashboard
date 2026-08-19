@@ -130,6 +130,12 @@ function teamUtilizationScheduleInputSave(tone, monthKey) {
   teamUtilizationInputSaveTimers.set(key, timer);
 }
 
+function resizeTeamUtilizationCommentField(field) {
+  if (!field) return;
+  field.style.height = 'auto';
+  field.style.height = `${Math.max(30, field.scrollHeight)}px`;
+}
+
 function teamUtilizationBindManualInputs(root, statsByTone, nextMonth) {
   if (!root || !nextMonth) return;
   const monthKey = teamUtilizationMonthKey(nextMonth.y, nextMonth.m);
@@ -166,7 +172,23 @@ function teamUtilizationBindManualInputs(root, statsByTone, nextMonth) {
   });
 
   root.querySelectorAll('[data-team-utilization-comments]').forEach(input => {
+    resizeTeamUtilizationCommentField(input);
+
+    input.addEventListener('keydown', event => {
+      if (event.key !== 'Enter') return;
+      if (event.shiftKey) {
+        // Shift+Enter intentionally inserts a new comment line.
+        requestAnimationFrame(() => resizeTeamUtilizationCommentField(event.currentTarget));
+        return;
+      }
+
+      // Plain Enter saves/leaves the field; use Shift+Enter for a new line.
+      event.preventDefault();
+      event.currentTarget.blur();
+    });
+
     input.addEventListener('input', event => {
+      resizeTeamUtilizationCommentField(event.currentTarget);
       const tone = String(event.currentTarget.dataset.teamUtilizationTeam || '').trim();
       if (!statsByTone[tone]) return;
       const current = teamUtilizationMonthInput(tone, nextMonth);
@@ -894,6 +916,14 @@ function buildTeamUtilizationSection(title, tone, stats, reportMonth, nextMonth)
 
       <div class="team-utilization-table-wrap">
         <table class="team-utilization-table">
+          <colgroup>
+            <col class="team-utilization-col-index" />
+            <col class="team-utilization-col-project-services" />
+            <col class="team-utilization-col-this-month" />
+            <col class="team-utilization-col-ytd" />
+            <col class="team-utilization-col-target" />
+            <col class="team-utilization-col-variance" />
+          </colgroup>
           <thead>
             <tr>
               <th class="team-utilization-sn" aria-label="Serial number"></th>
@@ -954,16 +984,15 @@ function buildTeamUtilizationSection(title, tone, stats, reportMonth, nextMonth)
               <th scope="row">Comments:</th>
               <td colspan="4">
                 ${nextMonth ? `
-                  <input
-                    type="text"
+                  <textarea
                     maxlength="2000"
+                    rows="1"
                     class="team-utilization-comments-input"
-                    value="${esc(stats.nextMonthInput?.comments || '')}"
-                    placeholder="Write comments"
+                    placeholder="Write comments · Shift+Enter for new line"
                     data-team-utilization-comments
                     data-team-utilization-team="${tone}"
                     aria-label="${esc(title)} ${esc(nextMonthName)} comments"
-                  />
+                  >${esc(stats.nextMonthInput?.comments || '')}</textarea>
                 ` : '—'}
               </td>
             </tr>

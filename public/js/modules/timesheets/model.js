@@ -407,6 +407,7 @@ async function loadSavedTimesheetFromDb() {
     renderTeamSummaryChart();
     renderIndividualSummaryChart();
     if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
+    if (typeof refreshAssignmentTrendsFromTimesheet === 'function') refreshAssignmentTrendsFromTimesheet();
     renderBurndownChart();
     renderBurnupChart();
     renderMonthlyPlannedWorkChart();
@@ -416,6 +417,7 @@ async function loadSavedTimesheetFromDb() {
     console.error(e);
     toast('Failed to load saved Time Sheet data from DB', 'error');
     if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
+    if (typeof refreshAssignmentTrendsFromTimesheet === 'function') refreshAssignmentTrendsFromTimesheet();
     renderBurndownChart();
     renderBurnupChart();
     renderMonthlyPlannedWorkChart();
