@@ -1302,35 +1302,385 @@ function renderAssignmentTrendsTooltip(context) {
   positionOverviewChartTooltip(element, chart, tooltip);
 }
 
+
+function setPerformanceChartText(id, value) {
+  const element = document.getElementById(id);
+  if (element) element.textContent = value;
+}
+
+
+const PERFORMANCE_SUMMARY_TOOLTIP_DATA = new Map();
+
+function performanceSummaryTooltipRows(rows) {
+  return `<table class="performance-summary-tooltip__table"><tbody>${rows.map(row => `
+    <tr><th>${esc(row.label)}</th><td>${esc(row.value)}${row.note ? `<small>${esc(row.note)}</small>` : ''}</td></tr>
+  `).join('')}</tbody></table>`;
+}
+
+function setPerformanceSummaryTooltip(key, { title, note = '', rows = [], formula = '', footer = '' } = {}) {
+  PERFORMANCE_SUMMARY_TOOLTIP_DATA.set(key, `
+    <div class="performance-summary-tooltip__title">${esc(title || '')}</div>
+    ${note ? `<div class="performance-summary-tooltip__note">${esc(note)}</div>` : ''}
+    ${rows.length ? performanceSummaryTooltipRows(rows) : ''}
+    ${formula ? `<div class="performance-summary-tooltip__formula">${esc(formula)}</div>` : ''}
+    ${footer ? `<div class="performance-summary-tooltip__footer">${esc(footer)}</div>` : ''}
+  `);
+}
+
+function getPerformanceSummaryTooltipElement() {
+  let tooltip = document.getElementById('performanceSummaryTooltip');
+  if (tooltip) return tooltip;
+  tooltip = document.createElement('div');
+  tooltip.id = 'performanceSummaryTooltip';
+  tooltip.className = 'performance-summary-tooltip';
+  tooltip.setAttribute('role', 'tooltip');
+  document.body.appendChild(tooltip);
+  return tooltip;
+}
+
+function positionPerformanceSummaryTooltip(tooltip, trigger) {
+  if (!tooltip || !trigger) return;
+  const rect = trigger.getBoundingClientRect();
+  const margin = 10;
+  const viewportWidth = document.documentElement.clientWidth || window.innerWidth;
+  const viewportHeight = document.documentElement.clientHeight || window.innerHeight;
+  const width = Math.max(280, Math.min(410, viewportWidth - (margin * 2)));
+  tooltip.style.width = `${width}px`;
+  tooltip.style.left = `${Math.max(margin, Math.min(rect.left, viewportWidth - width - margin))}px`;
+  tooltip.style.top = '0px';
+  tooltip.classList.add('is-visible');
+  const height = tooltip.offsetHeight;
+  const below = rect.bottom + 8;
+  const top = below + height <= viewportHeight - margin
+    ? below
+    : Math.max(margin, rect.top - height - 8);
+  tooltip.style.top = `${top}px`;
+}
+
+function showPerformanceSummaryTooltip(trigger) {
+  const key = trigger?.dataset?.performanceSummaryTooltip;
+  const html = key ? PERFORMANCE_SUMMARY_TOOLTIP_DATA.get(key) : '';
+  if (!html) return;
+  const tooltip = getPerformanceSummaryTooltipElement();
+  tooltip.innerHTML = html;
+  positionPerformanceSummaryTooltip(tooltip, trigger);
+}
+
+function hidePerformanceSummaryTooltip() {
+  document.getElementById('performanceSummaryTooltip')?.classList.remove('is-visible');
+}
+
+function bindPerformanceSummaryTooltips() {
+  document.querySelectorAll('[data-performance-summary-tooltip]').forEach(trigger => {
+    if (trigger.dataset.performanceSummaryTooltipBound === '1') return;
+    trigger.dataset.performanceSummaryTooltipBound = '1';
+    trigger.addEventListener('mouseenter', () => showPerformanceSummaryTooltip(trigger));
+    trigger.addEventListener('mouseleave', hidePerformanceSummaryTooltip);
+    trigger.addEventListener('focus', () => showPerformanceSummaryTooltip(trigger));
+    trigger.addEventListener('blur', hidePerformanceSummaryTooltip);
+  });
+}
+
+function performanceSummaryMonthLabel(row) {
+  const year = Number(row?.year);
+  const month = Number(row?.month);
+  if (Number.isFinite(year) && Number.isFinite(month) && month >= 1 && month <= 12) {
+    return new Date(year, month - 1, 1).toLocaleString('en-US', { month: 'short', year: 'numeric' });
+  }
+  return String(row?.label || '').trim();
+}
+
+function formatPerformanceChartMoney(value) {
+  const numeric = Number(value) || 0;
+  const absolute = Math.abs(numeric);
+  const sign = numeric < 0 ? '-' : '';
+  if (absolute >= 1000000) {
+    return `${sign}$${(absolute / 1000000).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M`;
+  }
+  if (absolute >= 1000) {
+    return `${sign}$${(absolute / 1000).toLocaleString('en-US', { maximumFractionDigits: absolute >= 100000 ? 0 : 1 })}K`;
+  }
+  return `${sign}$${absolute.toLocaleString('en-US', { maximumFractionDigits: 0 })}`;
+}
+
+function formatPerformanceChartHours(value) {
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return '—';
+  const absolute = Math.abs(numeric);
+  const sign = numeric < 0 ? '-' : numeric > 0 ? '+' : '';
+  if (absolute >= 1000000) {
+    return `${sign}${(absolute / 1000000).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}M h`;
+  }
+  if (absolute >= 1000) {
+    return `${sign}${(absolute / 1000).toLocaleString('en-US', { minimumFractionDigits: 1, maximumFractionDigits: 1 })}K h`;
+  }
+  return `${sign}${absolute.toLocaleString('en-US', { maximumFractionDigits: 1 })} h`;
+}
+
+function performanceChartLegendOptions() {
+  return {
+    display: true,
+    position: 'bottom',
+    labels: {
+      boxWidth: 9,
+      boxHeight: 9,
+      usePointStyle: true,
+      pointStyle: 'circle',
+      color: '#475569',
+      font: { size: 10, weight: '600' },
+      padding: 18,
+    },
+  };
+}
+
+
+let assignmentTrendSourceRows = [];
+
+function getAssignmentTrendProjectTypes() {
+  if (typeof TEAM_UTILIZATION_PROJECT_TYPES !== 'undefined') {
+    return TEAM_UTILIZATION_PROJECT_TYPES;
+  }
+  return new Set([
+    'Training Delivery',
+    'Service Delivery - Local PS',
+    'Service Delivery - Intrasourcing',
+    'Pre - Sales',
+  ]);
+}
+
+function getAssignmentTrendActualUtilization(rows) {
+  const trendRows = Array.isArray(rows) ? rows : [];
+  const monthIndex = new Map(
+    trendRows.map((row, index) => [`${Number(row.year)}-${Number(row.month)}`, index]),
+  );
+  const reported = trendRows.map(() => false);
+  const projectHours = trendRows.map(() => 0);
+  const utilization = trendRows.map(() => null);
+  const details = trendRows.map(() => null);
+  const projectTypes = getAssignmentTrendProjectTypes();
+  const timesheetRows = typeof getVisibleTimesheetRows === 'function'
+    ? getVisibleTimesheetRows()
+    : (S.timesheetRows || []);
+
+  for (const row of timesheetRows) {
+    const parsedMonth = typeof parseMonthlyWorkMonth === 'function'
+      ? parseMonthlyWorkMonth(
+        row.month ?? row.Month ?? row.month_label ?? row.monthLabel,
+      )
+      : null;
+    if (!parsedMonth) continue;
+
+    const index = monthIndex.get(`${Number(parsedMonth.year)}-${Number(parsedMonth.month)}`);
+    if (index === undefined) continue;
+
+    const hours = Number(row.qty ?? row.hours ?? row.quantity);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+
+    // Any valid Time Sheet effort means the month has actually been reported.
+    // A reported month can legitimately have 0% project utilization if all
+    // recorded effort is non-project work (for example General Admin).
+    reported[index] = true;
+
+    const workType = typeof normalizeTimesheetWorkType === 'function'
+      ? normalizeTimesheetWorkType(row.workType ?? row.work_type ?? row['Work Type'])
+      : String((row.workType ?? row.work_type ?? row['Work Type']) || '').trim();
+    if (projectTypes.has(workType)) projectHours[index] += hours;
+  }
+
+  const activeEmployees = typeof getActiveEmployees === 'function'
+    ? getActiveEmployees()
+    : (S.employees || []).filter(employee => employee.active !== 0);
+  const annualWorkdays = typeof getDefaultAnnualWorkdays === 'function'
+    ? Number(getDefaultAnnualWorkdays()) || 0
+    : 0;
+  const capacityPerStaff = annualWorkdays / 12;
+  const hoursPerDay = typeof TEAM_UTILIZATION_HOURS_PER_DAY !== 'undefined'
+    ? Number(TEAM_UTILIZATION_HOURS_PER_DAY) || 8
+    : 8;
+
+  trendRows.forEach((row, index) => {
+    if (!reported[index]) return;
+
+    const staffCount = activeEmployees.filter(employee => {
+      if (typeof isEmployeeUnavailableForEntireMonth !== 'function') return true;
+      return !isEmployeeUnavailableForEntireMonth(
+        employee.id,
+        Number(row.year),
+        Number(row.month),
+        S.assignments,
+      );
+    }).length;
+    const capacityDays = capacityPerStaff * staffCount;
+    const projectDays = projectHours[index] / hoursPerDay;
+
+    utilization[index] = capacityDays > 0
+      ? +((projectDays / capacityDays) * 100).toFixed(1)
+      : 0;
+    details[index] = {
+      staffCount,
+      capacityDays: +capacityDays.toFixed(2),
+      projectHours: +(Number(projectHours[index]) || 0).toFixed(2),
+      projectDays: +projectDays.toFixed(2),
+      annualWorkdays,
+      capacityPerStaff: +capacityPerStaff.toFixed(2),
+      hoursPerDay,
+    };
+  });
+
+  return { utilization, reported, projectHours, details };
+}
+
+function refreshAssignmentTrendsFromTimesheet() {
+  if (!assignmentTrendSourceRows.length) return;
+  renderTrends(assignmentTrendSourceRows);
+}
+
 function renderTrends(data) {
   if (S.charts.trends) S.charts.trends.destroy();
   const canvas = document.getElementById('trendsChart');
   if (!canvas) return;
 
+  const sourceRows = Array.isArray(data) ? data : [];
+  assignmentTrendSourceRows = sourceRows.map(row => ({ ...row }));
+  const actualUtilization = getAssignmentTrendActualUtilization(sourceRows);
+  const rows = sourceRows.map((row, index) => ({
+    ...row,
+    actualUtilization: actualUtilization.utilization[index],
+    actualReported: actualUtilization.reported[index],
+  }));
+
+  const latestPlan = rows.length ? rows[rows.length - 1] : null;
+  const latestPlanLabel = String(latestPlan?.label || '').trim();
+  const latestActual = [...rows].reverse().find(row => row.actualReported) || null;
+  const latestActualLabel = String(latestActual?.label || '').trim();
+
+  setPerformanceChartText(
+    'trendsLatestAssignmentLabel',
+    latestPlanLabel ? `Assignments (${latestPlanLabel})` : 'Assignments',
+  );
+  setPerformanceChartText(
+    'trendsLatestAssignments',
+    latestPlan ? (Number(latestPlan.assignments) || 0).toLocaleString('en-US', { maximumFractionDigits: 1 }) : '—',
+  );
+  setPerformanceChartText(
+    'trendsLatestUtilLabel',
+    latestActualLabel ? `Actual Utilization % (${latestActualLabel})` : 'Actual Utilization %',
+  );
+  setPerformanceChartText(
+    'trendsLatestUtil',
+    latestActual && Number.isFinite(Number(latestActual.actualUtilization))
+      ? `${Number(latestActual.actualUtilization).toLocaleString('en-US', { maximumFractionDigits: 1 })}%`
+      : '—',
+  );
+
+
+  const latestActualIndex = latestActual ? rows.indexOf(latestActual) : -1;
+  const latestActualDetail = latestActualIndex >= 0
+    ? actualUtilization.details?.[latestActualIndex] || null
+    : null;
+  setPerformanceChartText(
+    'trendsLatestProjectDaysLabel',
+    latestActualLabel ? `Project Days (${latestActualLabel})` : 'Project Days',
+  );
+  setPerformanceChartText(
+    'trendsLatestProjectDays',
+    latestActualDetail
+      ? `${latestActualDetail.projectDays.toLocaleString('en-US', { maximumFractionDigits: 1 })} days`
+      : '—',
+  );
+
+  if (latestPlan) {
+    const monthLabel = performanceSummaryMonthLabel(latestPlan);
+    const assignmentCount = Number(latestPlan.assignments) || 0;
+    setPerformanceSummaryTooltip('trends-assignments', {
+      title: `Assignments · ${monthLabel}`,
+      note: 'Planned assignment activity from Resource Assignment.',
+      rows: [
+        { label: 'Effective assignment rows', value: assignmentCount.toLocaleString('en-US') },
+        { label: 'Source', value: 'Resource Assignment' },
+      ],
+      formula: `Assignments = count of effective Resource Assignment rows in ${monthLabel} after the app's existing assignment/N/A filtering.`,
+      footer: 'This is assignment activity, not unique resources or unique projects.',
+    });
+  } else {
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('trends-assignments');
+  }
+
+  if (latestActual) {
+    const actualIndex = rows.indexOf(latestActual);
+    const detail = actualUtilization.details?.[actualIndex] || null;
+    const monthLabel = performanceSummaryMonthLabel(latestActual);
+    if (detail) {
+      const utilizationValue = Number(latestActual.actualUtilization) || 0;
+      setPerformanceSummaryTooltip('trends-utilization', {
+        title: `Actual Project Utilization · ${monthLabel}`,
+        note: 'Actual delivery comes only from uploaded Time Sheet data. Future months remain blank until a Time Sheet is reported.',
+        rows: [
+          { label: 'Project Time Sheet hours', value: `${detail.projectHours.toLocaleString('en-US', { maximumFractionDigits: 2 })} h`, note: 'Local PS + Intra-Sourcing + Training Delivery + Pre-Sales' },
+          { label: 'Project days', value: `${detail.projectDays.toLocaleString('en-US', { maximumFractionDigits: 2 })} days`, note: `${detail.projectHours.toLocaleString('en-US', { maximumFractionDigits: 2 })} h ÷ ${detail.hoursPerDay} h/day` },
+          { label: 'Available active staff', value: detail.staffCount.toLocaleString('en-US') },
+          { label: 'Monthly capacity', value: `${detail.capacityDays.toLocaleString('en-US', { maximumFractionDigits: 2 })} days`, note: `(${detail.annualWorkdays} ÷ 12) × ${detail.staffCount} staff` },
+          { label: 'Actual utilization', value: `${utilizationValue.toLocaleString('en-US', { maximumFractionDigits: 1 })}%` },
+        ],
+        formula: `Actual Utilization = ${detail.projectDays.toLocaleString('en-US', { maximumFractionDigits: 2 })} project days ÷ ${detail.capacityDays.toLocaleString('en-US', { maximumFractionDigits: 2 })} capacity days × 100 = ${utilizationValue.toLocaleString('en-US', { maximumFractionDigits: 1 })}%.`,
+        footer: 'Staff unavailable for the entire month are excluded from monthly capacity using the app’s existing availability rules.',
+      });
+
+      setPerformanceSummaryTooltip('trends-project-days', {
+        title: `Actual Project Days · ${monthLabel}`,
+        note: 'Project Days show the actual project-delivery effort recorded in the uploaded Time Sheet for the latest reported month.',
+        rows: [
+          { label: 'Project Time Sheet hours', value: `${detail.projectHours.toLocaleString('en-US', { maximumFractionDigits: 2 })} h`, note: 'Local PS + Intra-Sourcing + Training Delivery + Pre-Sales' },
+          { label: 'Hours per workday', value: `${detail.hoursPerDay} h/day` },
+          { label: 'Actual Project Days', value: `${detail.projectDays.toLocaleString('en-US', { maximumFractionDigits: 2 })} days` },
+        ],
+        formula: `Project Days = ${detail.projectHours.toLocaleString('en-US', { maximumFractionDigits: 2 })} Time Sheet hours ÷ ${detail.hoursPerDay} hours/day = ${detail.projectDays.toLocaleString('en-US', { maximumFractionDigits: 2 })} days.`,
+        footer: 'This is the numerator used in the Actual Utilization calculation for the same month.',
+      });
+    }
+  } else {
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('trends-utilization');
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('trends-project-days');
+  }
+  bindPerformanceSummaryTooltips();
+
   S.charts.trends = new Chart(canvas.getContext('2d'), {
     type: 'line',
     data: {
-      labels: data.map(d => d.label),
+      labels: rows.map(d => d.label),
       datasets: [
         {
           label: 'Assignments',
-          data: data.map(d => d.assignments),
-          borderColor: '#2563EB',
-          backgroundColor: 'rgba(37,99,235,0.06)',
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 3,
+          data: rows.map(d => d.assignments),
+          borderColor: '#0B63F6',
+          backgroundColor: 'rgba(59, 130, 246, 0.08)',
+          pointBackgroundColor: '#0B63F6',
+          pointBorderColor: '#0B63F6',
+          pointHoverBackgroundColor: '#FFFFFF',
+          pointHoverBorderColor: '#0B63F6',
+          pointBorderWidth: 1.5,
+          tension: 0.38,
+          borderWidth: 2.25,
+          pointRadius: 3.2,
+          pointHoverRadius: 5,
           fill: true,
           yAxisID: 'y',
         },
         {
-          label: 'Utilization %',
-          data: data.map(d => d.utilization),
-          borderColor: '#059669',
-          backgroundColor: 'rgba(5,150,105,0.04)',
-          tension: 0.4,
-          borderWidth: 2,
-          pointRadius: 3,
+          label: 'Actual Utilization %',
+          data: rows.map(d => d.actualUtilization),
+          borderColor: '#0E9F6E',
+          backgroundColor: 'transparent',
+          pointBackgroundColor: '#0E9F6E',
+          pointBorderColor: '#0E9F6E',
+          pointHoverBackgroundColor: '#FFFFFF',
+          pointHoverBorderColor: '#0E9F6E',
+          pointBorderWidth: 1.5,
+          tension: 0.38,
+          borderWidth: 2.15,
+          pointRadius: 3.2,
+          pointHoverRadius: 5,
+          fill: false,
           yAxisID: 'y1',
         },
       ],
@@ -1339,21 +1689,39 @@ function renderTrends(data) {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      animation: { duration: 520, easing: 'easeOutQuart' },
+      layout: { padding: { top: 3, right: 3, bottom: 0, left: 0 } },
       plugins: {
-        legend: {
-          display: true,
-          position: 'bottom',
-          labels: { boxWidth: 10, boxHeight: 10, font: { size: 11 }, padding: 12 },
-        },
+        legend: performanceChartLegendOptions(),
         tooltip: {
           enabled: false,
           external: renderAssignmentTrendsTooltip,
         },
       },
       scales: {
-        x: { ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } },
-        y: { position: 'left', ticks: { font: { size: 11 } }, grid: { color: '#F3F4F6' } },
-        y1: { position: 'right', ticks: { font: { size: 11 } }, grid: { display: false } },
+        x: {
+          border: { color: '#E2E8F0' },
+          ticks: {
+            color: '#334155',
+            font: { size: 10, weight: '600' },
+            maxRotation: 0,
+            minRotation: 0,
+            padding: 7,
+          },
+          grid: { color: 'rgba(226, 232, 240, 0.62)', borderDash: [3, 4], drawTicks: false },
+        },
+        y: {
+          position: 'left',
+          border: { color: '#E2E8F0' },
+          ticks: { color: '#334155', font: { size: 10, weight: '600' }, padding: 7 },
+          grid: { color: 'rgba(226, 232, 240, 0.62)', borderDash: [3, 4], drawTicks: false },
+        },
+        y1: {
+          position: 'right',
+          border: { color: '#E2E8F0' },
+          ticks: { color: '#334155', font: { size: 10, weight: '600' }, padding: 7 },
+          grid: { drawOnChartArea: false, drawTicks: false },
+        },
       },
     },
   });
@@ -1507,17 +1875,7 @@ function burnTooltipFooter(series, index) {
 }
 
 function burnChartLegendOptions() {
-  return {
-    display: true,
-    position: 'bottom',
-    labels: {
-      boxWidth: 10,
-      boxHeight: 10,
-      font: { size: 10 },
-      padding: 12,
-      usePointStyle: true,
-    },
-  };
+  return performanceChartLegendOptions();
 }
 
 
@@ -1621,6 +1979,90 @@ function renderBurndownChart() {
   if (!element) return;
 
   const series = getAssignmentBurnSeries();
+  const index = series.lastActualIndex;
+  if (index >= 0) {
+    const plannedRemaining = Number(series.plannedRemaining[index]) || 0;
+    const actualRemaining = Number(series.actualRemaining[index]) || 0;
+    const variance = +(actualRemaining - plannedRemaining).toFixed(2);
+    const label = series.labels[index] || '';
+
+    setPerformanceChartText('burndownPlannedLabel', label ? `Planned Remaining (${label})` : 'Planned Remaining');
+    setPerformanceChartText('burndownPlannedValue', formatPerformanceChartHours(plannedRemaining));
+    setPerformanceChartText('burndownActualLabel', label ? `Actual Remaining (${label})` : 'Actual Remaining');
+    setPerformanceChartText('burndownActualValue', formatPerformanceChartHours(actualRemaining));
+    setPerformanceChartText('burndownVarianceLabel', label ? `Variance (${label})` : 'Variance');
+    setPerformanceChartText('burndownVarianceValue', formatPerformanceChartHours(variance));
+    setPerformanceChartText(
+      'burndownVarianceStatus',
+      variance < 0 ? 'Ahead of plan' : variance > 0 ? 'Behind plan' : 'On plan',
+    );
+  } else {
+    setPerformanceChartText('burndownPlannedLabel', 'Planned Remaining');
+    setPerformanceChartText('burndownPlannedValue', '—');
+    setPerformanceChartText('burndownActualLabel', 'Actual Remaining');
+    setPerformanceChartText('burndownActualValue', '—');
+    setPerformanceChartText('burndownVarianceLabel', 'Variance');
+    setPerformanceChartText('burndownVarianceValue', '—');
+    setPerformanceChartText('burndownVarianceStatus', 'No actual month reported');
+  }
+
+
+  if (index >= 0) {
+    const label = series.labels[index] || '';
+    const plannedRemaining = Number(series.plannedRemaining[index]) || 0;
+    const actualRemaining = Number(series.actualRemaining[index]) || 0;
+    const cumulativePlanned = Number(series.cumulativePlanned[index]) || 0;
+    const cumulativeActual = Number(series.cumulativeActual[index]) || 0;
+    const variance = +(actualRemaining - plannedRemaining).toFixed(2);
+    const interpretation = variance < 0 ? 'Ahead of plan' : variance > 0 ? 'Behind plan' : 'On plan';
+
+    setPerformanceSummaryTooltip('burndown-planned', {
+      title: `Planned Remaining Effort · ${label}`,
+      note: 'Planned effort is derived from effective Resource Assignment rows for the selected fiscal year.',
+      rows: [
+        { label: 'Total FY planned effort', value: burnChartTooltipUnit(series.totalPlannedHours) },
+        { label: 'Cumulative planned delivered', value: burnChartTooltipUnit(cumulativePlanned) },
+        { label: 'Planned remaining', value: burnChartTooltipUnit(plannedRemaining) },
+      ],
+      formula: `Planned Remaining = Total FY Planned − Cumulative Planned = ${burnChartTooltipUnit(series.totalPlannedHours)} − ${burnChartTooltipUnit(cumulativePlanned)} = ${burnChartTooltipUnit(plannedRemaining)}.`,
+    });
+
+    setPerformanceSummaryTooltip('burndown-actual', {
+      title: `Actual Remaining Effort · ${label}`,
+      note: 'Actual delivered effort comes from reported Time Sheet hours. Future months are not projected.',
+      rows: [
+        { label: 'Total FY planned effort', value: burnChartTooltipUnit(series.totalPlannedHours) },
+        { label: 'Cumulative actual delivered', value: burnChartTooltipUnit(cumulativeActual) },
+        { label: 'Actual remaining', value: burnChartTooltipUnit(actualRemaining) },
+      ],
+      formula: `Actual Remaining = Total FY Planned − Cumulative Actual = ${burnChartTooltipUnit(series.totalPlannedHours)} − ${burnChartTooltipUnit(cumulativeActual)} = ${burnChartTooltipUnit(actualRemaining)}.`,
+      footer: 'This value is shown only through the latest month with actual Time Sheet delivery.',
+    });
+
+    setPerformanceSummaryTooltip('burndown-variance', {
+      title: `Burndown Variance · ${label}`,
+      note: 'Planned effort comes from Resource Assignment. Actual delivered effort comes from Time Sheet hours.',
+      rows: [
+        { label: 'Total FY planned effort', value: burnChartTooltipUnit(series.totalPlannedHours) },
+        { label: 'Cumulative planned effort', value: burnChartTooltipUnit(cumulativePlanned) },
+        { label: 'Cumulative actual effort', value: burnChartTooltipUnit(cumulativeActual) },
+        { label: 'Planned remaining', value: burnChartTooltipUnit(plannedRemaining), note: 'Total planned − cumulative planned' },
+        { label: 'Actual remaining', value: burnChartTooltipUnit(actualRemaining), note: 'Total planned − cumulative actual' },
+        { label: 'Variance', value: `${variance > 0 ? '+' : ''}${burnChartTooltipUnit(variance)}`, note: interpretation },
+      ],
+      formula: `Variance = Actual remaining − Planned remaining = ${burnChartTooltipUnit(actualRemaining)} − ${burnChartTooltipUnit(plannedRemaining)} = ${variance > 0 ? '+' : ''}${burnChartTooltipUnit(variance)}.`,
+      footer: variance < 0
+        ? 'Negative variance means less work remains than planned at this point, so delivery is ahead of plan.'
+        : variance > 0
+          ? 'Positive variance means more work remains than planned at this point, so delivery is behind plan.'
+          : 'Actual remaining effort matches the planned remaining effort.',
+    });
+  } else {
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('burndown-planned');
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('burndown-actual');
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('burndown-variance');
+  }
+  bindPerformanceSummaryTooltips();
 
   S.charts.burndown = new Chart(element.getContext('2d'), {
     type: 'line',
@@ -1630,25 +2072,31 @@ function renderBurndownChart() {
         {
           label: 'Planned remaining',
           data: series.plannedRemaining,
-          borderColor: '#2563EB',
-          borderDash: [5, 4],
+          borderColor: '#0B63F6',
+          borderDash: [6, 5],
           backgroundColor: 'transparent',
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderColor: '#0B63F6',
+          pointBorderWidth: 2,
           fill: false,
-          tension: 0.2,
+          tension: 0.18,
           borderWidth: 2,
-          pointRadius: 2.5,
-          pointHoverRadius: 4,
+          pointRadius: 3.4,
+          pointHoverRadius: 5,
         },
         {
           label: 'Actual remaining',
           data: series.actualRemaining,
-          borderColor: '#DC2626',
+          borderColor: '#F04438',
           backgroundColor: 'transparent',
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderColor: '#F04438',
+          pointBorderWidth: 2,
           fill: false,
-          tension: 0.2,
-          borderWidth: 2.5,
-          pointRadius: 3.5,
-          pointHoverRadius: 5,
+          tension: 0.18,
+          borderWidth: 2.25,
+          pointRadius: 3.8,
+          pointHoverRadius: 5.5,
           spanGaps: false,
         },
       ],
@@ -1657,26 +2105,36 @@ function renderBurndownChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      animation: { duration: 520, easing: 'easeOutQuart' },
+      layout: { padding: { top: 3, right: 2, bottom: 0, left: 0 } },
       plugins: {
         legend: burnChartLegendOptions(),
         tooltip: burnTableTooltipOptions(series, 'burndown'),
       },
       scales: {
         x: {
-          ticks: { font: { size: 10 }, maxRotation: 35, minRotation: 0 },
-          grid: { color: '#F3F4F6' },
+          border: { color: '#E2E8F0' },
+          ticks: {
+            color: '#475569',
+            font: { size: 9.5, weight: '600' },
+            maxRotation: 38,
+            minRotation: 32,
+            padding: 7,
+          },
+          grid: { color: 'rgba(226, 232, 240, 0.72)', borderDash: [3, 4], drawTicks: false },
         },
         y: {
           beginAtZero: true,
           suggestedMax: Math.max(series.totalPlannedHours, 1),
-          ticks: { font: { size: 10 }, callback: burnChartAxisUnit },
-          grid: { color: '#F3F4F6' },
-          title: {
-            display: true,
-            text: 'Remaining effort (hours)',
-            font: { size: 10 },
-            color: '#9CA3AF',
+          border: { color: '#E2E8F0' },
+          ticks: {
+            color: '#475569',
+            font: { size: 10, weight: '600' },
+            padding: 7,
+            callback: burnChartAxisUnit,
           },
+          grid: { color: 'rgba(226, 232, 240, 0.72)', borderDash: [3, 4], drawTicks: false },
+          title: { display: false },
         },
       },
     },
@@ -2054,41 +2512,165 @@ function renderBurnupChart() {
 
   const series = getAssignmentBurnRevenueSeries();
   const chartMaximum = Math.max(series.totalPlannedRevenue, series.actualToDate, 1);
+  const index = series.lastActualIndex;
+
+  if (index >= 0) {
+    const label = series.labels[index] || '';
+    const actual = Number(series.cumulativeActual[index]) || 0;
+    const planned = Number(series.cumulativePlanned[index]) || 0;
+    const variance = +(actual - planned).toFixed(2);
+    const variancePct = planned > 0 ? (variance / planned) * 100 : null;
+
+    setPerformanceChartText('burnupActualLabel', label ? `Actual (${label})` : 'Actual');
+    setPerformanceChartText('burnupActualValue', formatPerformanceChartMoney(actual));
+    setPerformanceChartText('burnupPlannedLabel', label ? `Planned (${label})` : 'Planned');
+    setPerformanceChartText('burnupPlannedValue', formatPerformanceChartMoney(planned));
+    setPerformanceChartText('burnupVarianceValue', formatPerformanceChartMoney(variance));
+    setPerformanceChartText(
+      'burnupVariancePct',
+      variancePct === null ? '—' : `(${variancePct > 0 ? '+' : ''}${variancePct.toLocaleString('en-US', { maximumFractionDigits: 0 })}%)`,
+    );
+  } else {
+    setPerformanceChartText('burnupActualLabel', 'Actual');
+    setPerformanceChartText('burnupActualValue', '—');
+    setPerformanceChartText('burnupPlannedLabel', 'Planned');
+    setPerformanceChartText('burnupPlannedValue', '—');
+    setPerformanceChartText('burnupVarianceValue', '—');
+    setPerformanceChartText('burnupVariancePct', '—');
+  }
+
+
+  if (index >= 0) {
+    const label = series.labels[index] || '';
+    const actual = Number(series.cumulativeActual[index]) || 0;
+    const planned = Number(series.cumulativePlanned[index]) || 0;
+    const variance = +(actual - planned).toFixed(2);
+    const variancePct = planned > 0 ? (variance / planned) * 100 : null;
+    const sumThrough = values => +(values || []).slice(0, index + 1).reduce(
+      (total, value) => total + (Number(value) || 0),
+      0,
+    ).toFixed(2);
+    const actualLocal = sumThrough(series.actualLocal);
+    const actualIntra = sumThrough(series.actualIntra);
+    const plannedLocal = sumThrough(series.plannedLocal);
+    const plannedIntra = sumThrough(series.plannedIntra);
+    const actualUnpricedHours = sumThrough(series.actualUnpricedHours);
+    const plannedUnpricedHours = sumThrough(series.plannedUnpricedHours);
+
+    setPerformanceSummaryTooltip('burnup-actual', {
+      title: `Cumulative Actual Revenue · ${label}`,
+      note: 'Actual revenue comes from uploaded Time Sheet delivery for Local PS and Intra-Sourcing, priced with the applicable effective-dated Resource Revenue rate for each matched resource.',
+      rows: [
+        { label: 'Local PS actual', value: burnupRevenueTooltipUnit(actualLocal) },
+        { label: 'Intra-Sourcing actual', value: burnupRevenueTooltipUnit(actualIntra) },
+        { label: 'Cumulative actual', value: burnupRevenueTooltipUnit(actual) },
+        ...(actualUnpricedHours > 0 ? [{ label: 'Unpriced eligible hours', value: `${actualUnpricedHours.toLocaleString('en-US', { maximumFractionDigits: 1 })} h`, note: 'Excluded because no matching rate was available' }] : []),
+      ],
+      formula: 'For each eligible Time Sheet row: Actual revenue = Time Sheet hours × applicable Resource Revenue hourly rate. The displayed value is the cumulative Local PS + Intra-Sourcing revenue through the reported month.',
+    });
+
+    setPerformanceSummaryTooltip('burnup-planned', {
+      title: `Cumulative Planned Revenue · ${label}`,
+      note: 'Planned revenue comes from Resource Assignment for Local PS and Intra-Sourcing.',
+      rows: [
+        { label: 'Local PS planned', value: burnupRevenueTooltipUnit(plannedLocal) },
+        { label: 'Intra-Sourcing planned', value: burnupRevenueTooltipUnit(plannedIntra) },
+        { label: 'Cumulative planned', value: burnupRevenueTooltipUnit(planned) },
+        ...(plannedUnpricedHours > 0 ? [{ label: 'Unpriced planned hours', value: `${plannedUnpricedHours.toLocaleString('en-US', { maximumFractionDigits: 1 })} h`, note: 'Excluded because no matching rate was available' }] : []),
+      ],
+      formula: `For each eligible assignment: Planned revenue = ${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} h/week × allocation % × applicable Resource Revenue hourly rate. The displayed value is cumulative Local PS + Intra-Sourcing planned revenue through ${label}.`,
+    });
+
+    setPerformanceSummaryTooltip('burnup-variance', {
+      title: `Revenue Variance · ${label}`,
+      note: 'Compares cumulative Time Sheet revenue with cumulative Resource Assignment planned revenue at the same reporting point.',
+      rows: [
+        { label: 'Cumulative actual', value: burnupRevenueTooltipUnit(actual) },
+        { label: 'Cumulative planned', value: burnupRevenueTooltipUnit(planned) },
+        { label: 'Variance', value: burnupRevenueTooltipUnit(variance) },
+        { label: 'Variance %', value: variancePct === null ? '—' : `${variancePct > 0 ? '+' : ''}${variancePct.toLocaleString('en-US', { maximumFractionDigits: 1 })}%` },
+      ],
+      formula: `Variance = Actual − Planned = ${burnupRevenueTooltipUnit(actual)} − ${burnupRevenueTooltipUnit(planned)} = ${burnupRevenueTooltipUnit(variance)}. Variance % = Variance ÷ Planned × 100${variancePct === null ? '' : ` = ${variancePct > 0 ? '+' : ''}${variancePct.toLocaleString('en-US', { maximumFractionDigits: 1 })}%`}.`,
+      footer: variance < 0 ? 'Negative variance means actual cumulative revenue is below the plan.' : variance > 0 ? 'Positive variance means actual cumulative revenue is ahead of the plan.' : 'Actual cumulative revenue matches the plan.',
+    });
+  } else {
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('burnup-actual');
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('burnup-planned');
+    PERFORMANCE_SUMMARY_TOOLTIP_DATA.delete('burnup-variance');
+  }
+  bindPerformanceSummaryTooltips();
+
+  const targetLabelPlugin = {
+    id: 'burnupTargetLabel',
+    afterDatasetsDraw(chart) {
+      const yScale = chart.scales.y;
+      const area = chart.chartArea;
+      if (!yScale || !area || !Number.isFinite(series.totalPlannedRevenue)) return;
+      const y = yScale.getPixelForValue(series.totalPlannedRevenue);
+      if (y < area.top - 4 || y > area.bottom + 4) return;
+      const label = formatPerformanceChartMoney(series.totalPlannedRevenue);
+      const { ctx } = chart;
+      ctx.save();
+      ctx.font = '700 10px sans-serif';
+      const textWidth = ctx.measureText(label).width;
+      const width = textWidth + 14;
+      const height = 22;
+      const x = area.right - width;
+      const top = Math.max(area.top + 2, y - height - 5);
+      ctx.fillStyle = '#0F2A56';
+      const radius = 5;
+      ctx.beginPath();
+      ctx.roundRect(x, top, width, height, radius);
+      ctx.fill();
+      ctx.fillStyle = '#FFFFFF';
+      ctx.textAlign = 'center';
+      ctx.textBaseline = 'middle';
+      ctx.fillText(label, x + width / 2, top + height / 2);
+      ctx.restore();
+    },
+  };
 
   S.charts.burnup = new Chart(element.getContext('2d'), {
     type: 'line',
+    plugins: [targetLabelPlugin],
     data: {
       labels: series.labels,
       datasets: [
         {
           label: 'Cumulative planned revenue',
           data: series.cumulativePlanned,
-          borderColor: '#2563EB',
-          borderDash: [5, 4],
+          borderColor: '#0B63F6',
+          borderDash: [6, 5],
           backgroundColor: 'transparent',
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderColor: '#0B63F6',
+          pointBorderWidth: 2,
           fill: false,
-          tension: 0.2,
+          tension: 0.18,
           borderWidth: 2,
-          pointRadius: 2.5,
-          pointHoverRadius: 4,
+          pointRadius: 3.3,
+          pointHoverRadius: 5,
         },
         {
           label: 'Cumulative actual revenue',
           data: series.cumulativeActual,
-          borderColor: '#059669',
+          borderColor: '#0E9F6E',
           backgroundColor: 'transparent',
+          pointBackgroundColor: '#FFFFFF',
+          pointBorderColor: '#0E9F6E',
+          pointBorderWidth: 2,
           fill: false,
-          tension: 0.2,
-          borderWidth: 2.5,
-          pointRadius: 3.5,
-          pointHoverRadius: 5,
+          tension: 0.18,
+          borderWidth: 2.35,
+          pointRadius: 3.7,
+          pointHoverRadius: 5.5,
           spanGaps: false,
         },
         {
           label: 'Total planned revenue',
           data: series.labels.map(() => series.totalPlannedRevenue),
-          borderColor: '#64748B',
-          borderDash: [3, 4],
+          borderColor: '#2563EB',
+          borderDash: [4, 5],
           backgroundColor: 'transparent',
           fill: false,
           tension: 0,
@@ -2101,26 +2683,36 @@ function renderBurnupChart() {
       responsive: true,
       maintainAspectRatio: false,
       interaction: { mode: 'index', intersect: false },
+      animation: { duration: 520, easing: 'easeOutQuart' },
+      layout: { padding: { top: 3, right: 3, bottom: 0, left: 0 } },
       plugins: {
         legend: burnChartLegendOptions(),
         tooltip: burnTableTooltipOptions(series, 'burnup'),
       },
       scales: {
         x: {
-          ticks: { font: { size: 10 }, maxRotation: 35, minRotation: 0 },
-          grid: { color: '#F3F4F6' },
+          border: { color: '#E2E8F0' },
+          ticks: {
+            color: '#475569',
+            font: { size: 9.5, weight: '600' },
+            maxRotation: 38,
+            minRotation: 32,
+            padding: 7,
+          },
+          grid: { color: 'rgba(226, 232, 240, 0.68)', borderDash: [3, 4], drawTicks: false },
         },
         y: {
           beginAtZero: true,
-          suggestedMax: chartMaximum,
-          ticks: { font: { size: 10 }, callback: burnupRevenueAxisUnit },
-          grid: { color: '#F3F4F6' },
-          title: {
-            display: true,
-            text: 'Cumulative revenue (USD)',
-            font: { size: 10 },
-            color: '#9CA3AF',
+          suggestedMax: chartMaximum * 1.08,
+          border: { color: '#E2E8F0' },
+          ticks: {
+            color: '#475569',
+            font: { size: 10, weight: '600' },
+            padding: 7,
+            callback: burnupRevenueAxisUnit,
           },
+          grid: { color: 'rgba(226, 232, 240, 0.68)', borderDash: [3, 4], drawTicks: false },
+          title: { display: false },
         },
       },
     },
@@ -2549,14 +3141,15 @@ function renderContributionMarginChart() {
           label: 'Profit',
           data: series.profit,
           yAxisID: 'yMoney',
-          borderColor: '#B45309',
+          borderColor: '#6EE7B7',
           backgroundColor: 'transparent',
-          borderWidth: 2,
+          borderWidth: 2.4,
           tension: 0.24,
-          pointRadius: 2.5,
-          pointHoverRadius: 4.5,
-          pointBackgroundColor: '#FFFFFF',
-          pointBorderWidth: 1.6,
+          pointRadius: 2.7,
+          pointHoverRadius: 4.7,
+          pointBackgroundColor: '#ECFDF5',
+          pointBorderColor: '#10B981',
+          pointBorderWidth: 1.7,
           spanGaps: false,
           order: 2,
         },
@@ -3227,11 +3820,11 @@ function renderBudgetActualRiskChart() {
       datasets: [
         {
           type: 'bar',
-          label: 'Budget',
-          data: series.budget,
+          label: 'Actual',
+          data: series.actual.map((value, index) => series.reported[index] ? value : null),
           yAxisID: 'yMonthly',
-          backgroundColor: 'rgba(59, 130, 246, 0.78)',
-          borderColor: '#2563EB',
+          backgroundColor: 'rgba(5, 150, 105, 0.82)',
+          borderColor: '#047857',
           borderWidth: 0,
           borderRadius: 5,
           borderSkipped: false,
@@ -3242,11 +3835,11 @@ function renderBudgetActualRiskChart() {
         },
         {
           type: 'bar',
-          label: 'Actual',
-          data: series.actual.map((value, index) => series.reported[index] ? value : null),
+          label: 'Budget',
+          data: series.budget,
           yAxisID: 'yMonthly',
-          backgroundColor: 'rgba(5, 150, 105, 0.82)',
-          borderColor: '#047857',
+          backgroundColor: 'rgba(59, 130, 246, 0.78)',
+          borderColor: '#2563EB',
           borderWidth: 0,
           borderRadius: 5,
           borderSkipped: false,

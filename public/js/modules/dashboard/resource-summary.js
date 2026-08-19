@@ -649,6 +649,20 @@ function renderResourceSummaryCells(employee, summary = getResourceSummaryViewDa
   return allocationCells + revenueCells;
 }
 
+function isYellowAssignmentColor(value) {
+  const raw = String(value || '').trim();
+  const match = raw.match(/^#([0-9a-f]{3}|[0-9a-f]{6})$/i);
+  if (!match) return false;
+
+  let hex = match[1];
+  if (hex.length === 3) hex = hex.split('').map(char => char + char).join('');
+  const r = parseInt(hex.slice(0, 2), 16);
+  const g = parseInt(hex.slice(2, 4), 16);
+  const b = parseInt(hex.slice(4, 6), 16);
+
+  return r >= 200 && g >= 135 && b <= 170 && (r - b) >= 55;
+}
+
 function renderAssignmentCells(employee, months, unavailableSlots) {
   let cells = '';
 
@@ -707,10 +721,13 @@ function renderAssignmentCells(employee, months, unavailableSlots) {
         const displayName = shortCustomerName(customer) || assignment.project_code;
         const isSelected = S.matrixSelectedAssignmentIds instanceof Set &&
           S.matrixSelectedAssignmentIds.has(Number(assignment.id));
+        const assignmentClassificationText = `${assignment.project_name || project.name || ''} ${assignment.project_code || project.code || ''}`;
+        const isGeneralAdminProject = /\bgeneral[\s_-]*admin(?:istration)?\b/i.test(assignmentClassificationText);
+        const isYellowProject = isGeneralAdminProject || isYellowAssignmentColor(assignment.project_color);
 
         cells += `
           <div
-            class="chip matrix-assignment-detail-trigger${isSelected ? ' is-selected' : ''}"
+            class="chip matrix-assignment-detail-trigger${isSelected ? ' is-selected' : ''}${isYellowProject ? ' is-yellow-project' : ''}${isGeneralAdminProject ? ' is-general-admin' : ''}"
             data-action="edit-assign"
             data-assignment-detail="${esc(encodeURIComponent(JSON.stringify(assignmentDetail)))}"
             data-id="${assignment.id}"

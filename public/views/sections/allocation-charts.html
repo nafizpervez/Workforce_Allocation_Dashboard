@@ -10,153 +10,224 @@
               <circle cx="11" cy="13" r="1.4" />
             </svg>
           </div>
-          <div class="grid grid-cols-3 gap-6">
-            <div class="dc">
+          <div class="grid grid-cols-3 gap-6 performance-chart-grid">
+            <div class="dc performance-chart-dc">
               <div class="dc-handle">
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 12 12"
-                  fill="currentColor"
-                >
-                  <circle cx="4" cy="3" r="1" />
-                  <circle cx="8" cy="3" r="1" />
-                  <circle cx="4" cy="6" r="1" />
-                  <circle cx="8" cy="6" r="1" />
-                  <circle cx="4" cy="9" r="1" />
-                  <circle cx="8" cy="9" r="1" />
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                  <circle cx="4" cy="3" r="1" /><circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" /><circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" /><circle cx="8" cy="9" r="1" />
                 </svg>
               </div>
-              <div
-                class="bg-white rounded-xl p-6"
-                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
-              >
-                <div class="flex items-center gap-3 card-title-pad mb-4">
-                  <div
-                    class="w-8 h-8 bg-blue-100 rounded-xl flex items-center justify-center flex-shrink-0"
-                  >
-                    <svg
-                      class="w-4 h-4 text-blue-600"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 class="font-semibold text-gray-900">
-                      Assignment Trends
-                    </h3>
-                    <p class="text-xs text-gray-500 mt-0.5">Last 12 months</p>
+              <div class="performance-chart-card performance-chart-card--trends">
+                <div class="performance-chart-header card-title-pad">
+                  <div class="performance-chart-title-group">
+                    <div class="performance-chart-icon performance-chart-icon--blue" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+                        <polyline points="22 12 18 12 15 21 9 3 6 12 2 12" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3>Assignment Trends</h3>
+                      <p>Last 12 months</p>
+                    </div>
                   </div>
                 </div>
-                <div style="height: 260px">
-                  <canvas id="trendsChart"></canvas>
+
+                <div class="performance-chart-body">
+                  <div class="performance-chart-axis-head performance-chart-axis-head--dual">
+                    <span class="is-blue">Assignments</span>
+                    <span class="is-green">Actual Utilization %</span>
+                  </div>
+                  <div class="performance-chart-canvas performance-chart-canvas--trends">
+                    <canvas id="trendsChart"></canvas>
+                  </div>
+                </div>
+
+                <div class="performance-chart-kpis performance-chart-kpis--three">
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="trends-assignments" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--blue" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2" />
+                        <circle cx="9" cy="7" r="4" />
+                        <path d="M22 21v-2a4 4 0 0 0-3-3.87" />
+                        <path d="M16 3.13a4 4 0 0 1 0 7.75" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="trendsLatestAssignmentLabel" class="performance-chart-kpi-label">Assignments</div>
+                      <div id="trendsLatestAssignments" class="performance-chart-kpi-value">—</div>
+                    </div>
+                  </div>
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="trends-utilization" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--green" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21.21 15.89A10 10 0 1 1 8.11 2.87" />
+                        <path d="M22 12A10 10 0 0 0 12 2v10z" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="trendsLatestUtilLabel" class="performance-chart-kpi-label">Actual Utilization %</div>
+                      <div id="trendsLatestUtil" class="performance-chart-kpi-value">—</div>
+                    </div>
+                  </div>
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="trends-project-days" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--purple" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M4 19V9" /><path d="M10 19V5" /><path d="M16 19v-7" /><path d="M22 19H2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="trendsLatestProjectDaysLabel" class="performance-chart-kpi-label">Project Days</div>
+                      <div id="trendsLatestProjectDays" class="performance-chart-kpi-value is-purple">—</div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="dc">
+
+            <div class="dc performance-chart-dc">
               <div class="dc-handle">
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 12 12"
-                  fill="currentColor"
-                >
-                  <circle cx="4" cy="3" r="1" />
-                  <circle cx="8" cy="3" r="1" />
-                  <circle cx="4" cy="6" r="1" />
-                  <circle cx="8" cy="6" r="1" />
-                  <circle cx="4" cy="9" r="1" />
-                  <circle cx="8" cy="9" r="1" />
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                  <circle cx="4" cy="3" r="1" /><circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" /><circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" /><circle cx="8" cy="9" r="1" />
                 </svg>
               </div>
-              <div
-                class="bg-white rounded-xl p-6"
-                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
-              >
-                <div class="flex items-center gap-3 card-title-pad mb-4">
-                  <div
-                    class="w-8 h-8 bg-purple-100 rounded-xl flex items-center justify-center flex-shrink-0"
-                  >
-                    <svg
-                      class="w-4 h-4 text-purple-600"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <line x1="18" y1="20" x2="18" y2="10" />
-                      <line x1="12" y1="20" x2="12" y2="4" />
-                      <line x1="6" y1="20" x2="6" y2="14" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 class="font-semibold text-gray-900">
-                      Burndown Chart
-                    </h3>
-                    <p class="text-xs text-gray-500 mt-0.5">
-                      Planned remaining effort versus actual Time Sheet delivery
-                    </p>
+              <div class="performance-chart-card performance-chart-card--burndown">
+                <div class="performance-chart-header card-title-pad">
+                  <div class="performance-chart-title-group">
+                    <div class="performance-chart-icon performance-chart-icon--amber" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 20V12" /><path d="M12 20V4" /><path d="M19 20V9" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3>Burndown Chart</h3>
+                      <p>Planned remaining effort versus actual Time Sheet delivery</p>
+                    </div>
                   </div>
                 </div>
-                <div style="height: 260px">
-                  <canvas id="burndownChart"></canvas>
+
+                <div class="performance-chart-body">
+                  <div class="performance-chart-axis-head">
+                    <span>Remaining effort (hours)</span>
+                  </div>
+                  <div class="performance-chart-canvas performance-chart-canvas--burn">
+                    <canvas id="burndownChart"></canvas>
+                  </div>
+                </div>
+
+                <div class="performance-chart-kpis performance-chart-kpis--three">
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="burndown-planned" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--blue" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9" /><path d="M12 7v5l4 2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="burndownPlannedLabel" class="performance-chart-kpi-label">Planned Remaining</div>
+                      <div id="burndownPlannedValue" class="performance-chart-kpi-value is-blue">—</div>
+                    </div>
+                  </div>
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="burndown-actual" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--red" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9" /><path d="M12 7v5l4 2" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="burndownActualLabel" class="performance-chart-kpi-label">Actual Remaining</div>
+                      <div id="burndownActualValue" class="performance-chart-kpi-value is-red">—</div>
+                    </div>
+                  </div>
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="burndown-variance" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--amber" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 19V9" /><path d="M12 19V5" /><path d="M19 19v-7" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="burndownVarianceLabel" class="performance-chart-kpi-label">Variance</div>
+                      <div class="performance-chart-kpi-inline-value">
+                        <span id="burndownVarianceValue" class="performance-chart-kpi-value is-amber">—</span>
+                        <small id="burndownVarianceStatus">No actual month reported</small>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
-            <div class="dc">
+
+            <div class="dc performance-chart-dc">
               <div class="dc-handle">
-                <svg
-                  width="11"
-                  height="11"
-                  viewBox="0 0 12 12"
-                  fill="currentColor"
-                >
-                  <circle cx="4" cy="3" r="1" />
-                  <circle cx="8" cy="3" r="1" />
-                  <circle cx="4" cy="6" r="1" />
-                  <circle cx="8" cy="6" r="1" />
-                  <circle cx="4" cy="9" r="1" />
-                  <circle cx="8" cy="9" r="1" />
+                <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
+                  <circle cx="4" cy="3" r="1" /><circle cx="8" cy="3" r="1" />
+                  <circle cx="4" cy="6" r="1" /><circle cx="8" cy="6" r="1" />
+                  <circle cx="4" cy="9" r="1" /><circle cx="8" cy="9" r="1" />
                 </svg>
               </div>
-              <div
-                class="bg-white rounded-xl p-6"
-                style="box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1)"
-              >
-                <div class="flex items-center gap-3 card-title-pad mb-4">
-                  <div
-                    class="w-8 h-8 bg-teal-100 rounded-xl flex items-center justify-center flex-shrink-0"
-                  >
-                    <svg
-                      class="w-4 h-4 text-teal-600"
-                      viewBox="0 0 24 24"
-                      fill="none"
-                      stroke="currentColor"
-                      stroke-width="2"
-                      stroke-linecap="round"
-                      stroke-linejoin="round"
-                    >
-                      <path d="M21.21 15.89A10 10 0 1 1 8 2.83" />
-                      <path d="M22 12A10 10 0 0 0 12 2v10z" />
-                    </svg>
-                  </div>
-                  <div>
-                    <h3 class="font-semibold text-gray-900">
-                      Burnup Chart
-                    </h3>
-                    <p class="text-xs text-gray-500 mt-0.5">Cumulative planned revenue versus actual Time Sheet delivery revenue</p>
+              <div class="performance-chart-card performance-chart-card--burnup">
+                <div class="performance-chart-header card-title-pad">
+                  <div class="performance-chart-title-group">
+                    <div class="performance-chart-icon performance-chart-icon--green" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.1" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M3 17 9 11l4 4 8-9" /><path d="M15 6h6v6" />
+                      </svg>
+                    </div>
+                    <div>
+                      <h3>Burnup Chart</h3>
+                      <p>Cumulative planned revenue versus actual Time Sheet delivery revenue</p>
+                    </div>
                   </div>
                 </div>
-                <div style="height: 260px">
-                  <canvas id="burnupChart"></canvas>
+
+                <div class="performance-chart-body">
+                  <div class="performance-chart-axis-head">
+                    <span>Revenue (USD)</span>
+                  </div>
+                  <div class="performance-chart-canvas performance-chart-canvas--burn">
+                    <canvas id="burnupChart"></canvas>
+                  </div>
+                </div>
+
+                <div class="performance-chart-kpis performance-chart-kpis--three">
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="burnup-actual" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--green" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9" /><path d="M16 8.5c-.8-1-2-1.5-4-1.5-2.2 0-3.5 1-3.5 2.5 0 3.5 7 1.5 7 5 0 1.5-1.3 2.5-3.5 2.5-1.8 0-3.2-.6-4-1.7" /><path d="M12 5v14" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="burnupActualLabel" class="performance-chart-kpi-label">Actual</div>
+                      <div id="burnupActualValue" class="performance-chart-kpi-value is-green">—</div>
+                    </div>
+                  </div>
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="burnup-planned" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--blue" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <circle cx="12" cy="12" r="9" /><circle cx="12" cy="12" r="4" /><path d="m15 9 5-5" /><path d="M16 4h4v4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div id="burnupPlannedLabel" class="performance-chart-kpi-label">Planned</div>
+                      <div id="burnupPlannedValue" class="performance-chart-kpi-value is-blue">—</div>
+                    </div>
+                  </div>
+                  <div class="performance-chart-kpi" data-performance-summary-tooltip="burnup-variance" tabindex="0">
+                    <div class="performance-chart-kpi-icon performance-chart-kpi-icon--amber" aria-hidden="true">
+                      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M5 20V12" /><path d="M12 20V8" /><path d="M19 20V4" />
+                      </svg>
+                    </div>
+                    <div>
+                      <div class="performance-chart-kpi-label">Variance</div>
+                      <div class="performance-chart-kpi-inline-value">
+                        <span id="burnupVarianceValue" class="performance-chart-kpi-value is-amber">—</span>
+                        <small id="burnupVariancePct">—</small>
+                      </div>
+                    </div>
+                  </div>
                 </div>
               </div>
             </div>
@@ -225,6 +296,18 @@
               </div>
 
               <div id="revenueAnalyticsBudgetPane" class="revenue-analytics-pane is-active" role="tabpanel" aria-labelledby="revenueAnalyticsBudgetTab">
+                <div class="budget-risk-hero">
+                  <div class="budget-risk-hero__copy">
+                    <span class="budget-risk-hero__eyebrow">Revenue performance</span>
+                    <h4>Budget vs Actual vs Risk</h4>
+                    <p>Monthly planned revenue, Time Sheet actual revenue and remaining revenue exposure across Local PS and Intra-Sourcing.</p>
+                  </div>
+                  <div class="budget-risk-hero__formula">
+                    <span>Risk formula</span>
+                    <strong>Budget − Actual = Revenue Risk</strong>
+                  </div>
+                </div>
+
                 <div id="budgetActualRiskSummary" class="revenue-budget-risk-summary" aria-label="Budget versus actual versus risk summary"></div>
                 <div id="budgetActualRiskStatus" class="revenue-budget-risk-status" aria-live="polite"></div>
                 <div class="revenue-budget-risk-chart-wrap">

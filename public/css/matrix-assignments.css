@@ -182,6 +182,29 @@ td.cell:hover .cell-add {
   font-weight: 600;
 }
 
+
+/* Improve contrast for yellow/amber project assignment cards. */
+.chip.is-yellow-project .chip-code,
+.chip.is-yellow-project .chip-pct,
+.chip.is-yellow-project .chip-revenue,
+.chip.is-yellow-project .chip-revenue.is-excluded {
+  color: #9a3412 !important;
+  font-weight: 800;
+  opacity: 1;
+}
+
+
+
+/* General Admin keeps the pale-yellow card but uses black text for maximum contrast. */
+.chip.is-general-admin .chip-code,
+.chip.is-general-admin .chip-pct,
+.chip.is-general-admin .chip-revenue,
+.chip.is-general-admin .chip-revenue.is-excluded {
+  color: #111827 !important;
+  font-weight: 800;
+  opacity: 1;
+}
+
 /* Multi-select state for weekly assignment cards. */
 .chip.is-selected {
   z-index: 3;

@@ -1,0 +1,728 @@
+/* ================================================================
+   ASSIGNMENT TRENDS / BURNDOWN / BURNUP — EXECUTIVE CHART CARDS
+   Presentation only. Calculations remain in overview.js.
+   ================================================================ */
+.performance-chart-grid {
+  align-items: stretch;
+}
+
+.performance-chart-dc {
+  min-width: 0;
+}
+
+.performance-chart-card {
+  position: relative;
+  display: flex;
+  flex-direction: column;
+  min-height: 500px;
+  height: 100%;
+  overflow: hidden;
+  border: 1px solid #dbe5f0;
+  border-radius: 17px;
+  background: #ffffff;
+  box-shadow: 0 6px 22px rgba(15, 23, 42, 0.065);
+}
+
+.performance-chart-header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 23px 24px 12px;
+}
+
+.performance-chart-title-group {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+  min-width: 0;
+}
+
+.performance-chart-title-group h3 {
+  margin: 0;
+  color: #0f2345;
+  font-size: 17px;
+  font-weight: 800;
+  line-height: 1.2;
+  letter-spacing: -0.018em;
+}
+
+.performance-chart-title-group p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 500;
+  line-height: 1.45;
+}
+
+.performance-chart-icon {
+  width: 48px;
+  height: 48px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid;
+  border-radius: 999px;
+  box-shadow: 0 2px 7px rgba(15, 23, 42, 0.045);
+}
+
+.performance-chart-icon svg {
+  width: 22px;
+  height: 22px;
+}
+
+.performance-chart-icon--blue {
+  border-color: #cfe0ff;
+  background: #eff6ff;
+  color: #0b63f6;
+}
+
+.performance-chart-icon--amber {
+  border-color: #f7ddb3;
+  background: #fff7ed;
+  color: #e78a00;
+}
+
+.performance-chart-icon--green {
+  border-color: #c7eadb;
+  background: #ecfdf5;
+  color: #0e9f6e;
+}
+
+
+.performance-chart-body {
+  flex: 1 1 auto;
+  min-height: 0;
+  padding: 13px 21px 0;
+}
+
+.performance-chart-axis-head {
+  display: flex;
+  align-items: center;
+  justify-content: flex-start;
+  min-height: 19px;
+  margin: 0 2px 6px;
+  color: #334155;
+  font-size: 9.5px;
+  font-weight: 750;
+}
+
+.performance-chart-axis-head--dual {
+  justify-content: space-between;
+}
+
+.performance-chart-axis-head .is-blue { color: #0b63f6; }
+.performance-chart-axis-head .is-green { color: #0e9f6e; }
+
+.performance-chart-canvas {
+  position: relative;
+  width: 100%;
+  height: 286px;
+}
+
+.performance-chart-canvas--trends {
+  height: 282px;
+}
+
+.performance-chart-kpis,
+.performance-chart-variance-strip {
+  margin: 12px 20px 20px;
+  border: 1px solid #dde6f0;
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.035);
+}
+
+.performance-chart-kpis {
+  display: grid;
+  min-height: 74px;
+}
+
+.performance-chart-kpis--two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
+
+.performance-chart-kpis--three {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+}
+
+.performance-chart-kpi {
+  position: relative;
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  min-width: 0;
+  padding: 12px 15px;
+}
+
+.performance-chart-kpi + .performance-chart-kpi::before {
+  content: "";
+  position: absolute;
+  left: 0;
+  top: 13px;
+  bottom: 13px;
+  width: 1px;
+  background: #e2e8f0;
+}
+
+.performance-chart-kpi-icon {
+  width: 39px;
+  height: 39px;
+  display: grid;
+  place-items: center;
+  flex: 0 0 auto;
+  border: 1px solid;
+  border-radius: 999px;
+}
+
+.performance-chart-kpi-icon svg {
+  width: 19px;
+  height: 19px;
+}
+
+.performance-chart-kpi-icon--blue {
+  border-color: #cfe0ff;
+  background: #eff6ff;
+  color: #0b63f6;
+}
+
+.performance-chart-kpi-icon--green {
+  border-color: #c7eadb;
+  background: #ecfdf5;
+  color: #0e9f6e;
+}
+
+.performance-chart-kpi-icon--amber {
+  border-color: #f7ddb3;
+  background: #fff7ed;
+  color: #e78a00;
+}
+
+.performance-chart-kpi-icon--purple {
+  border-color: #ddd6fe;
+  background: #f5f3ff;
+  color: #7c3aed;
+}
+
+.performance-chart-kpi-icon--red {
+  border-color: #fecaca;
+  background: #fff1f2;
+  color: #ef4444;
+}
+
+.performance-chart-kpi-label {
+  overflow: hidden;
+  color: #52627a;
+  font-size: 9.5px;
+  font-weight: 700;
+  line-height: 1.25;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-chart-kpi-value {
+  margin-top: 3px;
+  color: #0f2345;
+  font-size: 20px;
+  font-weight: 850;
+  line-height: 1.05;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-chart-kpi-value.is-blue { color: #0b63f6; }
+.performance-chart-kpi-value.is-green { color: #0e9f6e; }
+.performance-chart-kpi-value.is-amber { color: #d97706; }
+.performance-chart-kpi-value.is-purple { color: #7c3aed; }
+.performance-chart-kpi-value.is-red { color: #dc2626; }
+
+.performance-chart-kpi-inline-value {
+  display: flex;
+  align-items: baseline;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.performance-chart-kpi-inline-value small {
+  color: #64748b;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.performance-chart-variance-strip {
+  min-height: 62px;
+  display: flex;
+  align-items: center;
+  gap: 13px;
+  padding: 10px 15px;
+}
+
+.performance-chart-variance-copy {
+  display: grid;
+  grid-template-columns: minmax(110px, 1fr) auto auto;
+  align-items: center;
+  gap: 13px;
+  width: 100%;
+  min-width: 0;
+}
+
+.performance-chart-variance-copy > span {
+  color: #52627a;
+  font-size: 9.5px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.performance-chart-variance-copy > strong {
+  color: #d97706;
+  font-size: 14px;
+  font-weight: 850;
+  line-height: 1;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-chart-variance-copy > small {
+  color: #64748b;
+  font-size: 9px;
+  font-weight: 650;
+  white-space: nowrap;
+}
+
+/* Keep the generic collapse button aligned with the redesigned header. */
+.performance-chart-dc .card-collapse-toggle {
+  top: 10px;
+  right: 10px;
+}
+
+
+@media (max-width: 1280px) {
+  .performance-chart-grid {
+    grid-template-columns: 1fr !important;
+  }
+
+  .performance-chart-card {
+    min-height: 470px;
+  }
+
+  .performance-chart-canvas,
+  .performance-chart-canvas--trends {
+    height: 300px;
+  }
+}
+
+@media (max-width: 720px) {
+  .performance-chart-header {
+    padding: 18px 16px 10px;
+  }
+
+  .performance-chart-title-group {
+    gap: 10px;
+  }
+
+  .performance-chart-icon {
+    width: 42px;
+    height: 42px;
+  }
+
+  .performance-chart-body {
+    padding: 10px 12px 0;
+  }
+
+  .performance-chart-kpis,
+  .performance-chart-variance-strip {
+    margin: 10px 12px 14px;
+  }
+
+  .performance-chart-kpis--three {
+    grid-template-columns: 1fr;
+  }
+
+  .performance-chart-kpis--three .performance-chart-kpi + .performance-chart-kpi::before {
+    left: 14px;
+    right: 14px;
+    top: 0;
+    bottom: auto;
+    width: auto;
+    height: 1px;
+  }
+
+  .performance-chart-variance-copy {
+    grid-template-columns: 1fr;
+    gap: 3px;
+  }
+}
+
+/* ================================================================
+   EXECUTIVE CHART FINISHING — integrated footer, single-card surface
+   ================================================================ */
+.performance-chart-card {
+  border-color: #dfe7f1;
+  border-radius: 15px;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.055);
+}
+
+.performance-chart-body {
+  padding-bottom: 12px;
+}
+
+/* KPI and variance summaries are part of the outer card, not nested cards. */
+.performance-chart-kpis,
+.performance-chart-variance-strip {
+  margin: 0;
+  border: 0;
+  border-top: 1px solid #e8eef5;
+  border-radius: 0;
+  background: #fbfcfe;
+  box-shadow: none;
+}
+
+.performance-chart-kpis {
+  min-height: 78px;
+  padding: 0 16px;
+}
+
+.performance-chart-kpi {
+  padding: 13px 15px;
+}
+
+.performance-chart-kpi + .performance-chart-kpi::before {
+  top: 16px;
+  bottom: 16px;
+  background: #e6edf5;
+}
+
+.performance-chart-variance-strip {
+  min-height: 72px;
+  padding: 12px 20px;
+}
+
+.performance-chart-kpi-icon {
+  box-shadow: none;
+}
+
+.performance-chart-kpi-label,
+.performance-chart-variance-copy > span,
+.performance-chart-variance-copy > small {
+  color: #64748b;
+}
+
+/* Keep footer attached cleanly to the rounded outer shell. */
+.performance-chart-card > .performance-chart-kpis:last-child,
+.performance-chart-card > .performance-chart-variance-strip:last-child {
+  border-radius: 0 0 14px 14px;
+}
+
+/* Remove visual competition between drag/collapse chrome and the card surface. */
+.performance-chart-dc .card-collapse-toggle {
+  border-color: #e2e8f0;
+  background: rgba(255, 255, 255, 0.96);
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.06);
+}
+
+@media (max-width: 720px) {
+  .performance-chart-kpis,
+  .performance-chart-variance-strip {
+    margin: 0;
+  }
+
+  .performance-chart-kpis {
+    padding: 0 10px;
+  }
+}
+
+/* ================================================================
+   SINGLE-SURFACE FIX
+   The dashboard collapse/drag system already supplies the outer card shell.
+   Remove the second chart shell so header, chart and footer read as one card.
+   ================================================================ */
+.performance-chart-dc.dashboard-collapsible-card:not(.is-card-collapsed) {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  border: 1px solid #dfe7f1;
+  border-radius: 15px;
+  background: #ffffff;
+  box-shadow: 0 3px 12px rgba(15, 23, 42, 0.055);
+  overflow: hidden;
+}
+
+.performance-chart-dc.dashboard-collapsible-card > .card-control-rail {
+  flex: 0 0 auto;
+  border-radius: 14px 14px 0 0;
+}
+
+.performance-chart-dc.dashboard-collapsible-card > .card-expandable-content {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 0;
+  min-height: 0;
+}
+
+.performance-chart-dc.dashboard-collapsible-card
+  > .card-expandable-content
+  > .performance-chart-card {
+  display: flex;
+  flex: 1 1 auto;
+  flex-direction: column;
+  width: 100%;
+  min-height: 500px;
+  height: auto;
+  border: 0 !important;
+  border-radius: 0 !important;
+  background: #ffffff;
+  box-shadow: none !important;
+  overflow: hidden;
+}
+
+/* The chart body owns all remaining vertical room; footer never overlays it. */
+.performance-chart-dc .performance-chart-body {
+  flex: 1 1 auto;
+  min-height: 0;
+}
+
+.performance-chart-dc .performance-chart-kpis,
+.performance-chart-dc .performance-chart-variance-strip {
+  position: static;
+  z-index: auto;
+  flex: 0 0 auto;
+  margin: 0;
+  border-radius: 0 !important;
+  box-shadow: none !important;
+}
+
+/* The outer collapsible card owns the bottom corners. */
+.performance-chart-dc .performance-chart-card > .performance-chart-kpis:last-child,
+.performance-chart-dc .performance-chart-card > .performance-chart-variance-strip:last-child {
+  border-radius: 0 !important;
+}
+
+@media (max-width: 1280px) {
+  .performance-chart-dc.dashboard-collapsible-card
+    > .card-expandable-content
+    > .performance-chart-card {
+    min-height: 470px;
+  }
+}
+
+/* ================================================================
+   PERFORMANCE CHART FOOTER CALCULATION TOOLTIPS
+   ================================================================ */
+[data-performance-summary-tooltip] {
+  cursor: help;
+  outline: none;
+  transition: background-color .14s ease, box-shadow .14s ease;
+}
+
+[data-performance-summary-tooltip]:hover,
+[data-performance-summary-tooltip]:focus-visible {
+  background: #f8fbff;
+}
+
+[data-performance-summary-tooltip]:focus-visible {
+  box-shadow: inset 0 0 0 2px rgba(37, 99, 235, .18);
+}
+
+.performance-summary-tooltip {
+  position: fixed;
+  z-index: 100000;
+  display: none;
+  max-height: min(560px, calc(100vh - 20px));
+  overflow: auto;
+  padding: 13px 14px;
+  border: 1px solid rgba(51, 65, 85, .48);
+  border-radius: 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  box-shadow: 0 18px 42px rgba(15, 23, 42, .28);
+  font-size: 10px;
+  line-height: 1.45;
+  pointer-events: none;
+}
+
+.performance-summary-tooltip.is-visible {
+  display: block;
+}
+
+.performance-summary-tooltip__title {
+  margin-bottom: 7px;
+  color: #ffffff;
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.performance-summary-tooltip__note,
+.performance-summary-tooltip__footer {
+  color: #cbd5e1;
+}
+
+.performance-summary-tooltip__note {
+  margin-bottom: 7px;
+}
+
+.performance-summary-tooltip__footer {
+  margin-top: 7px;
+  font-size: 9px;
+}
+
+.performance-summary-tooltip__table {
+  width: 100%;
+  border-collapse: collapse;
+  font-variant-numeric: tabular-nums;
+}
+
+.performance-summary-tooltip__table th,
+.performance-summary-tooltip__table td {
+  padding: 5px 0;
+  border-bottom: 1px solid rgba(148, 163, 184, .16);
+  vertical-align: top;
+}
+
+.performance-summary-tooltip__table th {
+  width: 47%;
+  padding-right: 12px;
+  color: #cbd5e1;
+  font-weight: 600;
+  text-align: left;
+}
+
+.performance-summary-tooltip__table td {
+  color: #ffffff;
+  font-weight: 750;
+  text-align: right;
+}
+
+.performance-summary-tooltip__table small {
+  display: block;
+  margin-top: 2px;
+  color: #94a3b8;
+  font-size: 8.5px;
+  font-weight: 500;
+  line-height: 1.35;
+}
+
+.performance-summary-tooltip__formula {
+  margin-top: 8px;
+  padding: 8px 9px;
+  border: 1px solid rgba(96, 165, 250, .20);
+  border-radius: 7px;
+  background: rgba(30, 64, 175, .16);
+  color: #dbeafe;
+}
+
+/* Balanced three-metric footers across all executive charts. */
+.performance-chart-kpis--three .performance-chart-kpi {
+  min-width: 0;
+}
+
+.performance-chart-kpis--three .performance-chart-kpi-label {
+  max-width: 100%;
+}
+
+.performance-chart-kpis--three .performance-chart-kpi-value {
+  font-size: 18px;
+}
+
+.performance-chart-kpis--three .performance-chart-kpi-inline-value {
+  gap: 4px;
+}
+
+.performance-chart-kpis--three .performance-chart-kpi-inline-value small {
+  display: block;
+  width: 100%;
+  margin-top: 2px;
+}
+
+
+/* ================================================================
+   BURNDOWN FOOTER — keep each metric inside its own third
+   ================================================================ */
+.performance-chart-card--burndown .performance-chart-kpis--three .performance-chart-kpi {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  align-items: center;
+  column-gap: 8px;
+  padding: 11px 10px;
+  overflow: hidden;
+}
+
+.performance-chart-card--burndown .performance-chart-kpi-icon {
+  width: 34px;
+  height: 34px;
+}
+
+.performance-chart-card--burndown .performance-chart-kpi-icon svg {
+  width: 16px;
+  height: 16px;
+}
+
+.performance-chart-card--burndown .performance-chart-kpi > div:last-child {
+  min-width: 0;
+  width: 100%;
+  overflow: hidden;
+}
+
+.performance-chart-card--burndown .performance-chart-kpi-label {
+  max-width: 100%;
+  overflow: visible;
+  white-space: normal;
+  text-overflow: clip;
+  overflow-wrap: anywhere;
+  font-size: 8.5px;
+  line-height: 1.22;
+}
+
+.performance-chart-card--burndown .performance-chart-kpi-value {
+  max-width: 100%;
+  overflow: hidden;
+  font-size: 16px;
+  line-height: 1.08;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.performance-chart-card--burndown .performance-chart-kpi-inline-value {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  align-items: start;
+  gap: 2px;
+  min-width: 0;
+}
+
+.performance-chart-card--burndown .performance-chart-kpi-inline-value small {
+  width: 100%;
+  margin: 0;
+  overflow: hidden;
+  color: #64748b;
+  font-size: 8px;
+  line-height: 1.2;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+@media (max-width: 1500px) and (min-width: 1281px) {
+  .performance-chart-card--burndown .performance-chart-kpis {
+    padding: 0 8px;
+  }
+
+  .performance-chart-card--burndown .performance-chart-kpis--three .performance-chart-kpi {
+    grid-template-columns: 31px minmax(0, 1fr);
+    column-gap: 6px;
+    padding: 10px 7px;
+  }
+
+  .performance-chart-card--burndown .performance-chart-kpi-icon {
+    width: 31px;
+    height: 31px;
+  }
+
+  .performance-chart-card--burndown .performance-chart-kpi-label {
+    font-size: 8px;
+  }
+
+  .performance-chart-card--burndown .performance-chart-kpi-value {
+    font-size: 15px;
+  }
+}
