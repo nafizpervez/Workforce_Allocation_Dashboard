@@ -162,7 +162,7 @@
             </div>
           </div>
 
-          <div class="dc revenue-budget-risk-card mt-6">
+          <div class="dc revenue-budget-risk-card revenue-analytics-card mt-6">
             <div class="dc-handle" title="Drag card">
               <svg width="11" height="11" viewBox="0 0 12 12" fill="currentColor">
                 <circle cx="4" cy="3" r="1" />
@@ -173,10 +173,10 @@
                 <circle cx="8" cy="9" r="1" />
               </svg>
             </div>
-            <div class="bg-white rounded-xl revenue-budget-risk-surface">
-              <div class="revenue-budget-risk-header card-title-pad">
+            <div class="bg-white rounded-xl revenue-budget-risk-surface revenue-analytics-surface">
+              <div class="revenue-budget-risk-header revenue-analytics-header card-title-pad">
                 <div class="flex items-center gap-3">
-                  <div class="revenue-budget-risk-icon" aria-hidden="true">
+                  <div id="revenueAnalyticsIcon" class="revenue-budget-risk-icon" aria-hidden="true">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                       <path d="M3 3v18h18" />
                       <path d="m7 15 4-4 3 3 5-7" />
@@ -184,57 +184,153 @@
                     </svg>
                   </div>
                   <div>
-                    <h3 id="budgetActualRiskTitle" class="font-semibold text-gray-900">PS Revenue · Budget vs Actual vs Risk</h3>
-                    <p id="budgetActualRiskSubtitle" class="text-xs text-gray-500 mt-0.5">Monthly Local PS + Intra-Sourcing revenue plan, Time Sheet actual, and outstanding revenue risk.</p>
+                    <h3 id="budgetActualRiskTitle" class="font-semibold text-gray-900">PS Revenue</h3>
+                    <p id="budgetActualRiskSubtitle" class="text-xs text-gray-500 mt-0.5">Revenue performance and contribution analysis.</p>
                   </div>
                 </div>
                 <div id="budgetActualRiskFyBadge" class="revenue-budget-risk-fy-badge">FY</div>
               </div>
 
-              <div id="budgetActualRiskSummary" class="revenue-budget-risk-summary" aria-label="Budget versus actual versus risk summary"></div>
-
-              <div id="budgetActualRiskStatus" class="revenue-budget-risk-status" aria-live="polite"></div>
-
-              <div class="revenue-budget-risk-chart-wrap">
-                <canvas id="budgetActualRiskChart"></canvas>
+              <div class="revenue-analytics-tabs" role="tablist" aria-label="PS Revenue analysis">
+                <button
+                  id="revenueAnalyticsBudgetTab"
+                  type="button"
+                  class="revenue-analytics-tab is-active"
+                  role="tab"
+                  aria-selected="true"
+                  aria-controls="revenueAnalyticsBudgetPane"
+                  data-revenue-analytics-tab="budget-risk"
+                  onclick="setRevenueAnalyticsTab('budget-risk')"
+                >
+                  <span class="revenue-analytics-tab__icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 16V8m5 8V4m5 12v-6m4 6H1" stroke-linecap="round"/><path d="m3 6 4-3 5 4 5-5" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  <span>Budget vs Actual vs Risk</span>
+                </button>
+                <button
+                  id="revenueAnalyticsMarginTab"
+                  type="button"
+                  class="revenue-analytics-tab"
+                  role="tab"
+                  aria-selected="false"
+                  aria-controls="revenueAnalyticsMarginPane"
+                  data-revenue-analytics-tab="contribution-margin"
+                  onclick="setRevenueAnalyticsTab('contribution-margin')"
+                >
+                  <span class="revenue-analytics-tab__icon" aria-hidden="true">
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 16h14" stroke-linecap="round"/><path d="M5 13V8m5 5V4m5 9V6" stroke-linecap="round"/><path d="m4 6 4-3 3 2 5-4" stroke-linecap="round" stroke-linejoin="round"/></svg>
+                  </span>
+                  <span>Contribution Margin</span>
+                </button>
               </div>
 
-              <div class="revenue-budget-risk-details">
-                <button
-                  id="budgetActualRiskTableToggle"
-                  type="button"
-                  class="revenue-budget-risk-table-toggle"
-                  aria-expanded="false"
-                  aria-controls="budgetActualRiskTablePanel"
-                  onclick="toggleBudgetRiskTable()"
-                >
-                  <span>Monthly reconciliation</span>
-                  <span class="revenue-budget-risk-table-toggle__meta">Expand</span>
-                  <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
-                    <path d="m6 8 4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
-                  </svg>
-                </button>
-                <div id="budgetActualRiskTablePanel" class="revenue-budget-risk-table-panel" hidden>
-                  <div class="revenue-budget-risk-table-wrap nice-scroll">
-                    <table class="revenue-budget-risk-table">
-                      <thead>
-                        <tr>
-                          <th>Month</th>
-                          <th>Budget</th>
-                          <th>Actual</th>
-                          <th>Risk</th>
-                          <th>Cum. Budget</th>
-                          <th>Cum. Actual</th>
-                          <th>Cum. Risk</th>
-                        </tr>
-                      </thead>
-                      <tbody id="budgetActualRiskTableBody"></tbody>
-                    </table>
+              <div id="revenueAnalyticsBudgetPane" class="revenue-analytics-pane is-active" role="tabpanel" aria-labelledby="revenueAnalyticsBudgetTab">
+                <div id="budgetActualRiskSummary" class="revenue-budget-risk-summary" aria-label="Budget versus actual versus risk summary"></div>
+                <div id="budgetActualRiskStatus" class="revenue-budget-risk-status" aria-live="polite"></div>
+                <div class="revenue-budget-risk-chart-wrap">
+                  <canvas id="budgetActualRiskChart"></canvas>
+                </div>
+                <div class="revenue-budget-risk-details">
+                  <button
+                    id="budgetActualRiskTableToggle"
+                    type="button"
+                    class="revenue-budget-risk-table-toggle"
+                    aria-expanded="false"
+                    aria-controls="budgetActualRiskTablePanel"
+                    onclick="toggleBudgetRiskTable()"
+                  >
+                    <span>Monthly reconciliation</span>
+                    <span class="revenue-budget-risk-table-toggle__meta">Expand</span>
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                      <path d="m6 8 4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </button>
+                  <div id="budgetActualRiskTablePanel" class="revenue-budget-risk-table-panel" hidden>
+                    <div class="revenue-budget-risk-table-wrap nice-scroll">
+                      <table class="revenue-budget-risk-table">
+                        <thead>
+                          <tr>
+                            <th>Month</th>
+                            <th>Budget</th>
+                            <th>Actual</th>
+                            <th>Risk</th>
+                            <th>Cum. Budget</th>
+                            <th>Cum. Actual</th>
+                            <th>Cum. Risk</th>
+                          </tr>
+                        </thead>
+                        <tbody id="budgetActualRiskTableBody"></tbody>
+                      </table>
+                    </div>
                   </div>
                 </div>
+                <div id="budgetActualRiskBasis" class="revenue-budget-risk-basis"></div>
               </div>
 
-              <div id="budgetActualRiskBasis" class="revenue-budget-risk-basis"></div>
+              <div id="revenueAnalyticsMarginPane" class="revenue-analytics-pane revenue-analytics-pane--margin" role="tabpanel" aria-labelledby="revenueAnalyticsMarginTab" hidden>
+                <div class="contribution-margin-hero">
+                  <div class="contribution-margin-hero__copy">
+                    <span class="contribution-margin-hero__eyebrow">Commercial performance</span>
+                    <h4>Contribution Margin</h4>
+                    <p>Revenue, resource cost basis and profitability across Pre-Sales, Local PS and Intra-Sourcing.</p>
+                  </div>
+                  <div class="contribution-margin-hero__formula">
+                    <span>Margin formula</span>
+                    <strong>Revenue ÷ Resource Cost Basis × 100</strong>
+                  </div>
+                </div>
+
+                <div id="contributionMarginSummary" class="revenue-budget-risk-summary contribution-margin-summary" aria-label="Contribution margin summary"></div>
+                <div id="contributionMarginStatus" class="revenue-budget-risk-status contribution-margin-status" aria-live="polite"></div>
+
+                <div class="contribution-margin-chart-shell">
+                  <div class="contribution-margin-chart-heading">
+                    <div>
+                      <span class="contribution-margin-chart-heading__eyebrow">Monthly performance</span>
+                      <h4>Revenue, Cost Basis, Profit & Margin</h4>
+                    </div>
+                    <span class="contribution-margin-chart-heading__hint">Hover any month for category-level detail</span>
+                  </div>
+                  <div class="revenue-budget-risk-chart-wrap contribution-margin-chart-wrap">
+                    <canvas id="contributionMarginChart"></canvas>
+                  </div>
+                </div>
+
+                <div class="revenue-budget-risk-details contribution-margin-details">
+                  <button
+                    id="contributionMarginTableToggle"
+                    type="button"
+                    class="revenue-budget-risk-table-toggle"
+                    aria-expanded="false"
+                    aria-controls="contributionMarginTablePanel"
+                    onclick="toggleContributionMarginTable()"
+                  >
+                    <span>Monthly contribution breakdown</span>
+                    <span class="revenue-budget-risk-table-toggle__meta">Expand</span>
+                    <svg viewBox="0 0 20 20" fill="none" stroke="currentColor" stroke-width="1.8" aria-hidden="true">
+                      <path d="m6 8 4 4 4-4" stroke-linecap="round" stroke-linejoin="round" />
+                    </svg>
+                  </button>
+                  <div id="contributionMarginTablePanel" class="revenue-budget-risk-table-panel" hidden>
+                    <div class="revenue-budget-risk-table-wrap nice-scroll">
+                      <table class="revenue-budget-risk-table contribution-margin-table">
+                        <thead>
+                          <tr>
+                            <th>Month</th>
+                            <th>Resource Cost Basis</th>
+                            <th>Revenue</th>
+                            <th>Profit</th>
+                            <th>Contribution Margin</th>
+                          </tr>
+                        </thead>
+                        <tbody id="contributionMarginTableBody"></tbody>
+                      </table>
+                    </div>
+                  </div>
+                </div>
+
+                <div id="contributionMarginBasis" class="revenue-budget-risk-basis contribution-margin-basis"></div>
+              </div>
             </div>
           </div>
 

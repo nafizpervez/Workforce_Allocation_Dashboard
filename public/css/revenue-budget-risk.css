@@ -405,3 +405,323 @@
   .revenue-budget-risk-details { margin: 2px 12px 12px; }
   .revenue-budget-risk-basis { padding: 2px 14px 15px; }
 }
+
+/* ================================================================
+   PS REVENUE ANALYTICS — TABBED CARD + CONTRIBUTION MARGIN
+   ================================================================ */
+.revenue-analytics-surface {
+  overflow: hidden;
+}
+
+.revenue-analytics-header {
+  border-bottom: 0;
+  padding-bottom: 14px;
+}
+
+.revenue-budget-risk-icon {
+  transition: color .22s ease, background .22s ease, border-color .22s ease, transform .22s ease;
+}
+
+.revenue-budget-risk-icon.is-contribution-margin {
+  border-color: #d1fae5;
+  background: #ecfdf5;
+  color: #047857;
+  transform: rotate(-2deg) scale(1.02);
+}
+
+.revenue-analytics-tabs {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 0 18px 12px;
+  border-bottom: 1px solid #e7edf5;
+  background: linear-gradient(180deg, #fbfdff 0%, #f8fafc 100%);
+}
+
+.revenue-analytics-tab {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 38px;
+  padding: 8px 13px;
+  border: 1px solid transparent;
+  border-radius: 9px;
+  background: transparent;
+  color: #64748b;
+  font-size: 10.5px;
+  font-weight: 750;
+  cursor: pointer;
+  transition: color .18s ease, background .18s ease, border-color .18s ease, box-shadow .18s ease, transform .18s ease;
+}
+
+.revenue-analytics-tab:hover {
+  color: #334155;
+  background: #ffffff;
+  border-color: #e2e8f0;
+}
+
+.revenue-analytics-tab:focus-visible {
+  outline: 2px solid rgba(37, 99, 235, .22);
+  outline-offset: 2px;
+}
+
+.revenue-analytics-tab.is-active {
+  color: #0f172a;
+  background: #ffffff;
+  border-color: #dbe4ef;
+  box-shadow: 0 4px 12px rgba(15, 23, 42, .055);
+  transform: translateY(-1px);
+}
+
+.revenue-analytics-tab.is-active::after {
+  content: "";
+  position: absolute;
+  left: 12px;
+  right: 12px;
+  bottom: -13px;
+  height: 2px;
+  border-radius: 999px;
+  background: #2563eb;
+}
+
+.revenue-analytics-tab[data-revenue-analytics-tab="contribution-margin"].is-active::after {
+  background: #059669;
+}
+
+.revenue-analytics-tab__icon {
+  display: grid;
+  place-items: center;
+  width: 20px;
+  height: 20px;
+  border-radius: 6px;
+  background: #f1f5f9;
+  color: #64748b;
+  transition: background .18s ease, color .18s ease;
+}
+
+.revenue-analytics-tab__icon svg {
+  width: 13px;
+  height: 13px;
+}
+
+.revenue-analytics-tab.is-active .revenue-analytics-tab__icon {
+  background: #eff6ff;
+  color: #2563eb;
+}
+
+.revenue-analytics-tab[data-revenue-analytics-tab="contribution-margin"].is-active .revenue-analytics-tab__icon {
+  background: #ecfdf5;
+  color: #047857;
+}
+
+.revenue-analytics-pane[hidden] {
+  display: none !important;
+}
+
+.revenue-analytics-pane.is-entering {
+  animation: revenuePaneIn .34s cubic-bezier(.2, .72, .3, 1) both;
+}
+
+@keyframes revenuePaneIn {
+  from { opacity: 0; transform: translateY(5px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* Contribution Margin executive treatment */
+.revenue-analytics-pane--margin {
+  background: linear-gradient(180deg, #fbfefd 0%, #ffffff 23%, #ffffff 100%);
+}
+
+.contribution-margin-hero {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 18px 20px 16px;
+  border-bottom: 1px solid #e7edf5;
+  background:
+    radial-gradient(circle at 92% 10%, rgba(16, 185, 129, .08), transparent 28%),
+    linear-gradient(135deg, #ffffff 0%, #f8fffc 100%);
+}
+
+.contribution-margin-hero__eyebrow,
+.contribution-margin-chart-heading__eyebrow {
+  display: block;
+  margin-bottom: 4px;
+  color: #059669;
+  font-size: 8.5px;
+  font-weight: 800;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+
+.contribution-margin-hero h4,
+.contribution-margin-chart-heading h4 {
+  margin: 0;
+  color: #0f172a;
+  font-size: 14px;
+  font-weight: 800;
+  letter-spacing: -.01em;
+}
+
+.contribution-margin-hero p {
+  margin: 4px 0 0;
+  color: #64748b;
+  font-size: 10px;
+  line-height: 1.45;
+}
+
+.contribution-margin-hero__formula {
+  flex: 0 0 auto;
+  min-width: 285px;
+  padding: 11px 13px;
+  border: 1px solid #d1fae5;
+  border-radius: 10px;
+  background: rgba(236, 253, 245, .78);
+  box-shadow: inset 0 1px 0 rgba(255, 255, 255, .8);
+}
+
+.contribution-margin-hero__formula span {
+  display: block;
+  margin-bottom: 3px;
+  color: #64748b;
+  font-size: 8.5px;
+  font-weight: 700;
+  letter-spacing: .04em;
+  text-transform: uppercase;
+}
+
+.contribution-margin-hero__formula strong {
+  display: block;
+  color: #065f46;
+  font-size: 10.5px;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+}
+
+.contribution-margin-summary {
+  background: #f8fbfa;
+}
+
+.contribution-margin-kpi {
+  overflow: hidden;
+  box-shadow: 0 3px 10px rgba(15, 23, 42, .025);
+}
+
+.contribution-margin-kpi::after {
+  content: "";
+  position: absolute;
+  width: 56px;
+  height: 56px;
+  top: -28px;
+  right: -20px;
+  border-radius: 999px;
+  background: rgba(148, 163, 184, .08);
+  pointer-events: none;
+}
+
+.contribution-margin-kpi--revenue::before { background: #059669; }
+.contribution-margin-kpi--cost::before { background: #2563eb; }
+.contribution-margin-kpi--profit::before { background: #d97706; }
+.contribution-margin-kpi--margin::before { background: #7c3aed; }
+.contribution-margin-kpi--scope::before { background: #64748b; }
+
+.contribution-margin-kpi--revenue .revenue-budget-risk-kpi__value { color: #047857; }
+.contribution-margin-kpi--cost .revenue-budget-risk-kpi__value { color: #1d4ed8; }
+.contribution-margin-kpi--profit.is-favorable .revenue-budget-risk-kpi__value { color: #047857; }
+.contribution-margin-kpi--profit.is-positive .revenue-budget-risk-kpi__value { color: #b45309; }
+.contribution-margin-kpi--margin .revenue-budget-risk-kpi__value { color: #6d28d9; }
+
+.revenue-analytics-pane.is-entering .contribution-margin-kpi {
+  animation: contributionMetricIn .42s cubic-bezier(.2, .72, .3, 1) both;
+}
+.revenue-analytics-pane.is-entering .contribution-margin-kpi:nth-child(2) { animation-delay: .035s; }
+.revenue-analytics-pane.is-entering .contribution-margin-kpi:nth-child(3) { animation-delay: .07s; }
+.revenue-analytics-pane.is-entering .contribution-margin-kpi:nth-child(4) { animation-delay: .105s; }
+.revenue-analytics-pane.is-entering .contribution-margin-kpi:nth-child(5) { animation-delay: .14s; }
+
+@keyframes contributionMetricIn {
+  from { opacity: 0; transform: translateY(7px) scale(.992); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+
+.contribution-margin-status {
+  background: linear-gradient(90deg, #ffffff, #fbfefd);
+}
+
+.contribution-margin-chart-shell {
+  margin: 14px 18px 4px;
+  border: 1px solid #e2e8f0;
+  border-radius: 12px;
+  overflow: hidden;
+  background: #ffffff;
+  box-shadow: 0 5px 18px rgba(15, 23, 42, .035);
+}
+
+.contribution-margin-chart-heading {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 13px 15px 8px;
+}
+
+.contribution-margin-chart-heading__hint {
+  color: #94a3b8;
+  font-size: 8.5px;
+  font-weight: 600;
+}
+
+.contribution-margin-chart-wrap {
+  height: 350px;
+  padding: 6px 14px 7px;
+  background: linear-gradient(180deg, #ffffff 0%, #fcfdfd 100%);
+}
+
+.contribution-margin-details {
+  margin-top: 12px;
+}
+
+.contribution-margin-basis {
+  padding-top: 0;
+}
+
+.contribution-margin-table th:nth-child(2),
+.contribution-margin-table td:nth-child(2) {
+  background-clip: padding-box;
+}
+
+@media (max-width: 850px) {
+  .revenue-analytics-tabs {
+    overflow-x: auto;
+    padding-bottom: 10px;
+  }
+  .revenue-analytics-tab {
+    flex: 0 0 auto;
+  }
+  .contribution-margin-hero {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .contribution-margin-hero__formula {
+    width: 100%;
+    min-width: 0;
+  }
+  .contribution-margin-chart-heading {
+    align-items: flex-start;
+    flex-direction: column;
+    gap: 5px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .revenue-analytics-pane.is-entering,
+  .revenue-analytics-pane.is-entering .contribution-margin-kpi {
+    animation: none !important;
+  }
+  .revenue-analytics-tab,
+  .revenue-budget-risk-icon {
+    transition: none !important;
+  }
+}
