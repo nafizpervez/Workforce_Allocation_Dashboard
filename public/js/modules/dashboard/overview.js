@@ -2743,6 +2743,8 @@ function getPsResourceCostSeries(categoryKeys = []) {
 
   const plannedCost = months.map(() => 0);
   const actualCost = months.map(() => 0);
+  const plannedCostedHours = months.map(() => 0);
+  const actualCostedHours = months.map(() => 0);
   const plannedUnpricedHours = months.map(() => 0);
   const actualUnpricedHours = months.map(() => 0);
   const plannedByCategory = Object.fromEntries(
@@ -2786,6 +2788,7 @@ function getPsResourceCostSeries(categoryKeys = []) {
 
     const cost = hours * costRate;
     plannedCost[index] += cost;
+    plannedCostedHours[index] += hours;
     plannedByCategory[categoryKey][index] += cost;
   }
 
@@ -2824,6 +2827,7 @@ function getPsResourceCostSeries(categoryKeys = []) {
 
     const cost = hours * costRate;
     actualCost[index] += cost;
+    actualCostedHours[index] += hours;
     actualByCategory[categoryKey][index] += cost;
   }
 
@@ -2838,12 +2842,15 @@ function getPsResourceCostSeries(categoryKeys = []) {
     labels: months.map(month => month.label),
     plannedCost: plannedCost.map(roundMoney),
     actualCost: actualCost.map(roundMoney),
+    plannedCostedHours: plannedCostedHours.map(roundHours),
+    actualCostedHours: actualCostedHours.map(roundHours),
     plannedByCategory: roundCategory(plannedByCategory),
     actualByCategory: roundCategory(actualByCategory),
     plannedUnpricedHours: plannedUnpricedHours.map(roundHours),
     actualUnpricedHours: actualUnpricedHours.map(roundHours),
   };
 }
+
 
 function formatContributionMarginPercent(value) {
   const numeric = Number(value);
@@ -2862,79 +2869,78 @@ function getContributionMarginSeries() {
   const rows = source.rows || [];
   const categories = ['preSales', 'serviceDeliveryLocalPs', 'serviceDeliveryIntrasourcing'];
   const costSource = getPsResourceCostSeries(categories);
-  const categoryLabels = {
-    preSales: 'Pre-Sales',
-    serviceDeliveryLocalPs: 'Local PS',
-    serviceDeliveryIntrasourcing: 'Intra-Sourcing',
-  };
   const roundMoney = value => +((Number(value) || 0).toFixed(2));
-  const sumCategoryRevenue = (monthlySource, key) => categories.reduce(
+  const sumCategoryRevenue = monthlySource => categories.reduce(
     (total, category) => total + (Number(monthlySource?.revenue?.[category]) || 0),
     0,
   );
 
   const labels = rows.map(row => row.label);
   const resourceCost = [];
+  const resourceHours = [];
   const revenue = [];
   const profit = [];
   const marginPercent = [];
   const reported = [];
-  const breakdown = categories.reduce((acc, key) => {
-    acc[key] = { cost: [], revenue: [] };
-    return acc;
-  }, {});
 
   let lastReportedIndex = -1;
   rows.forEach((row, index) => {
-    // Resource Cost Basis is planned resource effort priced with the new Cost Rate.
-    // Revenue remains selling revenue priced with Local / Intra / Pre-Sale revenue rates.
-    const monthCost = roundMoney(costSource.plannedCost[index]);
-    const monthRevenue = roundMoney(sumCategoryRevenue(row.actual));
     const isReported = Boolean(row.actual?.hasData);
+    const monthRevenue = roundMoney(sumCategoryRevenue(row.actual));
+    // Contribution performance is actual-vs-actual:
+    // actual Time Sheet revenue compared with actual Time Sheet resource cost.
+    const monthCost = roundMoney(Number(costSource.actualCost?.[index]) || 0);
+    const monthHours = Number(costSource.actualCostedHours?.[index]) || 0;
 
-    categories.forEach(key => {
-      breakdown[key].cost.push(roundMoney(Number(costSource.plannedByCategory?.[key]?.[index]) || 0));
-      breakdown[key].revenue.push(roundMoney(Number(row.actual?.revenue?.[key]) || 0));
-    });
-
-    resourceCost.push(monthCost);
+    resourceCost.push(isReported ? monthCost : null);
+    resourceHours.push(isReported ? monthHours : null);
     revenue.push(isReported ? monthRevenue : null);
     profit.push(isReported ? roundMoney(monthRevenue - monthCost) : null);
-    marginPercent.push(isReported && monthCost > 0 ? +(((monthRevenue / monthCost) * 100).toFixed(1)) : null);
+    marginPercent.push(isReported && monthCost > 0
+      ? +(((monthRevenue / monthCost) * 100).toFixed(1))
+      : null);
     reported.push(isReported);
     if (isReported) lastReportedIndex = index;
   });
 
   const ytdSliceEnd = lastReportedIndex >= 0 ? lastReportedIndex + 1 : 0;
-  const sumMoney = values => roundMoney((values || []).slice(0, ytdSliceEnd).reduce((t, v) => t + (Number(v) || 0), 0));
-  const ytdRevenue = sumMoney(revenue.map(value => value == null ? 0 : value));
+  const sumMoney = values => roundMoney((values || []).slice(0, ytdSliceEnd).reduce(
+    (total, value) => total + (Number(value) || 0),
+    0,
+  ));
+  const sumHours = values => +((values || []).slice(0, ytdSliceEnd).reduce(
+    (total, value) => total + (Number(value) || 0),
+    0,
+  ).toFixed(2));
+  const ytdRevenue = sumMoney(revenue);
   const ytdResourceCost = sumMoney(resourceCost);
+  const ytdResourceHours = sumHours(resourceHours);
   const ytdProfit = roundMoney(ytdRevenue - ytdResourceCost);
-  const ytdContributionMargin = ytdResourceCost > 0 ? +(((ytdRevenue / ytdResourceCost) * 100).toFixed(1)) : null;
+  const ytdContributionMargin = ytdResourceCost > 0
+    ? +(((ytdRevenue / ytdResourceCost) * 100).toFixed(1))
+    : null;
 
   return {
     fiscalYear: analysisFiscalYear,
     labels,
     revenue,
     resourceCost,
+    resourceHours,
     profit,
     marginPercent,
     reported,
     lastReportedIndex,
     ytdRevenue,
     ytdResourceCost,
+    ytdResourceHours,
     ytdProfit,
     ytdContributionMargin,
-    actualResourceCost: costSource.actualCost,
-    ytdActualResourceCost: sumMoney(costSource.actualCost),
-    costUnpricedPlannedHours: costSource.plannedUnpricedHours,
     costUnpricedActualHours: costSource.actualUnpricedHours,
     reportedMonths: reported.filter(Boolean).length,
     latestLabel: lastReportedIndex >= 0 ? labels[lastReportedIndex] : 'No reported month',
-    breakdown,
-    categoryLabels,
   };
 }
+
 
 const CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA = new Map();
 
@@ -2947,7 +2953,7 @@ function contributionMarginTooltipRows(rows) {
 function buildContributionMarginKpiTooltipData(series) {
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.clear();
   const fyLabel = fiscalYearDisplayLabel(series.fiscalYear);
-  const basisNote = 'Revenue uses actual Time Sheet revenue for Pre-Sales, Local PS, and Intra-Sourcing. Resource Cost Basis uses Resource Assignment hours for the same categories priced with the applicable effective-dated Cost Rate.';
+  const basisNote = 'Revenue is actual Time Sheet revenue. Resource Cost is calculated from the same reported Time Sheet resource hours using each matched employee/designation Cost Rate.';
 
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('revenue-ytd', `
     <div class="revenue-budget-risk-kpi-tooltip__title">Revenue YTD · ${esc(fyLabel)}</div>
@@ -2961,33 +2967,36 @@ function buildContributionMarginKpiTooltipData(series) {
   `);
 
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('resource-cost-ytd', `
-    <div class="revenue-budget-risk-kpi-tooltip__title">Resource Cost Basis YTD · ${esc(fyLabel)}</div>
+    <div class="revenue-budget-risk-kpi-tooltip__title">Resource Cost YTD · ${esc(fyLabel)}</div>
     <div class="revenue-budget-risk-kpi-tooltip__note">${esc(basisNote)}</div>
     ${contributionMarginTooltipRows([
-      { label: 'Resource Cost Basis YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Resource Cost YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Costed Time Sheet hours', value: `${Number(series.ytdResourceHours || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}h` },
       { label: 'Latest reported month', value: series.latestLabel },
     ])}
-    <div class="revenue-budget-risk-kpi-tooltip__formula">Resource Cost Basis YTD = assigned Resource Assignment hours through the latest reported month × applicable Cost Rate for Pre-Sales + Local PS + Intra-Sourcing.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Resource Cost YTD = Σ(each reported resource's applicable Time Sheet hours × that employee/designation Cost Rate).</div>
   `);
 
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('profit-ytd', `
     <div class="revenue-budget-risk-kpi-tooltip__title">Profit YTD · ${esc(fyLabel)}</div>
     ${contributionMarginTooltipRows([
       { label: 'Revenue YTD', value: formatBudgetRiskMoney(series.ytdRevenue, { exact: true }) },
-      { label: 'Resource Cost Basis YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Resource Cost YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Costed Time Sheet hours', value: `${Number(series.ytdResourceHours || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}h` },
       { label: 'Profit YTD', value: formatBudgetRiskMoney(series.ytdProfit, { exact: true }) },
     ])}
-    <div class="revenue-budget-risk-kpi-tooltip__formula">Profit = Revenue − Resource Cost Basis.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Profit = Actual Revenue − Actual Resource Cost.</div>
   `);
 
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('margin-ytd', `
     <div class="revenue-budget-risk-kpi-tooltip__title">Contribution Margin · ${esc(fyLabel)}</div>
     ${contributionMarginTooltipRows([
       { label: 'Revenue YTD', value: formatBudgetRiskMoney(series.ytdRevenue, { exact: true }) },
-      { label: 'Resource Cost Basis YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Resource Cost YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
+      { label: 'Costed Time Sheet hours', value: `${Number(series.ytdResourceHours || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}h` },
       { label: 'Contribution Margin', value: formatContributionMarginPercent(series.ytdContributionMargin) },
     ])}
-    <div class="revenue-budget-risk-kpi-tooltip__formula">Per your requested formula: Contribution Margin = Revenue ÷ Resource Cost Basis × 100.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Per your requested formula: Contribution Margin = Revenue ÷ Resource Cost × 100.</div>
   `);
 
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('reported-scope', `
@@ -3045,19 +3054,19 @@ function renderContributionMarginSummary(series) {
       <div class="revenue-budget-risk-kpi__meta">Actual revenue through ${esc(series.latestLabel)}</div>
     </div>
     <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--cost" data-contribution-margin-kpi-tooltip="resource-cost-ytd" tabindex="0">
-      <div class="revenue-budget-risk-kpi__label">Resource Cost Basis YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
+      <div class="revenue-budget-risk-kpi__label">Resource Cost YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
       <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdResourceCost))}</div>
-      <div class="revenue-budget-risk-kpi__meta">Assigned resource cost through ${esc(series.latestLabel)}</div>
+      <div class="revenue-budget-risk-kpi__meta">Actual Time Sheet resource cost through ${esc(series.latestLabel)}</div>
     </div>
     <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--profit revenue-budget-risk-kpi--risk ${profitClass}" data-contribution-margin-kpi-tooltip="profit-ytd" tabindex="0">
       <div class="revenue-budget-risk-kpi__label">Profit YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
       <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdProfit))}</div>
-      <div class="revenue-budget-risk-kpi__meta">Revenue − Resource Cost Basis</div>
+      <div class="revenue-budget-risk-kpi__meta">Revenue − Resource Cost</div>
     </div>
     <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--margin revenue-budget-risk-kpi--attainment" data-contribution-margin-kpi-tooltip="margin-ytd" tabindex="0">
       <div class="revenue-budget-risk-kpi__label">Contribution Margin <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
       <div class="revenue-budget-risk-kpi__value">${esc(formatContributionMarginPercent(series.ytdContributionMargin))}</div>
-      <div class="revenue-budget-risk-kpi__meta">Revenue ÷ Resource Cost Basis × 100</div>
+      <div class="revenue-budget-risk-kpi__meta">Revenue ÷ Resource Cost × 100</div>
     </div>
     <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--scope" data-contribution-margin-kpi-tooltip="reported-scope" tabindex="0">
       <div class="revenue-budget-risk-kpi__label">Reported Scope <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
@@ -3106,7 +3115,7 @@ function renderContributionMarginTable(series) {
   body.innerHTML = series.labels.map((label, index) => `
     <tr class="${index === series.lastReportedIndex ? 'is-latest-reported' : ''}">
       <td>${esc(label)}</td>
-      <td>${esc(formatBudgetRiskMoney(series.resourceCost[index]))}</td>
+      <td class="${series.reported[index] ? '' : 'is-not-reported'}">${series.reported[index] ? esc(formatBudgetRiskMoney(series.resourceCost[index])) : '—'}</td>
       <td class="${series.reported[index] ? '' : 'is-not-reported'}">${series.reported[index] ? esc(formatBudgetRiskMoney(series.revenue[index])) : '—'}</td>
       <td class="${series.reported[index] ? (Number(series.profit[index]) >= 0 ? 'risk-favorable' : 'risk-positive') : 'is-not-reported'}">${series.reported[index] ? esc(formatBudgetRiskMoney(series.profit[index])) : '—'}</td>
       <td class="${series.reported[index] ? '' : 'is-not-reported'}">${series.reported[index] ? esc(formatContributionMarginPercent(series.marginPercent[index])) : '—'}</td>
@@ -3120,10 +3129,9 @@ function renderContributionMarginBasis(series) {
   element.innerHTML = `
     <strong>Calculation basis:</strong>
     Revenue = actual Time Sheet revenue for <strong>Pre-Sales + Local PS + Intra-Sourcing</strong>.
-    Resource Cost Basis = assigned resource cost for the same categories from Resource Assignment
-    (${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable Cost Rate).
-    Profit = Revenue − Resource Cost Basis.
-    Contribution Margin = Revenue ÷ Resource Cost Basis × 100 (per your requested formula).
+    Resource Cost = actual reported Time Sheet resource hours × the matched employee/designation <strong>Cost Rate</strong>.
+    Profit = Revenue − Resource Cost.
+    Contribution Margin = Revenue ÷ Resource Cost × 100 (per your requested formula).
     The section follows the global Matrix FY selector.
   `;
 }
@@ -3145,14 +3153,10 @@ function renderContributionMarginTooltip(context, series) {
   }
 
   const rows = [
-    { label: 'Resource Cost Basis', value: formatBudgetRiskMoney(series.resourceCost[index], { exact: true }), emphasis: true },
-    { label: '↳ Pre-Sales cost basis', value: formatBudgetRiskMoney(series.breakdown.preSales.cost[index], { exact: true }) },
-    { label: '↳ Local PS cost basis', value: formatBudgetRiskMoney(series.breakdown.serviceDeliveryLocalPs.cost[index], { exact: true }) },
-    { label: '↳ Intra-Sourcing cost basis', value: formatBudgetRiskMoney(series.breakdown.serviceDeliveryIntrasourcing.cost[index], { exact: true }) },
-    { label: 'Revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.revenue[index], { exact: true }) : 'Not reported', emphasis: true },
-    { label: '↳ Pre-Sales revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.breakdown.preSales.revenue[index], { exact: true }) : '—' },
-    { label: '↳ Local PS revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.breakdown.serviceDeliveryLocalPs.revenue[index], { exact: true }) : '—' },
-    { label: '↳ Intra-Sourcing revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.breakdown.serviceDeliveryIntrasourcing.revenue[index], { exact: true }) : '—' },
+    { label: 'Actual Revenue', value: series.reported[index] ? formatBudgetRiskMoney(series.revenue[index], { exact: true }) : 'Not reported', emphasis: true },
+    { label: 'Costed Time Sheet hours', value: series.reported[index] ? `${Number(series.resourceHours?.[index] || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}h` : '—' },
+    { label: 'Actual Resource Cost', value: series.reported[index] ? formatBudgetRiskMoney(series.resourceCost[index], { exact: true }) : 'Not reported', emphasis: true },
+    { label: 'Cost formula', value: 'Σ resource hours × Cost Rate' },
     { label: 'Profit', value: series.reported[index] ? formatBudgetRiskMoney(series.profit[index], { exact: true }) : 'Not reported', risk: true },
     { label: 'Contribution Margin', value: series.reported[index] ? formatContributionMarginPercent(series.marginPercent[index]) : 'Not reported', emphasis: true },
   ];
@@ -3236,7 +3240,7 @@ function renderContributionMarginChart() {
       datasets: [
         {
           type: 'bar',
-          label: 'Resource cost basis',
+          label: 'Resource cost',
           data: series.resourceCost,
           yAxisID: 'yMoney',
           backgroundColor: 'rgba(37, 99, 235, 0.72)',
@@ -3469,6 +3473,7 @@ function getBudgetActualRiskSeries() {
   const ytdActualIntra = sumMoney((source.actualIntra || []).slice(0, ytdSliceEnd));
   const ytdPlannedResourceCost = sumMoney((costSource.plannedCost || []).slice(0, ytdSliceEnd));
   const ytdActualResourceCost = sumMoney((costSource.actualCost || []).slice(0, ytdSliceEnd));
+  const ytdActualResourceCostHours = +((costSource.actualCostedHours || []).slice(0, ytdSliceEnd).reduce((total, value) => total + (Number(value) || 0), 0).toFixed(2));
   const ytdProfit = roundMoney(ytdActual - ytdActualResourceCost);
   const fyPlannedResourceCost = sumMoney(costSource.plannedCost || []);
   const fyPlannedLocal = sumMoney(source.plannedLocal || []);
@@ -3493,10 +3498,13 @@ function getBudgetActualRiskSeries() {
     ytdActualIntra,
     ytdPlannedResourceCost,
     ytdActualResourceCost,
+    ytdActualResourceCostHours,
     ytdProfit,
     fyPlannedResourceCost,
     plannedResourceCost: costSource.plannedCost,
     actualResourceCost: costSource.actualCost,
+    plannedResourceCostHours: costSource.plannedCostedHours,
+    actualResourceCostHours: costSource.actualCostedHours,
     costUnpricedPlannedHours: costSource.plannedUnpricedHours,
     costUnpricedActualHours: costSource.actualUnpricedHours,
     fyPlannedLocal,
@@ -3579,15 +3587,14 @@ function buildBudgetRiskKpiTooltipData(series) {
 
   BUDGET_RISK_KPI_TOOLTIP_DATA.set('actual-ytd', `
     <div class="revenue-budget-risk-kpi-tooltip__title">Actual YTD · through ${esc(latestLabel)}</div>
-    <div class="revenue-budget-risk-kpi-tooltip__note">Derived from uploaded Time Sheet rows classified as Local PS or Intra-Sourcing, priced with the applicable effective-dated Resource Revenue rate for the matched resource.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__note">Actual is the reported PS revenue total. Resource Cost is calculated separately from the same Time Sheet delivery hours using the new employee/designation Cost Rate.</div>
     ${budgetRiskKpiTooltipRows([
-      { label: 'Local PS actual', value: formatBudgetRiskMoney(series.ytdActualLocal, { exact: true }) },
-      { label: 'Intra-Sourcing actual', value: formatBudgetRiskMoney(series.ytdActualIntra, { exact: true }) },
-      { label: 'Actual YTD', value: formatBudgetRiskMoney(series.ytdActual, { exact: true }) },
-      { label: 'Actual Resource Cost YTD', value: formatBudgetRiskMoney(series.ytdActualResourceCost, { exact: true }), note: 'Time Sheet hours × Cost Rate' },
-      { label: 'Profit YTD', value: formatBudgetRiskMoney(series.ytdProfit, { exact: true }), note: 'Revenue − Resource Cost' },
+      { label: 'Actual Revenue YTD', value: formatBudgetRiskMoney(series.ytdActual, { exact: true }) },
+      { label: 'Costed Time Sheet hours', value: `${Number(series.ytdActualResourceCostHours || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}h` },
+      { label: 'Actual Resource Cost YTD', value: formatBudgetRiskMoney(series.ytdActualResourceCost, { exact: true }), note: 'Σ resource Time Sheet hours × Cost Rate' },
+      { label: 'Profit YTD', value: formatBudgetRiskMoney(series.ytdProfit, { exact: true }), note: 'Actual Revenue − Actual Resource Cost' },
     ])}
-    <div class="revenue-budget-risk-kpi-tooltip__formula">Actual revenue = Time Sheet hours × applicable selling rate. Resource Cost = Time Sheet hours × Cost Rate. Profit = Revenue − Resource Cost. Actual YTD = sum of reported fiscal months through ${esc(latestLabel)}.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Cost Rate does not replace revenue. It prices employee/resource cost. Profit = Actual Revenue − Actual Resource Cost.</div>
     <div class="revenue-budget-risk-kpi-tooltip__note">${esc(actualRateNote)}</div>
   `);
 
@@ -3841,14 +3848,13 @@ function renderBudgetRiskTooltip(context, series) {
   const actualUnpriced = Number(series.actualUnpricedHours?.[index]) || 0;
 
   const rows = [
-    { label: 'Budget', value: formatBudgetRiskMoney(series.budget[index], { exact: true }), emphasis: true },
-    { label: '↳ Local PS plan', value: formatBudgetRiskMoney(series.plannedLocal?.[index], { exact: true }) },
-    { label: '↳ Intra-Sourcing plan', value: formatBudgetRiskMoney(series.plannedIntra?.[index], { exact: true }) },
-    { label: 'Actual', value: reported ? formatBudgetRiskMoney(series.actual[index], { exact: true }) : 'Not reported', emphasis: true },
-    { label: '↳ Local PS actual', value: reported ? formatBudgetRiskMoney(series.actualLocal?.[index], { exact: true }) : '—' },
-    { label: '↳ Intra-Sourcing actual', value: reported ? formatBudgetRiskMoney(series.actualIntra?.[index], { exact: true }) : '—' },
+    { label: 'Budget Revenue', value: formatBudgetRiskMoney(series.budget[index], { exact: true }), emphasis: true },
+    { label: 'Actual Revenue', value: reported ? formatBudgetRiskMoney(series.actual[index], { exact: true }) : 'Not reported', emphasis: true },
+    { label: 'Planned Costed Hours', value: `${Number(series.plannedResourceCostHours?.[index] || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}h` },
     { label: 'Planned Resource Cost', value: formatBudgetRiskMoney(series.plannedResourceCost?.[index], { exact: true }) },
+    { label: 'Actual Costed Hours', value: reported ? `${Number(series.actualResourceCostHours?.[index] || 0).toLocaleString('en-US', { maximumFractionDigits: 1 })}h` : '—' },
     { label: 'Actual Resource Cost', value: reported ? formatBudgetRiskMoney(series.actualResourceCost?.[index], { exact: true }) : 'Not reported' },
+    { label: 'Cost basis', value: 'Σ resource hours × Cost Rate' },
     { label: 'Actual Profit', value: reported ? formatBudgetRiskMoney((Number(series.actual[index]) || 0) - (Number(series.actualResourceCost?.[index]) || 0), { exact: true }) : 'Not reported', emphasis: true },
     { label: reported ? 'Risk = Budget − Actual' : 'Risk / outstanding', value: formatBudgetRiskMoney(risk, { exact: true }), risk: true },
     { label: 'Cumulative Budget', value: formatBudgetRiskMoney(series.cumulativeBudget[index], { exact: true }), emphasis: true },
