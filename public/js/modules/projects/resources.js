@@ -19,6 +19,68 @@ function psAssignedToOptionsHtml(selectedValue = '') {
   ].join('');
 }
 
+function psTeamAssignmentSourceText(teamAssignment) {
+  const assignedTo = teamAssignment?.assignedTo || '';
+  const assignmentMonthLabel = psTeamAssignmentMonthLabel(
+    teamAssignment?.monthKey || S.psTeamAssignments?.current?.monthKey || currentPsTeamAssignmentMonthKey(),
+  );
+  const effectiveMonthLabel = psTeamAssignmentMonthLabel(teamAssignment?.effectiveMonth || '');
+
+  if (assignedTo) {
+    return teamAssignment?.source === 'carried-forward'
+      ? `Carried forward from ${effectiveMonthLabel || assignmentMonthLabel || 'earlier month'}`
+      : `Manual · ${effectiveMonthLabel || assignmentMonthLabel || 'selected month'}`;
+  }
+  if (teamAssignment?.source === 'manual-unassigned') {
+    return `Unassigned manually · ${effectiveMonthLabel || assignmentMonthLabel || 'selected month'}`;
+  }
+  if (teamAssignment?.source === 'carried-forward-unassigned') {
+    return `Unassigned since ${effectiveMonthLabel || assignmentMonthLabel || 'earlier month'}`;
+  }
+  return '— · never assigned';
+}
+
+function refreshTeamResourceAssignmentRow(employeeId, selectEl = null) {
+  const employee = (S.employees || []).find(e => Number(e.id) === Number(employeeId));
+  if (!employee) {
+    if (selectEl) selectEl.disabled = false;
+    return;
+  }
+
+  const row = selectEl?.closest?.('[data-team-resource-row]') || null;
+  const teamAssignment = getCurrentPsTeamAssignment(employeeId);
+  const assignedTo = teamAssignment?.assignedTo || '';
+  const assignmentSource = psTeamAssignmentSourceText(teamAssignment);
+
+  const select = selectEl || row?.querySelector?.('.ps-team-assignment-select');
+  if (select) {
+    select.value = assignedTo;
+    select.disabled = false;
+    select.removeAttribute('aria-busy');
+  }
+
+  if (!row) return;
+
+  const source = row.querySelector('.ps-team-assignment-source');
+  if (source) {
+    source.textContent = assignmentSource;
+    source.title = assignmentSource;
+  }
+
+  row.dataset.search = [
+    employee.employee_code,
+    employee.name,
+    employee.email,
+    employee.dept,
+    employee.designation,
+    assignedTo,
+    employee.active !== 0 ? 'active' : 'inactive',
+  ].filter(Boolean).join(' ').toLowerCase();
+
+  const searchInput = document.getElementById('teamResourcesSearch');
+  if (searchInput) filterTeamResources(searchInput.value);
+}
+
 function openResourceModal() {
   const activeEmps = S.employees.filter(e => e.active !== 0);
   const inactiveEmps = S.employees.filter(e => e.active === 0);
@@ -29,18 +91,7 @@ function openResourceModal() {
     const clr = uc(util), badge = ub(util);
     const teamAssignment = getCurrentPsTeamAssignment(e.id);
     const assignedTo = teamAssignment?.assignedTo || '';
-    const assignmentMonthLabel = psTeamAssignmentMonthLabel(teamAssignment?.monthKey || S.psTeamAssignments?.current?.monthKey || currentPsTeamAssignmentMonthKey());
-    const effectiveMonthLabel = psTeamAssignmentMonthLabel(teamAssignment?.effectiveMonth || '');
-    let assignmentSource = `— · never assigned`;
-    if (assignedTo) {
-      assignmentSource = teamAssignment?.source === 'carried-forward'
-        ? `Carried forward from ${effectiveMonthLabel || assignmentMonthLabel || 'earlier month'}`
-        : `Manual · ${effectiveMonthLabel || assignmentMonthLabel || 'selected month'}`;
-    } else if (teamAssignment?.source === 'manual-unassigned') {
-      assignmentSource = `Unassigned manually · ${effectiveMonthLabel || assignmentMonthLabel || 'selected month'}`;
-    } else if (teamAssignment?.source === 'carried-forward-unassigned') {
-      assignmentSource = `Unassigned since ${effectiveMonthLabel || assignmentMonthLabel || 'earlier month'}`;
-    }
+    const assignmentSource = psTeamAssignmentSourceText(teamAssignment);
     const searchText = [
       e.employee_code,
       e.name,
@@ -1120,7 +1171,10 @@ async function saveEmployeePsTeamAssignment(employeeId, assignedTo, selectEl = n
   }
   if (!['', ...PS_ASSIGNED_TO_OPTIONS].includes(assignedTo)) return;
 
-  if (selectEl) selectEl.disabled = true;
+  if (selectEl) {
+    selectEl.disabled = true;
+    selectEl.setAttribute('aria-busy', 'true');
+  }
   try {
     await api('PATCH', `/api/ps-team-assignments/${Number(employeeId)}`, {
       assignedTo,
@@ -1131,14 +1185,20 @@ async function saveEmployeePsTeamAssignment(employeeId, assignedTo, selectEl = n
     // state. Do not force the utilization month selector: changing August
     // membership must not silently move a user who is reviewing July.
     if (typeof renderTeamUtilizationSummary === 'function') renderTeamUtilizationSummary();
-    openResourceModal();
+    // Keep the Team Resources modal open. Rebuilding it here caused a visible
+    // close/reopen flicker after every Assigned To change. Refresh only the
+    // changed row from the newly loaded effective-dated assignment state.
+    refreshTeamResourceAssignmentRow(employeeId, selectEl);
     const employee = (S.employees || []).find(e => Number(e.id) === Number(employeeId));
     toast(assignedTo
       ? `${employee?.name || 'Resource'} assigned to ${assignedTo} from ${psTeamAssignmentMonthLabel(currentMonth)} onward`
       : `${employee?.name || 'Resource'} is unassigned from ${psTeamAssignmentMonthLabel(currentMonth)} onward`);
   } catch (error) {
     toast(error.message || 'Failed to update Assigned To', 'error');
-    if (selectEl) selectEl.disabled = false;
+    if (selectEl) {
+      selectEl.disabled = false;
+      selectEl.removeAttribute('aria-busy');
+    }
   }
 }
 

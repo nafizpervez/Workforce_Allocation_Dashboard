@@ -6,6 +6,7 @@ const REVENUE_RATE_MODAL_COLUMNS = Object.freeze([
     field: 'local_rate',
     label: 'Local / Pre-Sale / Training',
   }),
+  Object.freeze({ field: 'cost_rate', label: 'Cost Rate' }),
 ]);
 
 let pendingRevenueRateSave = null;
@@ -56,7 +57,7 @@ function openRevenueRatesModal(draftRates = null) {
   openModal(`
     ${mHdr(
       'Resource Revenue',
-      'Set the Intra-Sourcing rate and the shared Local / Pre-Sale / Training rate for each designation group.',
+      'Set the Intra-Sourcing rate, shared Local / Pre-Sale / Training rate, and Cost Rate for each designation group.',
     )}
 
     <div class="p-6">
@@ -67,7 +68,7 @@ function openRevenueRatesModal(draftRates = null) {
       </div>
 
       <div class="nice-scroll overflow-x-auto rounded-xl border border-gray-200">
-        <table class="w-full min-w-[680px] border-collapse">
+        <table class="w-full min-w-[900px] border-collapse">
           <thead class="bg-gray-50">
             <tr class="border-b border-gray-200">
               <th class="sticky left-0 z-[2] bg-gray-50 px-4 py-3 text-left text-xs font-semibold text-gray-500">Designation</th>
@@ -89,7 +90,7 @@ function openRevenueRatesModal(draftRates = null) {
         Save Rates
       </button>
     </div>
-  `, 'max-w-4xl');
+  `, 'max-w-5xl');
 }
 
 function collectRevenueRateDraft() {

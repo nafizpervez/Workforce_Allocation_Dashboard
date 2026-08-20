@@ -46,7 +46,7 @@ router.put('/api/revenue-rates', (req, res) => {
     submittedRates.length !== REVENUE_DESIGNATIONS.length
   ) {
     return res.status(400).json({
-      error: 'Submit one non-negative Intra-Sourcing rate and one non-negative shared Local / Pre Sale / Training rate for every supported designation group.',
+      error: 'Submit one non-negative Intra-Sourcing rate, one non-negative shared Local / Pre Sale / Training rate, and one non-negative Cost Rate for every supported designation group.',
     });
   }
 
