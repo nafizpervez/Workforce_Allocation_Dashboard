@@ -2724,6 +2724,127 @@ function renderBurnupChart() {
 }
 
 
+
+function getPsResourceCostSeries(categoryKeys = []) {
+  const analysisFiscalYear = getRevenueAnalysisFiscalYear();
+  const months = fiscalMonths(analysisFiscalYear);
+  const allowedCategories = new Set(categoryKeys);
+  const monthIndex = new Map(months.map((month, index) => [`${month.y}-${month.m}`, index]));
+  const activeEmployees = getActiveEmployees();
+  const employeesById = new Map(activeEmployees.map(employee => [Number(employee.id), employee]));
+  const employeesByName = new Map();
+
+  for (const employee of activeEmployees) {
+    const key = typeof normalizePersonName === 'function'
+      ? normalizePersonName(employee.name)
+      : String(employee.name || '').trim().toLowerCase();
+    if (key && !employeesByName.has(key)) employeesByName.set(key, employee);
+  }
+
+  const plannedCost = months.map(() => 0);
+  const actualCost = months.map(() => 0);
+  const plannedUnpricedHours = months.map(() => 0);
+  const actualUnpricedHours = months.map(() => 0);
+  const plannedByCategory = Object.fromEntries(
+    [...allowedCategories].map(key => [key, months.map(() => 0)]),
+  );
+  const actualByCategory = Object.fromEntries(
+    [...allowedCategories].map(key => [key, months.map(() => 0)]),
+  );
+
+  const getCostRate = (employee, dateValue) => {
+    if (!employee) return null;
+    const value = typeof getRevenueRateValueAtDate === 'function'
+      ? getRevenueRateValueAtDate(employee.designation, 'cost_rate', dateValue)
+      : Number(getRevenueRateForDesignationAtDate(employee.designation, dateValue)?.cost_rate);
+    return Number.isFinite(value) && value >= 0 ? value : null;
+  };
+
+  for (const assignment of getEffectiveFiscalAssignments(analysisFiscalYear, S.matrixAssignments)) {
+    const employee = employeesById.get(Number(assignment.employee_id));
+    if (!employee) continue;
+    const index = monthIndex.get(`${Number(assignment.year)}-${Number(assignment.month)}`);
+    if (index === undefined) continue;
+
+    const percentage = Number(assignment.percentage);
+    if (!Number.isFinite(percentage) || percentage <= 0) continue;
+
+    const projectName = typeof getSummaryAssignmentProjectName === 'function'
+      ? getSummaryAssignmentProjectName(assignment)
+      : String(assignment.project_name || '').trim();
+    const categoryKey = typeof classifyMonthlyPlannedWorkType === 'function'
+      ? classifyMonthlyPlannedWorkType(projectName)
+      : null;
+    if (!allowedCategories.has(categoryKey)) continue;
+
+    const hours = WORK_HOURS_PER_WEEK * (percentage / 100);
+    const costRate = getCostRate(employee, getRevenueRateDateForAssignment(assignment));
+    if (costRate === null) {
+      plannedUnpricedHours[index] += hours;
+      continue;
+    }
+
+    const cost = hours * costRate;
+    plannedCost[index] += cost;
+    plannedByCategory[categoryKey][index] += cost;
+  }
+
+  const visibleTimesheetRows = typeof getVisibleTimesheetRows === 'function'
+    ? getVisibleTimesheetRows()
+    : (S.timesheetRows || []);
+
+  for (const row of visibleTimesheetRows) {
+    const parsedMonth = typeof parseMonthlyWorkMonth === 'function'
+      ? parseMonthlyWorkMonth(row.month ?? row.Month ?? row.month_label ?? row.monthLabel)
+      : null;
+    if (!parsedMonth) continue;
+    const index = monthIndex.get(`${parsedMonth.year}-${parsedMonth.month}`);
+    if (index === undefined) continue;
+
+    const hours = Number(row.qty ?? row.hours ?? row.quantity);
+    if (!Number.isFinite(hours) || hours <= 0) continue;
+
+    const categoryKey = typeof classifyMonthlyActualWorkType === 'function'
+      ? classifyMonthlyActualWorkType(row.workType ?? row.work_type ?? row['Work Type'])
+      : null;
+    if (!allowedCategories.has(categoryKey)) continue;
+
+    const workerKey = typeof normalizePersonName === 'function'
+      ? normalizePersonName(row.worker)
+      : String(row.worker || '').trim().toLowerCase();
+    const employee = employeesByName.get(workerKey);
+    const costRate = getCostRate(
+      employee,
+      getRevenueRateDateForTimesheetRow(row, parsedMonth.year, parsedMonth.month),
+    );
+    if (costRate === null) {
+      actualUnpricedHours[index] += hours;
+      continue;
+    }
+
+    const cost = hours * costRate;
+    actualCost[index] += cost;
+    actualByCategory[categoryKey][index] += cost;
+  }
+
+  const roundMoney = value => +((Number(value) || 0).toFixed(2));
+  const roundHours = value => +((Number(value) || 0).toFixed(2));
+  const roundCategory = source => Object.fromEntries(
+    Object.entries(source).map(([key, values]) => [key, values.map(roundMoney)]),
+  );
+
+  return {
+    fiscalYear: analysisFiscalYear,
+    labels: months.map(month => month.label),
+    plannedCost: plannedCost.map(roundMoney),
+    actualCost: actualCost.map(roundMoney),
+    plannedByCategory: roundCategory(plannedByCategory),
+    actualByCategory: roundCategory(actualByCategory),
+    plannedUnpricedHours: plannedUnpricedHours.map(roundHours),
+    actualUnpricedHours: actualUnpricedHours.map(roundHours),
+  };
+}
+
 function formatContributionMarginPercent(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return '—';
@@ -2740,6 +2861,7 @@ function getContributionMarginSeries() {
     : { rows: [] };
   const rows = source.rows || [];
   const categories = ['preSales', 'serviceDeliveryLocalPs', 'serviceDeliveryIntrasourcing'];
+  const costSource = getPsResourceCostSeries(categories);
   const categoryLabels = {
     preSales: 'Pre-Sales',
     serviceDeliveryLocalPs: 'Local PS',
@@ -2764,12 +2886,14 @@ function getContributionMarginSeries() {
 
   let lastReportedIndex = -1;
   rows.forEach((row, index) => {
-    const monthCost = roundMoney(sumCategoryRevenue(row.planned));
+    // Resource Cost Basis is planned resource effort priced with the new Cost Rate.
+    // Revenue remains selling revenue priced with Local / Intra / Pre-Sale revenue rates.
+    const monthCost = roundMoney(costSource.plannedCost[index]);
     const monthRevenue = roundMoney(sumCategoryRevenue(row.actual));
     const isReported = Boolean(row.actual?.hasData);
 
     categories.forEach(key => {
-      breakdown[key].cost.push(roundMoney(Number(row.planned?.revenue?.[key]) || 0));
+      breakdown[key].cost.push(roundMoney(Number(costSource.plannedByCategory?.[key]?.[index]) || 0));
       breakdown[key].revenue.push(roundMoney(Number(row.actual?.revenue?.[key]) || 0));
     });
 
@@ -2801,6 +2925,10 @@ function getContributionMarginSeries() {
     ytdResourceCost,
     ytdProfit,
     ytdContributionMargin,
+    actualResourceCost: costSource.actualCost,
+    ytdActualResourceCost: sumMoney(costSource.actualCost),
+    costUnpricedPlannedHours: costSource.plannedUnpricedHours,
+    costUnpricedActualHours: costSource.actualUnpricedHours,
     reportedMonths: reported.filter(Boolean).length,
     latestLabel: lastReportedIndex >= 0 ? labels[lastReportedIndex] : 'No reported month',
     breakdown,
@@ -2819,7 +2947,7 @@ function contributionMarginTooltipRows(rows) {
 function buildContributionMarginKpiTooltipData(series) {
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.clear();
   const fyLabel = fiscalYearDisplayLabel(series.fiscalYear);
-  const basisNote = 'Revenue uses actual Time Sheet revenue for Pre-Sales, Local PS, and Intra-Sourcing. Resource Cost Basis uses the assigned resource value for the same categories from Resource Assignment and the applicable effective-dated Resource Revenue rate.';
+  const basisNote = 'Revenue uses actual Time Sheet revenue for Pre-Sales, Local PS, and Intra-Sourcing. Resource Cost Basis uses Resource Assignment hours for the same categories priced with the applicable effective-dated Cost Rate.';
 
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('revenue-ytd', `
     <div class="revenue-budget-risk-kpi-tooltip__title">Revenue YTD · ${esc(fyLabel)}</div>
@@ -2839,7 +2967,7 @@ function buildContributionMarginKpiTooltipData(series) {
       { label: 'Resource Cost Basis YTD', value: formatBudgetRiskMoney(series.ytdResourceCost, { exact: true }) },
       { label: 'Latest reported month', value: series.latestLabel },
     ])}
-    <div class="revenue-budget-risk-kpi-tooltip__formula">Resource Cost Basis YTD = sum of assigned resource value through the latest reported month for Pre-Sales + Local PS + Intra-Sourcing.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Resource Cost Basis YTD = assigned Resource Assignment hours through the latest reported month × applicable Cost Rate for Pre-Sales + Local PS + Intra-Sourcing.</div>
   `);
 
   CONTRIBUTION_MARGIN_KPI_TOOLTIP_DATA.set('profit-ytd', `
@@ -2919,7 +3047,7 @@ function renderContributionMarginSummary(series) {
     <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--cost" data-contribution-margin-kpi-tooltip="resource-cost-ytd" tabindex="0">
       <div class="revenue-budget-risk-kpi__label">Resource Cost Basis YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
       <div class="revenue-budget-risk-kpi__value">${esc(formatBudgetRiskMoney(series.ytdResourceCost))}</div>
-      <div class="revenue-budget-risk-kpi__meta">Assigned resource value through ${esc(series.latestLabel)}</div>
+      <div class="revenue-budget-risk-kpi__meta">Assigned resource cost through ${esc(series.latestLabel)}</div>
     </div>
     <div class="revenue-budget-risk-kpi contribution-margin-kpi contribution-margin-kpi--profit revenue-budget-risk-kpi--risk ${profitClass}" data-contribution-margin-kpi-tooltip="profit-ytd" tabindex="0">
       <div class="revenue-budget-risk-kpi__label">Profit YTD <span class="revenue-budget-risk-kpi__info" aria-hidden="true">i</span></div>
@@ -2992,8 +3120,8 @@ function renderContributionMarginBasis(series) {
   element.innerHTML = `
     <strong>Calculation basis:</strong>
     Revenue = actual Time Sheet revenue for <strong>Pre-Sales + Local PS + Intra-Sourcing</strong>.
-    Resource Cost Basis = assigned resource value for the same categories from Resource Assignment
-    (${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable hourly rate).
+    Resource Cost Basis = assigned resource cost for the same categories from Resource Assignment
+    (${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable Cost Rate).
     Profit = Revenue − Resource Cost Basis.
     Contribution Margin = Revenue ÷ Resource Cost Basis × 100 (per your requested formula).
     The section follows the global Matrix FY selector.
@@ -3279,6 +3407,7 @@ function formatBudgetRiskPercent(value) {
 
 function getBudgetActualRiskSeries() {
   const source = getAssignmentBurnRevenueSeries();
+  const costSource = getPsResourceCostSeries(['serviceDeliveryLocalPs', 'serviceDeliveryIntrasourcing']);
   const roundMoney = value => +((Number(value) || 0).toFixed(2));
   const sumMoney = values => roundMoney((values || []).reduce(
     (total, value) => total + (Number(value) || 0),
@@ -3338,6 +3467,10 @@ function getBudgetActualRiskSeries() {
   const ytdSliceEnd = lastReportedIndex >= 0 ? lastReportedIndex + 1 : 0;
   const ytdActualLocal = sumMoney((source.actualLocal || []).slice(0, ytdSliceEnd));
   const ytdActualIntra = sumMoney((source.actualIntra || []).slice(0, ytdSliceEnd));
+  const ytdPlannedResourceCost = sumMoney((costSource.plannedCost || []).slice(0, ytdSliceEnd));
+  const ytdActualResourceCost = sumMoney((costSource.actualCost || []).slice(0, ytdSliceEnd));
+  const ytdProfit = roundMoney(ytdActual - ytdActualResourceCost);
+  const fyPlannedResourceCost = sumMoney(costSource.plannedCost || []);
   const fyPlannedLocal = sumMoney(source.plannedLocal || []);
   const fyPlannedIntra = sumMoney(source.plannedIntra || []);
 
@@ -3358,6 +3491,14 @@ function getBudgetActualRiskSeries() {
     ytdVariance,
     ytdActualLocal,
     ytdActualIntra,
+    ytdPlannedResourceCost,
+    ytdActualResourceCost,
+    ytdProfit,
+    fyPlannedResourceCost,
+    plannedResourceCost: costSource.plannedCost,
+    actualResourceCost: costSource.actualCost,
+    costUnpricedPlannedHours: costSource.plannedUnpricedHours,
+    costUnpricedActualHours: costSource.actualUnpricedHours,
     fyPlannedLocal,
     fyPlannedIntra,
     committedTarget,
@@ -3411,6 +3552,7 @@ function buildBudgetRiskKpiTooltipData(series) {
       { label: 'Local PS plan', value: formatBudgetRiskMoney(series.fyPlannedLocal, { exact: true }) },
       { label: 'Intra-Sourcing plan', value: formatBudgetRiskMoney(series.fyPlannedIntra, { exact: true }) },
       { label: 'FY Budget Plan', value: formatBudgetRiskMoney(series.fyBudget, { exact: true }) },
+      { label: 'FY Resource Cost', value: formatBudgetRiskMoney(series.fyPlannedResourceCost, { exact: true }), note: 'Resource Assignment hours × Cost Rate' },
     ])}
     <div class="revenue-budget-risk-kpi-tooltip__formula">Monthly revenue = ${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable hourly rate. FY Budget Plan = sum of all fiscal-month Local PS + Intra-Sourcing planned revenue.</div>
     <div class="revenue-budget-risk-kpi-tooltip__note">${esc(budgetRateNote)}</div>
@@ -3442,8 +3584,10 @@ function buildBudgetRiskKpiTooltipData(series) {
       { label: 'Local PS actual', value: formatBudgetRiskMoney(series.ytdActualLocal, { exact: true }) },
       { label: 'Intra-Sourcing actual', value: formatBudgetRiskMoney(series.ytdActualIntra, { exact: true }) },
       { label: 'Actual YTD', value: formatBudgetRiskMoney(series.ytdActual, { exact: true }) },
+      { label: 'Actual Resource Cost YTD', value: formatBudgetRiskMoney(series.ytdActualResourceCost, { exact: true }), note: 'Time Sheet hours × Cost Rate' },
+      { label: 'Profit YTD', value: formatBudgetRiskMoney(series.ytdProfit, { exact: true }), note: 'Revenue − Resource Cost' },
     ])}
-    <div class="revenue-budget-risk-kpi-tooltip__formula">Actual revenue = Time Sheet hours × applicable hourly rate. Actual YTD = sum of reported fiscal months through ${esc(latestLabel)}.</div>
+    <div class="revenue-budget-risk-kpi-tooltip__formula">Actual revenue = Time Sheet hours × applicable selling rate. Resource Cost = Time Sheet hours × Cost Rate. Profit = Revenue − Resource Cost. Actual YTD = sum of reported fiscal months through ${esc(latestLabel)}.</div>
     <div class="revenue-budget-risk-kpi-tooltip__note">${esc(actualRateNote)}</div>
   `);
 
@@ -3600,6 +3744,8 @@ function renderBudgetRiskStatus(series) {
     <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
     <span class="revenue-budget-risk-status__variance ${varianceClass}"><strong>${esc(formatBudgetRiskMoney(Math.abs(series.ytdVariance)))}</strong> ${esc(varianceLabel)}</span>
     <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
+    <span><strong>${esc(formatBudgetRiskMoney(series.ytdProfit))}</strong> YTD profit</span>
+    <span class="revenue-budget-risk-status__divider" aria-hidden="true"></span>
     <span>${esc(targetText)}</span>
   `;
 }
@@ -3663,8 +3809,10 @@ function renderBudgetRiskBasis(series) {
   element.innerHTML = `
     <strong>Calculation basis:</strong>
     Budget = Local PS + Intra-Sourcing Resource Assignment revenue
-    (${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable Resource Revenue hourly rate).
-    Actual = Local PS + Intra-Sourcing Time Sheet hours × applicable rate.
+    (${Number(WORK_HOURS_PER_WEEK).toLocaleString('en-US', { maximumFractionDigits: 2 })} hours/week × allocation % × applicable selling/revenue rate).
+    Actual = Local PS + Intra-Sourcing Time Sheet hours × applicable selling/revenue rate.
+    Resource Cost = corresponding Resource Assignment / Time Sheet hours × applicable Cost Rate.
+    Profit = Revenue − Resource Cost.
     Risk = Budget − Actual; for a future/unreported month, Actual is treated as 0 so the month's full planned revenue remains outstanding.
     Cumulative lines are running totals from April to March.${unpricedNote}
   `;
@@ -3699,6 +3847,9 @@ function renderBudgetRiskTooltip(context, series) {
     { label: 'Actual', value: reported ? formatBudgetRiskMoney(series.actual[index], { exact: true }) : 'Not reported', emphasis: true },
     { label: '↳ Local PS actual', value: reported ? formatBudgetRiskMoney(series.actualLocal?.[index], { exact: true }) : '—' },
     { label: '↳ Intra-Sourcing actual', value: reported ? formatBudgetRiskMoney(series.actualIntra?.[index], { exact: true }) : '—' },
+    { label: 'Planned Resource Cost', value: formatBudgetRiskMoney(series.plannedResourceCost?.[index], { exact: true }) },
+    { label: 'Actual Resource Cost', value: reported ? formatBudgetRiskMoney(series.actualResourceCost?.[index], { exact: true }) : 'Not reported' },
+    { label: 'Actual Profit', value: reported ? formatBudgetRiskMoney((Number(series.actual[index]) || 0) - (Number(series.actualResourceCost?.[index]) || 0), { exact: true }) : 'Not reported', emphasis: true },
     { label: reported ? 'Risk = Budget − Actual' : 'Risk / outstanding', value: formatBudgetRiskMoney(risk, { exact: true }), risk: true },
     { label: 'Cumulative Budget', value: formatBudgetRiskMoney(series.cumulativeBudget[index], { exact: true }), emphasis: true },
     { label: 'Cumulative Actual', value: formatBudgetRiskMoney(series.cumulativeActual[index], { exact: true }), emphasis: true },

@@ -9,6 +9,7 @@ const REVENUE_DESIGNATIONS = Object.freeze([
 const REVENUE_RATE_FIELDS = Object.freeze([
   'intrasourcing_rate',
   'local_rate',
+  'cost_rate',
 ]);
 
 const REVENUE_RATE_BASELINE_DATE = '1900-01-01';
@@ -50,14 +51,25 @@ function ensureRevenueRateHistoryTable(db) {
       effective_from TEXT NOT NULL,
       intrasourcing_rate REAL NOT NULL DEFAULT 0,
       local_rate REAL NOT NULL DEFAULT 0,
+      cost_rate REAL NOT NULL DEFAULT 0,
       change_scope TEXT NOT NULL DEFAULT 'all',
       created_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CHECK (intrasourcing_rate >= 0),
       CHECK (local_rate >= 0),
+      CHECK (cost_rate >= 0),
       CHECK (change_scope IN ('future', 'all')),
       UNIQUE (designation, effective_from)
     )
   `).run();
+
+  const historyColumns = getTableColumns(db, 'designation_revenue_rate_history');
+  if (!historyColumns.has('cost_rate')) {
+    db.prepare(`
+      ALTER TABLE designation_revenue_rate_history
+      ADD COLUMN cost_rate REAL NOT NULL DEFAULT 0 CHECK (cost_rate >= 0)
+    `).run();
+  }
+
   db.prepare(`
     CREATE INDEX IF NOT EXISTS idx_designation_revenue_rate_history_lookup
     ON designation_revenue_rate_history(designation, effective_from)
@@ -71,12 +83,14 @@ function ensureRevenueRatesTable(db) {
       professional_service_rate REAL NOT NULL DEFAULT 0,
       intrasourcing_rate REAL NOT NULL DEFAULT 0,
       local_rate REAL NOT NULL DEFAULT 0,
+      cost_rate REAL NOT NULL DEFAULT 0,
       pre_sale_rate REAL NOT NULL DEFAULT 0,
       training_rate REAL NOT NULL DEFAULT 0,
       updated_at TEXT NOT NULL DEFAULT CURRENT_TIMESTAMP,
       CHECK (professional_service_rate >= 0),
       CHECK (intrasourcing_rate >= 0),
       CHECK (local_rate >= 0),
+      CHECK (cost_rate >= 0),
       CHECK (pre_sale_rate >= 0),
       CHECK (training_rate >= 0)
     )
@@ -84,6 +98,7 @@ function ensureRevenueRatesTable(db) {
 
   const intrasourcingAdded = addRevenueRateColumn(db, 'intrasourcing_rate');
   const localAdded = addRevenueRateColumn(db, 'local_rate');
+  addRevenueRateColumn(db, 'cost_rate');
   addRevenueRateColumn(db, 'pre_sale_rate');
   addRevenueRateColumn(db, 'training_rate');
 
@@ -107,9 +122,10 @@ function ensureRevenueRatesTable(db) {
       professional_service_rate,
       intrasourcing_rate,
       local_rate,
+      cost_rate,
       pre_sale_rate,
       training_rate
-    ) VALUES (?, 0, 0, 0, 0, 0)
+    ) VALUES (?, 0, 0, 0, 0, 0, 0)
   `);
 
   db.transaction(() => {
@@ -124,9 +140,10 @@ function ensureRevenueRatesTable(db) {
       effective_from,
       intrasourcing_rate,
       local_rate,
+      cost_rate,
       change_scope
     )
-    SELECT designation, ?, intrasourcing_rate, local_rate, 'all'
+    SELECT designation, ?, intrasourcing_rate, local_rate, cost_rate, 'all'
     FROM designation_revenue_rates
     WHERE designation = ?
   `);
@@ -150,6 +167,7 @@ function listRevenueRates(db) {
       designation,
       intrasourcing_rate,
       local_rate,
+      cost_rate,
       updated_at
     FROM designation_revenue_rates
   `).all();
@@ -160,6 +178,7 @@ function listRevenueRates(db) {
       effective_from,
       intrasourcing_rate,
       local_rate,
+      cost_rate,
       change_scope,
       created_at
     FROM designation_revenue_rate_history
@@ -178,6 +197,7 @@ function listRevenueRates(db) {
       designation,
       intrasourcing_rate: 0,
       local_rate: 0,
+      cost_rate: 0,
       updated_at: null,
     }),
     history: historyMap.get(designation) || [],
@@ -190,7 +210,7 @@ function ratesEqual(left, right) {
 
 function getLatestHistoryRate(db, designation) {
   return db.prepare(`
-    SELECT designation, effective_from, intrasourcing_rate, local_rate
+    SELECT designation, effective_from, intrasourcing_rate, local_rate, cost_rate
     FROM designation_revenue_rate_history
     WHERE designation = ?
     ORDER BY effective_from DESC, id DESC
@@ -208,14 +228,16 @@ function updateRevenueRateSnapshot(db, designation) {
       professional_service_rate,
       intrasourcing_rate,
       local_rate,
+      cost_rate,
       pre_sale_rate,
       training_rate,
       updated_at
-    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(designation) DO UPDATE SET
       professional_service_rate = excluded.professional_service_rate,
       intrasourcing_rate = excluded.intrasourcing_rate,
       local_rate = excluded.local_rate,
+      cost_rate = excluded.cost_rate,
       pre_sale_rate = excluded.pre_sale_rate,
       training_rate = excluded.training_rate,
       updated_at = CURRENT_TIMESTAMP
@@ -224,6 +246,7 @@ function updateRevenueRateSnapshot(db, designation) {
     latest.intrasourcing_rate,
     latest.intrasourcing_rate,
     latest.local_rate,
+    latest.cost_rate,
     latest.local_rate,
     latest.local_rate,
   );
@@ -253,12 +276,14 @@ function saveRevenueRates(db, rates, options = {}) {
       effective_from,
       intrasourcing_rate,
       local_rate,
+      cost_rate,
       change_scope,
       created_at
-    ) VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
+    ) VALUES (?, ?, ?, ?, ?, ?, CURRENT_TIMESTAMP)
     ON CONFLICT(designation, effective_from) DO UPDATE SET
       intrasourcing_rate = excluded.intrasourcing_rate,
       local_rate = excluded.local_rate,
+      cost_rate = excluded.cost_rate,
       change_scope = excluded.change_scope,
       created_at = CURRENT_TIMESTAMP
   `);
@@ -274,6 +299,7 @@ function saveRevenueRates(db, rates, options = {}) {
         effectiveDate,
         rate.intrasourcing_rate,
         rate.local_rate,
+        rate.cost_rate,
         applyMode,
       );
       updateRevenueRateSnapshot(db, rate.designation);
